@@ -12,6 +12,7 @@
 #include "game/death_review.h"
 #include "network/server.h"
 #include "network/server_history.h"
+#include "network/server_status.h"
 #ifdef _WIN32
 #include <windows.h>
 #include <direct.h>
@@ -80,12 +81,14 @@ void tinit(tenv* env) {
   ui_settings_init(env);
   game_data_init(env);
   ntl_init();
+  server_status_init();
   personal_tag_init(env);
 }
 
 void tdestroy(tenv* env) {
   native_preferences_tick(&env->usr->usrs,true);
   ntl_destroy();
+  server_status_destroy();
   personal_tag_destroy(env);
   game_data_destroy(env);
   ui_settings_destroy(env);
@@ -98,6 +101,7 @@ void tdestroy(tenv* env) {
 }
 
 void trender(tenv* env) {
+  server_status_menu(env->usr->gdata.curr_screen==TITLE_SCREEN && env->usr->gdata.conn==DISCONNECTED);
   tuser_data* usr = env->usr;
   tcontext* ctx = env->ctx;
   game_data* gdata = &usr->gdata;

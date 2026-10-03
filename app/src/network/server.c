@@ -4,6 +4,7 @@
 #include "callback.h"
 #include "network_pump.h"
 #include "server_history.h"
+#include "server_status.h"
 #include "../game/input.h"
 #include "../game/perf_trace.h"
 
@@ -20,6 +21,7 @@ void server_connect(tenv* env) {
   game_data* gdata = &usr->gdata;
   user_settings* usrs = &usr->usrs;
 
+  server_status_menu(false);
   server_history_remember(usrs->ipv4);
 
   char url[256] = {};

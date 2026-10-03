@@ -2,6 +2,7 @@
 
 #include "../network/server.h"
 #include "../network/server_history.h"
+#include "../network/server_status.h"
 #include "../user.h"
 
 void ui_title_screen_init(tenv* env) {}
@@ -79,17 +80,36 @@ void ui_title_screen(tenv* env) {
                       ImGuiInputTextFlags_None, NULL, NULL);
   igSameLine(0,-1);
   igSetNextItemWidth(frame_height);
+  igSetNextWindowSizeConstraints((ImVec2){480,0},(ImVec2){900,650},NULL,NULL);
   if(igBeginCombo("##recent_servers",NULL,ImGuiComboFlags_NoPreview)) {
-    igTextDisabled("Recent servers");
+    igTextDisabled("서버  |  인원 (마지막 접속 기준)  |  핑");
+    igSeparator();
     for(int i=0;i<recent_servers.count;i++) {
       const char* address=recent_servers.addresses[i];
-      if(igSelectable_Bool(address,!strcmp(usrs->ipv4,address),0,(ImVec2){0}))
-        strcpy(usrs->ipv4,address);
+      server_status_request(address);
+      server_status status; server_status_get(address,&status);
+      char population[80],ping[80],label[220];
+      long long age=status.players_at>0?(long long)time(NULL)-status.players_at:0;
+      if(age<0) age=0;
+      if(status.players<0) snprintf(population,sizeof(population),"인원 미확인");
+      else if(age<60) snprintf(population,sizeof(population),"%d명 · %lld초 전",status.players,age);
+      else if(age<3600) snprintf(population,sizeof(population),"%d명 · %lld분 전",status.players,age/60);
+      else snprintf(population,sizeof(population),"%d명 · %lld시간 전",status.players,age/3600);
+      if(status.pending) snprintf(ping,sizeof(ping),"측정 중");
+      else if(status.failed) snprintf(ping,sizeof(ping),"응답 없음");
+      else if(status.ping_ms==0) snprintf(ping,sizeof(ping),"<1 ms");
+      else if(status.ping_ms>0) snprintf(ping,sizeof(ping),"%d ms%s",status.ping_ms,status.game_ping?" (게임)":"");
+      else snprintf(ping,sizeof(ping),"핑 미확인");
+      snprintf(label,sizeof(label),"%s  |  %s  |  %s###server",address,population,ping);
+      igPushID_Int(i);
+      if(igSelectable_Bool(label,!strcmp(usrs->ipv4,address),0,(ImVec2){0})) strcpy(usrs->ipv4,address);
+      if(igIsItemHovered(0)) igSetTooltip("핑: 이 주소의 /ptc 응답 3회 중앙값. 게임 중 핑과 차이 날 수 있습니다.\n인원: 마지막 접속 때 서버가 알려준 수. 플레이하면 갱신됩니다.");
+      igPopID();
     }
-    if(!recent_servers.count) igTextDisabled("Use Play to save an address.");
+    if(!recent_servers.count) igTextDisabled("플레이한 서버가 여기에 저장됩니다.");
     igEndCombo();
   }
-  if(igIsItemHovered(0)) igSetTooltip("Recent servers (saved on Play)");
+  if(igIsItemHovered(0)) igSetTooltip("최근 서버 · 인원 · 핑");
   igPopStyleColor(1);
   igPopItemWidth();
   igSetCursorPosX(ctx->size[0] / 2.0f - logo_size / 2);

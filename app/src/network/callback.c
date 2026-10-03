@@ -1,5 +1,6 @@
 #include "callback.h"
 #include "network_pump.h"
+#include "server_status.h"
 #include "../game/perf_trace.h"
 #include "../game/death_review.h"
 
@@ -839,6 +840,7 @@ void got_packet(tenv* env, uint8_t* a, int a_len) {
     gdata->data.wfpr = false;
     gdata->data.pings[gdata->data.cping] = gdata->data.ctm - gdata->data.last_ping_mtm;
     perf_ping(gdata->data.pings[gdata->data.cping]);
+    server_status_game_ping(usrs->ipv4,gdata->data.pings[gdata->data.cping]);
     gdata->data.cping = (gdata->data.cping + 1) % PING_SAMPLE_COUNT;
     if (gdata->data.lagging) {
       gdata->data.etm *= gdata->data.lag_mult;
@@ -1242,6 +1244,7 @@ void got_packet(tenv* env, uint8_t* a, int a_len) {
         }
     }
   } else if (cmd == 'l') {
+    if(alen<6) return;
     gdata->data.gotlb = true;
 
     gdata->data.lb_pos = a[m];
@@ -1250,6 +1253,7 @@ void got_packet(tenv* env, uint8_t* a, int a_len) {
     gdata->data.rank = a[m] << 8 | a[m + 1];
     m += 2;
     gdata->data.slither_count = a[m] << 8 | a[m + 1];
+    server_status_population(usrs->ipv4,gdata->data.slither_count);
     m += 2;
 
     while (m < alen) {

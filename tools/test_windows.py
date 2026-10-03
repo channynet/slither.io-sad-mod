@@ -27,6 +27,7 @@ for name, sources, extra in [
     ('cosmetic_geometry', [], []),
     ('head_point_geometry', [], []),
     ('input_timing', [], []),
+    ('server_status', ['app/src/network/server_status.c','app/src/network/server_history.c','app/src/external/mongoose.c'], ['-lws2_32']),
     ('server_history', ['app/src/network/server_history.c'], []),
     ('team_minimap', [], []),
     ('gameplay_review', ['thermite/src/util/tdarray.c'], [*flags,'-DCIMGUI_NO_EXPORT','-ffunction-sections','-fdata-sections','-Wl,--gc-sections']),
