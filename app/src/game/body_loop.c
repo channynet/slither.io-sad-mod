@@ -37,6 +37,12 @@ bool body_loop_capture(body_loop* loop,const def_vec* trail,int count,float head
     if(score<best) { best=score; end=i; best_fraction=t; }
   }
   if(end<0) return false;
+  float body_length=0;
+  for(int i=1;i<count;i++) {
+    float distance=norm(sub(trail[i],trail[i-1]));
+    if(!isfinite(distance) || distance>fmaxf(100,radius*8)) return false;
+    body_length+=distance;
+  }
   def_vec start=mix(trail[end],trail[end-1],best_fraction);
   float total=norm(sub(start,trail[end-1]))+norm(sub(trail[0],start));
   for(int i=end-1;i>0;i--) total+=norm(sub(trail[i],trail[i-1]));
@@ -52,9 +58,27 @@ bool body_loop_capture(body_loop* loop,const def_vec* trail,int count,float head
     walked+=distance; a=b;
   }
   if(output!=BODY_LOOP_POINTS) return false;
-  loop->count=output; loop->length=total; return true;
+  float area=0;
+  for(int i=0;i<output;i++) {
+    def_vec a=loop->points[i],b=loop->points[(i+1)%output];
+    // Translate first: map coordinates can be much larger than a small coil.
+    a=sub(a,start); b=sub(b,start); area+=a.x*b.y-a.y*b.x;
+  }
+  if(fabsf(area)<radius*radius) return false;
+  loop->count=output; loop->length=total; loop->body_length=body_length;
+  loop->overlap=body_length-total; loop->spacing=body_length/(count-1);
+  loop->direction=area>0?1:-1;
+  return true;
 }
-float body_loop_heading(const body_loop* loop,def_vec position,float heading,float lookahead) {
+float body_loop_offset(const body_loop* loop,float radius,float speed,float latency) {
+  if(!loop || loop->count<3 || !loop->direction) return 0;
+  // Keep at least four body samples and a latency reserve overlapping the seam.
+  float reserve=fmaxf(fmaxf(radius*4,loop->spacing*4),speed*(latency+.2f));
+  float error=loop->overlap-reserve;
+  // Expand gently; close a diminishing overlap sooner. Never jump to a new radius.
+  return fminf(radius*.35f,fmaxf(-radius*.5f,error/(2*PI)*(error<0?.5f:.15f)));
+}
+float body_loop_heading_offset(const body_loop* loop,def_vec position,float heading,float lookahead,float offset) {
   if(!loop || loop->count<3) return heading;
   int nearest=0; float fraction=0,best=FLT_MAX;
   def_vec facing={cosf(heading),sinf(heading)};
@@ -72,9 +96,15 @@ float body_loop_heading(const body_loop* loop,def_vec position,float heading,flo
     def_vec b=loop->points[(nearest+j+1)%loop->count]; float distance=norm(sub(b,a));
     if(distance>=remaining && distance>0) {
       def_vec target=mix(a,b,remaining/distance);
+      def_vec tangent=sub(b,a);
+      target.x+=loop->direction*tangent.y/distance*offset;
+      target.y-=loop->direction*tangent.x/distance*offset;
       return atan2f(target.y-position.y,target.x-position.x);
     }
     remaining-=distance; a=b;
   }
   return heading;
+}
+float body_loop_heading(const body_loop* loop,def_vec position,float heading,float lookahead) {
+  return body_loop_heading_offset(loop,position,heading,lookahead,0);
 }

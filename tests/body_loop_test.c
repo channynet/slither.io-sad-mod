@@ -21,6 +21,10 @@ int main(void) {
     ellipse(sign,a);
     assert(body_loop_capture(&loop,trail,300,heading,14.5f,60));
     assert(loop.count==128 && loop.length>1100 && loop.length<1200);
+    assert(loop.direction==sign && loop.overlap>200 && loop.body_length>loop.length);
+    assert(body_loop_offset(&loop,14.5f,180,.1f)>0);
+    body_loop short_tail=loop; short_tail.overlap=10;
+    assert(body_loop_offset(&short_tail,14.5f,180,.1f)<0);
     def_scene_reset(&scene); scene.body_path=&loop; scene.position=trail[0]; scene.angle=heading;
     scene.radius=14.5f; scene.speed=180; scene.turn_rate=3; scene.latency=.1f; scene.arena_radius=10000;
     // Food outside the enclosure must not pull a safe body-following bot out.
@@ -54,6 +58,15 @@ int main(void) {
   def_add_obstacle(&scene,(def_obstacle){.a={80,130},.b={340,130},.radius=15});
   def_result avoid=def_choose(&scene); assert(avoid.safe && fabsf(def_wrap(avoid.angle-preferred))>.2f);
   scene.count=0; assert(fabsf(def_wrap(def_choose(&scene).angle-preferred))<.001f);
+  // An outside threat suppresses expansion while a safe spine path remains.
+  def_add_obstacle(&scene,(def_obstacle){.a={260,-1000},.b={260,1000},.radius=15});
+  def_result spine=def_choose(&scene); assert(spine.safe);
+  scene.body_offset=5;
+  def_result restrained=def_choose(&scene);
+  assert(restrained.safe && fabsf(def_wrap(restrained.angle-spine.angle))<.001f);
+  scene.count=0;
+  assert(fabsf(def_wrap(def_choose(&scene).angle-preferred))>.01f);
+  scene.body_offset=0;
   // The same captured route must not override a shrinking arena edge.
   scene.arena_radius=170; assert(!def_choose(&scene).safe);
   scene.arena_radius=10000;

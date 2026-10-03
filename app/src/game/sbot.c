@@ -8,6 +8,7 @@
 static def_scene scene;
 static body_loop own_loop;
 static def_vec own_trail[BODY_LOOP_SCAN];
+static float body_refreshed_at;
 static void capture_body(const snake* me,float min_radius) {
   int count=1; own_trail[0]=(def_vec){me->xx,me->yy};
   int parts=me->pts?tdarray_length(me->pts):0;
@@ -15,7 +16,11 @@ static void capture_body(const snake* me,float min_radius) {
     const body_part* p=me->pts+i; if(p->dying) continue;
     own_trail[count++]=(def_vec){p->xx,p->yy};
   }
-  body_loop_capture(&own_loop,own_trail,count,me->ang,fmaxf(1,me->sc*14.5f),min_radius);
+  body_loop next;
+  if(body_loop_capture(&next,own_trail,count,me->ang,fmaxf(1,me->sc*14.5f),min_radius) &&
+     (!own_loop.count || (next.direction==own_loop.direction &&
+       next.length>own_loop.length*.75f && next.length<own_loop.length*1.25f)))
+    own_loop=next; // A missing/delayed body update must not erase a valid route.
 }
 static uint64_t generation;
 static float previous_angle,last_time;
@@ -56,10 +61,10 @@ void sbot_go(tenv* env) {
     was_active=false; valid=false; orbit_direction=0; own_loop.count=0; g->bot.output.accel=false;
     return;
   }
-  // At most 30 Hz; include the one-time body capture in BOT cost accounting.
+  // At most 30 Hz; include bounded 10 Hz body refresh in BOT cost accounting.
   if(was_active && valid && generation==me->generation && now>=last_time && now-last_time<33) return;
   double started=perf_now();
-  if(!was_active || generation!=me->generation) {
+  if(!was_active || generation!=me->generation || (valid && now<last_time)) {
     orbit_direction=0; own_loop.count=0; valid=false;
     if(!was_active && manual_sample && manual_generation==me->generation &&
        now>=manual_time && now-manual_time<150 && manual_turn_time>=0.08f && fabsf(manual_rate)>0.15f) {
@@ -70,10 +75,13 @@ void sbot_go(tenv* env) {
       orbit_center=(def_vec){me->xx-orbit_direction*sinf(me->ang)*orbit_radius,
                             me->yy+orbit_direction*cosf(me->ang)*orbit_radius};
     }
-    // A completed body lap works even on a straight section of an oval,
-    // when no recent manual turn sample exists. Capture once per activation.
+    // A completed lap also works on a straight section of an oval.
     capture_body(me,fmaxf(me->sp,me->ssp)*31.25f/fmaxf(0.1f,g->data.mamu*me->scang*me->spang*125));
-    was_active=true; manual_sample=false;
+    body_refreshed_at=now; was_active=true; manual_sample=false;
+  }
+  if(now<body_refreshed_at || now-body_refreshed_at>=100) {
+    capture_body(me,fmaxf(me->sp,me->ssp)*31.25f/fmaxf(.1f,g->data.mamu*me->scang*me->spang*125));
+    body_refreshed_at=now;
   }
   bool continuity=valid && generation==me->generation && now>=last_time && now-last_time<250;
   def_scene_reset(&scene);
@@ -90,6 +98,7 @@ void sbot_go(tenv* env) {
   if(g->data.lagging) scene.latency=0.5f;
   scene.has_previous=continuity; scene.previous_angle=previous_angle;
   scene.body_path=own_loop.count?&own_loop:NULL;
+  scene.body_offset=body_loop_offset(scene.body_path,scene.radius,scene.speed,scene.latency);
   scene.orbit_direction=orbit_direction; scene.orbit_center=orbit_center; scene.orbit_radius=orbit_radius;
   for(int i=0;i<tdarray_length(g->data.snakes);i++) {
     snake* s=g->data.snakes+i;
@@ -108,7 +117,7 @@ void sbot_go(tenv* env) {
     }
   }
   float food_score=0;
-  for(int i=0;i<tdarray_length(g->data.foods);i++) {
+  for(int i=0;!scene.body_path && !orbit_direction && i<tdarray_length(g->data.foods);i++) {
     food* f=g->data.foods+i; if(f->eaten) continue;
     float dx=f->xx-me->xx,dy=f->yy-me->yy,d2=dx*dx+dy*dy;
     if(d2<100 || d2>160000) continue;

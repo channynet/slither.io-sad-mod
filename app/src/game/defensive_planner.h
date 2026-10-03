@@ -11,7 +11,8 @@ typedef struct {
   def_vec position,center,food;
   float angle,speed,turn_rate,radius,arena_radius,latency,previous_angle;
   bool has_food,has_previous;
-  const struct body_loop* body_path; // captured own-body lap; NULL when inactive
+  const struct body_loop* body_path; // refreshed own-body lap; NULL when inactive
+  float body_offset;
   def_vec orbit_center;
   float orbit_radius;
   int orbit_direction; // -1 or +1; zero disables orbit continuation

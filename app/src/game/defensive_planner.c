@@ -61,11 +61,11 @@ float def_orbit_heading(const def_scene* s,def_vec position) {
   return def_wrap(atan2f(delta.y,delta.x)+s->orbit_direction*
     (DPI/2+atan2f(error,fmaxf(20,s->orbit_radius*0.5f))));
 }
-static float body_heading(const def_scene* s,def_vec p,float angle) {
+static float body_heading(const def_scene* s,def_vec p,float angle,float offset) {
   float lookahead=fmaxf(s->radius*1.5f,s->speed*(0.18f+s->latency*0.3f));
-  return body_loop_heading(s->body_path,p,angle,lookahead);
+  return body_loop_heading_offset(s->body_path,p,angle,lookahead,offset);
 }
-static def_result evaluate_path(const def_scene* s,float target,int mode) {
+static def_result evaluate_path(const def_scene* s,float target,int mode,float offset) {
   def_result r={.angle=def_wrap(target),.clearance=1000,.safe_seconds=DEF_HORIZON,.safe=true};
   def_vec p=s->position; float angle=s->angle;
   const float dt=DEF_HORIZON/DEF_STEPS;
@@ -73,7 +73,7 @@ static def_result evaluate_path(const def_scene* s,float target,int mode) {
     float time=k*dt;
     float turn_dt=clamp(time-s->latency,0,dt);
     if(mode==1) target=def_orbit_heading(s,p);
-    else if(mode==2) target=body_heading(s,p,angle);
+    else if(mode==2) target=body_heading(s,p,angle,offset);
     angle+=clamp(def_wrap(target-angle),-s->turn_rate*turn_dt,s->turn_rate*turn_dt);
     def_vec q={p.x+cosf(angle)*s->speed*dt,p.y+sinf(angle)*s->speed*dt};
     // Chord deviation bound covers the curved motion between samples.
@@ -103,16 +103,23 @@ static def_result evaluate_path(const def_scene* s,float target,int mode) {
   return r;
 }
 def_result def_evaluate(const def_scene* s,float target) {
-  return evaluate_path(s,target,0);
+  return evaluate_path(s,target,0,0);
 }
 def_result def_evaluate_orbit(const def_scene* s) {
-  return evaluate_path(s,def_orbit_heading(s,s->position),1);
+  return evaluate_path(s,def_orbit_heading(s,s->position),1,0);
 }
 def_result def_choose(const def_scene* s) {
   // Prefer the captured body lap, then the manual-circle fallback, while safe.
   // Threats and the arena boundary are checked by the same collision evaluator.
   if(s->body_path && s->body_path->count>=3) {
-    def_result follow=evaluate_path(s,body_heading(s,s->position,s->angle),2);
+    def_result follow=evaluate_path(s,body_heading(s,s->position,s->angle,s->body_offset),2,s->body_offset);
+    if(follow.safe && (s->body_offset<=0 || follow.clearance>s->radius*2)) return follow;
+    // Before leaving the enclosure, try the current spine and its inside edge.
+    def_result spine=evaluate_path(s,body_heading(s,s->position,s->angle,0),2,0);
+    if(spine.safe) return spine;
+    float inward=-s->radius*.5f;
+    def_result inside=evaluate_path(s,body_heading(s,s->position,s->angle,inward),2,inward);
+    if(inside.safe) return inside;
     if(follow.safe) return follow;
   } else if(s->orbit_direction) {
     def_result orbit=def_evaluate_orbit(s);
