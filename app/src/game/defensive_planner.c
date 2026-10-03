@@ -91,17 +91,28 @@ def_result def_evaluate(const def_scene* s,float target) {
 }
 def_result def_choose(const def_scene* s) {
   def_result best={0}; float best_score=-FLT_MAX;
-  for(int i=0;i<DEF_CANDIDATES;i++) {
+  float food_angle=s->has_food?atan2f(s->food.y-s->position.y,s->food.x-s->position.x):s->angle;
+  int candidates=DEF_CANDIDATES+(s->has_food?1:0)+(s->has_previous?1:0);
+  for(int i=0;i<candidates;i++) {
     // Include straight ahead, gentle steering, and both near-U-turns.
     float offset=(i-8)*(DPI/8.5f);
     float target=s->angle+offset;
+    if(i>=DEF_CANDIDATES) {
+      target=(s->has_food && i==DEF_CANDIDATES)?food_angle:s->previous_angle;
+      offset=def_wrap(target-s->angle);
+    }
     def_result r=def_evaluate(s,target);
     float score=(r.safe?100000:0)+r.safe_seconds*10000+clamp(r.clearance,-100,80)*2;
-    score-=fabsf(offset)*8;
-    if(s->has_previous) score-=fabsf(def_wrap(target-s->previous_angle))*12;
+    // Linear turn penalties previously exceeded the maximum food reward slope,
+    // so straight ahead always won in open space. Quadratic penalties allow
+    // small corrections while still discouraging abrupt left/right reversals.
+    score-=offset*offset*2;
+    if(s->has_previous) {
+      float change=def_wrap(target-s->previous_angle);
+      score-=change*change*1.5f;
+    }
     if(s->has_food && r.safe && r.clearance>20) {
-      float food_angle=atan2f(s->food.y-s->position.y,s->food.x-s->position.x);
-      score+=cosf(def_wrap(target-food_angle))*12;
+      score+=cosf(def_wrap(target-food_angle))*48;
     }
     if(score>best_score) { best_score=score; best=r; }
   }

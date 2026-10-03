@@ -16,10 +16,11 @@ run([BIN / 'x86_64-w64-mingw32-clang.exe','-std=gnu11','-O1','-static',*flags,
      ROOT / 'app/src/game/user_settings.c', ROOT / 'app/src/external/mongoose.c',
      '-lws2_32','-o',prefs_test])
 with tempfile.TemporaryDirectory(prefix='preferences-test-', dir=BUILD) as sandbox:
-    result = subprocess.run([str(prefs_test)],cwd=sandbox,check=True,capture_output=True,text=True)
+    result = subprocess.run([str(prefs_test)],cwd=sandbox,check=True,capture_output=True,text=True,encoding="utf-8",errors="replace")
     print(result.stdout)
 
 for name, sources, extra in [
+    ('bot_steering', ['app/src/game/input.c'], [*flags,'-DCIMGUI_NO_EXPORT','-ffunction-sections','-fdata-sections','-Wl,--gc-sections']),
     ('sbot_integration', ['app/src/game/sbot.c','app/src/game/defensive_planner.c','thermite/src/util/tdarray.c'], [*flags,'-DCIMGUI_NO_EXPORT']),
     ('defensive_planner', ['app/src/game/defensive_planner.c'], []),
     ('credential_store', ['app/src/network/credential_store.c'], ['-lcrypt32']),
@@ -43,5 +44,5 @@ for name, sources, extra in [
     with tempfile.TemporaryDirectory(prefix=f'{name}-test-',dir=BUILD) as sandbox:
         args = [str(executable)]
         if name == 'tag_image': args.append(str(ROOT / 'app/res/personal/black-wings.png'))
-        result = subprocess.run(args,cwd=sandbox,check=True,capture_output=True,text=True)
+        result = subprocess.run(args,cwd=sandbox,check=True,capture_output=True,text=True,encoding="utf-8",errors="replace")
         print(result.stdout)

@@ -49,6 +49,16 @@ int main(void) {
   // Persistent preference cannot force an unsafe old heading.
   reset(); wall(130,-1000,1000); s.has_previous=true; s.previous_angle=0;
   assert(def_choose(&s).safe);
+  // Regression: previous-heading preference must not lock straight flight.
+  for(int sign=-1;sign<=1;sign+=2) {
+    reset(); s.has_food=true; s.food=(def_vec){0,sign*200};
+    s.has_previous=true; s.previous_angle=0;
+    r=def_choose(&s); assert(r.safe && sign*r.angle>0.5f);
+  }
+  // A small food angle must not fall into the coarse candidate dead zone.
+  reset(); s.has_food=true; s.food=(def_vec){200,20};
+  s.has_previous=true; s.previous_angle=0;
+  assert(def_choose(&s).angle>0.03f);
   // Worst retained-obstacle count; report actual planner time, not an FPS claim.
   reset(); for(int i=0;i<512;i++) {
     float a=i*0.0122718463f;
@@ -56,6 +66,6 @@ int main(void) {
   }
   double start=milliseconds(); volatile float sink=0;
   for(int i=0;i<200;i++) sink+=def_choose(&s).angle;
-  printf("Defensive planner: 11 scenario groups passed; 512 obstacles, 17 paths, 15 steps: %.3f ms/decision (200 runs)\n",(milliseconds()-start)/200);
+  printf("Defensive planner: 14 scenario groups passed; 512 obstacles, up to 19 paths, 15 steps: %.3f ms/decision (200 runs)\n",(milliseconds()-start)/200);
   return 0;
 }

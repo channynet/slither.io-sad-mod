@@ -105,8 +105,11 @@ void input_network(tenv* env) {
     gdata->data.last_ping_mtm=now; gdata->data.wfpr=true;
     mg_ws_send(connection,(uint8_t[]){251},1,WEBSOCKET_OP_BINARY);
   }
-  if(igGetIO_Nil()->WantTextInput || ntl_mouse_captured() ||
-      !glfwGetWindowAttrib(env->wnd->handle,GLFW_FOCUSED)) {
+  // UI capture suppresses human input, not autonomous steering. A running bot
+  // must keep avoiding hazards while the user chats or switches windows.
+  bool bot_active=usrs->hotkeys[HOTKEY_BOT].active;
+  if(!bot_active && (igGetIO_Nil()->WantTextInput || ntl_mouse_captured() ||
+      !glfwGetWindowAttrib(env->wnd->handle,GLFW_FOCUSED))) {
     if(gdata->data.md) {
       gdata->data.md=gdata->data.wmd=false;
       mg_ws_send(connection,(uint8_t[]){254},1,WEBSOCKET_OP_BINARY);
@@ -125,8 +128,7 @@ void input_network(tenv* env) {
                       twindow_key_down(env->wnd, GLFW_KEY_SPACE) ||
                       twindow_key_down(env->wnd, GLFW_KEY_UP) ||
                       twindow_key_down(env->wnd, GLFW_KEY_LEFT_SHIFT) ||
-                      twindow_key_down(env->wnd, GLFW_KEY_RIGHT_SHIFT) ||
-                      false);
+                      twindow_key_down(env->wnd, GLFW_KEY_RIGHT_SHIFT));
 
     if (gdata->data.md != gdata->data.wmd &&
         input_due(now,gdata->data.last_accel_mtm,BOOST_INTERVAL_MS)) {
