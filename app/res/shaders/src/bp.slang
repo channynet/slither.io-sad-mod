@@ -40,9 +40,15 @@ vs_output vs_main(vs_input input) {
 }
 
 float4 fs_main(vs_output input) {
-  float4 c = tex_atlas.Sample(input.uv2).rgba;
   float d = length(2 * input.uv - 1);
   float p = length(float2(ddx(d), ddy(d)));
   float a = smoothstep(0.0, EDGE_SOFTNESS, (1 - d) / p);
+  // Outline instances only shade the thin rim. Avoid sampling and blending
+  // the entire interior of every body disc on integrated GPUs.
+  if (input.color.r < 0) {
+    if (d < input.color.g || d > 1) discard;
+    return float4(0.015,0.015,0.015,a*input.color.a);
+  }
+  float4 c = tex_atlas.Sample(input.uv2).rgba;
   return input.color * float4(c.rgb, a * c.a);
 }

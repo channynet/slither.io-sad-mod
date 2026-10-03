@@ -1,6 +1,7 @@
 #include "settings.h"
 
 #include "../user.h"
+#include "../game/native_preferences.h"
 
 void ui_settings_init(tenv* env) {}
 
@@ -32,7 +33,7 @@ void ui_settings(tenv* env) {
       igTableSetColumnIndex(0);
       igIndent(style->WindowPadding.x);
       igAlignTextToFramePadding();
-      igText("VSync");
+      igText("Strict VSync");
       igAlignTextToFramePadding();
       igText("Cursor size");
       igAlignTextToFramePadding();
@@ -63,16 +64,13 @@ void ui_settings(tenv* env) {
       igText("Laser color");
       igAlignTextToFramePadding();
       igText("Laser thickness");
-      igAlignTextToFramePadding();
-      igText("Bot circle after score");
-      igAlignTextToFramePadding();
-      igText("Bot radius multiplier");
 
       igTableSetColumnIndex(1);
       if (igCheckbox("##vsync", &usrs->vsync)) {
         env->config.vsync = usrs->vsync;
         twindow_request_refresh(env->wnd);
       }
+      igSetItemTooltip("기본은 저지연 화면 찢어짐 방지, 체크하면 일정한 화면 갱신을 우선합니다.");
       igSetNextItemWidth(-1);
       igSliderInt("##cursor size", &usrs->cursor_size, 16, 64, "%d px",
                   ImGuiSliderFlags_AlwaysClamp);
@@ -107,12 +105,6 @@ void ui_settings(tenv* env) {
                    ImGuiColorEditFlags_AlphaBar);
       igSetNextItemWidth(-1);
       igSliderInt("##laser thickness", &usrs->laser_thickness, 1, 4, "%d px",
-                  ImGuiSliderFlags_AlwaysClamp);
-                  igSetNextItemWidth(-1);
-      igSliderInt("##circle after", &usrs->bot_follow_circle_score, 1000, 6000, "%d",
-                  ImGuiSliderFlags_AlwaysClamp);
-                  igSetNextItemWidth(-1);
-      igSliderInt("##rad mult", &usrs->bot_radius_mult, 10, 40, "%dx",
                   ImGuiSliderFlags_AlwaysClamp);
       igIndent(-style->WindowPadding.x);
       igEndTable();
@@ -235,7 +227,7 @@ void ui_settings(tenv* env) {
         hotkey* hk = usrs->hotkeys + i;
         igPushID_Int(i);
         igSetNextItemWidth(frame_height * 2);
-        char preview_char[2] = {(char)hk->key, 0};
+        char preview_char[16]; native_key_label(hk->key,preview_char,sizeof(preview_char));
         if (igBeginCombo("##hotkey code", preview_char, ImGuiComboFlags_None)) {
           for (int c = 48; c < 58; c++) {
             char selectable_char[2] = {c, 0};
@@ -246,6 +238,7 @@ void ui_settings(tenv* env) {
                 is_in_use = true;
               }
             }
+            is_in_use = is_in_use || c == GLFW_KEY_3 || c == GLFW_KEY_8;
             if (igSelectable_Bool(selectable_char, c == hk->key,
                                   is_in_use ? ImGuiSelectableFlags_Disabled
                                             : ImGuiSelectableFlags_None,
@@ -262,13 +255,18 @@ void ui_settings(tenv* env) {
                 is_in_use = true;
               }
             }
-            is_in_use = is_in_use || c == GLFW_KEY_M || c == GLFW_KEY_N;
+            is_in_use = is_in_use || c == GLFW_KEY_M || c == GLFW_KEY_N || c == GLFW_KEY_H || c == GLFW_KEY_K;
             if (igSelectable_Bool(selectable_char, c == hk->key,
                                   is_in_use ? ImGuiSelectableFlags_Disabled
                                             : ImGuiSelectableFlags_None,
                                   (ImVec2){})) {
               hk->key = c;
             }
+          }
+          for (int c=GLFW_KEY_F6;c<=GLFW_KEY_F9;c+=3) {
+            char label[16]; native_key_label(c,label,sizeof(label)); bool used=false;
+            for(int d=0;d<NUM_HOTKEYS;d++) if(d!=i && usrs->hotkeys[d].key==c) used=true;
+            if(igSelectable_Bool(label,c==hk->key,used?ImGuiSelectableFlags_Disabled:0,(ImVec2){0})) hk->key=c;
           }
           igEndCombo();
         }
@@ -278,12 +276,12 @@ void ui_settings(tenv* env) {
         igSetNextItemWidth(rest.x - style->ItemInnerSpacing.x);
         if (i == HOTKEY_RESTART || i == HOTKEY_QUIT) {
           igBeginDisabled(true);
-          igCombo_Str_arr("##hotkey mode", &(int){0}, (const char*[]){"Toggle"},
+          igCombo_Str_arr("##hotkey mode", &(int){0}, (const char*[]){"Double press"},
                           1, -1);
           igEndDisabled();
         } else {
           igCombo_Str_arr("##hotkey mode", &hk->mode,
-                          (const char*[]){"Toggle", "Press and hold"}, 2, -1);
+                          (const char*[]){"Toggle", "Press and hold", "Double press"}, 3, -1);
         }
         igPopID();
       }

@@ -1,4 +1,5 @@
 #include "redraw.h"
+#include "native_preferences.h"
 
 #include "../user.h"
 
@@ -88,7 +89,7 @@ void redraw(tenv* env) {
   // draw foods and preys:
   int foods_len = tdarray_length(gdata->data.foods);
   int preys_len = tdarray_length(gdata->data.preys);
-  
+
   float food_scale = mode->const_food_scale ? 1.0f : gdata->data.gsc;
 
   if (mode->uniform_food_color) {
@@ -638,6 +639,19 @@ void redraw(tenv* env) {
 
         float om = 0;
         float mr = 0;
+
+        // Draw the silhouette underneath this entire snake, not rings on each
+        // segment. Reuse the visible body samples and existing instance batch.
+        if (native_prefs.snake_outline) {
+          float radius=gdata->data.gsc*lsz+2.2f;
+          for(int outline_i=bp-1;outline_i>=0;outline_i--) {
+            if(gdata->data.pbu[outline_i]<1) continue;
+            float x=mww2+(gdata->data.pbx[outline_i]-gdata->data.view_xx)*gdata->data.gsc;
+            float y=mhh2+(gdata->data.pby[outline_i]-gdata->data.view_yy)*gdata->data.gsc;
+            bp_renderer_push(usr->r->bpr,&(bp_instance){
+              {x-radius,y-radius,2*radius,0},gdata->cg_uvs[BLANK_UV],{-1,fmaxf(0,(radius-4.5f)/radius),0,a}});
+          }
+        }
 
         if (mode->render_mode == 0) {
           float shadow_strength = 0.25f;

@@ -12,11 +12,9 @@ void window_resize_callback(GLFWwindow* window, int width, int height) {
   env->wnd->size[0] = width;
   env->wnd->size[1] = height;
 
-  if (width > 0 && height > 0) {
-    tcontext_resize(env->ctx, env->wnd->size, env->config.vsync);
-    env->wnd->_resize_func(env);
-    env->wnd->_render_func(env);
-  }
+  // GLFW can invoke this inside glfwSetWindowMonitor. Defer GPU work until
+  // the monitor transition has returned; never render inside a callback.
+  env->wnd->_refresh = true;
 }
 
 twindow* twindow_create(tenv* env, trender_func render_func,
@@ -85,19 +83,24 @@ twindow* twindow_create(tenv* env, trender_func render_func,
   return window;
 }
 
-void twindow_poll_input(twindow* window) {
-  glfwPollEvents();
-  if (window->_refresh) {
+static void twindow_refresh(twindow* window) {
+  if (window->size[0] <= 0 || window->size[1] <= 0) return;
+  // OUT_OF_DATE may occur without a framebuffer-size event.
+  if (window->_refresh || !window->env->ctx->swapchain_ok) {
+    glfwGetFramebufferSize(window->handle, &window->size[0], &window->size[1]);
+    if (window->size[0] <= 0 || window->size[1] <= 0) return;
     tcontext_resize(window->env->ctx, window->env->wnd->size, window->env->config.vsync);
     window->_refresh = false;
+    window->_resize_func(window->env);
   }
+}
+void twindow_poll_input(twindow* window) {
+  glfwPollEvents();
+  twindow_refresh(window);
 }
 void twindow_wait_input(twindow* window) {
   glfwWaitEvents();
-  if (window->_refresh) {
-    tcontext_resize(window->env->ctx, window->env->wnd->size, window->env->config.vsync);
-    window->_refresh = false;
-  }
+  twindow_refresh(window);
 }
 
 void twindow_toggle_fullscreen(twindow* window) {

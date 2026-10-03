@@ -7,6 +7,7 @@ typedef struct tkeyboard {
   int* keys_pressed;
   int* keys_released;
   char char_pressed;
+  int press_modifiers[512];
 } tkeyboard;
 
 tkeyboard* tkeyboard_create(twindow* window);

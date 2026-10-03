@@ -1,0 +1,25 @@
+#ifndef DEFENSIVE_PLANNER_H
+#define DEFENSIVE_PLANNER_H
+#include <stdbool.h>
+#define DEF_OBSTACLES 512
+#define DEF_CANDIDATES 17
+#define DEF_STEPS 15
+#define DEF_HORIZON 1.5f
+typedef struct { float x,y; } def_vec;
+typedef struct { def_vec a,b,velocity; float radius,priority; bool head; } def_obstacle;
+typedef struct {
+  def_vec position,center,food;
+  float angle,speed,turn_rate,radius,arena_radius,latency,previous_angle;
+  bool has_food,has_previous;
+  def_obstacle obstacles[DEF_OBSTACLES];
+  int count;
+  float omitted_clearance;
+} def_scene;
+typedef struct { float angle,clearance,safe_seconds; bool safe; } def_result;
+float def_wrap(float angle);
+float def_point_segment(def_vec p,def_vec a,def_vec b);
+void def_scene_reset(def_scene* scene);
+void def_add_obstacle(def_scene* scene,def_obstacle obstacle);
+def_result def_evaluate(const def_scene* scene,float angle);
+def_result def_choose(const def_scene* scene);
+#endif

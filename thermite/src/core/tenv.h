@@ -32,6 +32,7 @@ void tresize(tenv* env);
 void tinit(tenv* env);
 void trender(tenv* env);
 void tinput(tenv* env);
+void tidle(tenv* env);
 void tdestroy(tenv* env);
 
 #endif

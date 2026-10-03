@@ -26,11 +26,13 @@ typedef struct tcontext {
   VkQueue queue;
   VkSwapchainKHR old_swapchain;
   VkSwapchainKHR swapchain;
+  VkPresentModeKHR present_mode;
   VkDescriptorPool descriptor_pool;
 
   int fif;
   int current_frame;
   bool swapchain_ok;
+  bool frame_submitted;
   VkCommandPool cmd_pool;
   tcontext_frame* frames;
   VkSemaphore* render_completes;

@@ -2,6 +2,8 @@
 
 #include <string.h>
 #include <thermite.h>
+#include "native_preferences.h"
+#include <windows.h>
 
 void user_settings_default(user_settings* usr_settings) {
   usr_settings->ui_font_size = FONT_SIZE_SMALL;
@@ -32,8 +34,8 @@ void user_settings_default(user_settings* usr_settings) {
   usr_settings->bot_follow_circle_score = 2000;
 
   // normal mode
-  usr_settings->modes[0].food_flicker = true;
-  usr_settings->modes[0].food_float = true;
+  usr_settings->modes[0].food_flicker = false;
+  usr_settings->modes[0].food_float = false;
   usr_settings->modes[0].uniform_food_color = false;
   usr_settings->modes[0].food_type = 0;
   usr_settings->modes[0].food_scale = 1;
@@ -42,14 +44,14 @@ void user_settings_default(user_settings* usr_settings) {
   usr_settings->modes[0].food_color[2] = 1;
   usr_settings->modes[0].boost_type = 0;
   usr_settings->modes[0].qsm = 1;
-  usr_settings->modes[0].bg_scale = 599 / 4096.0f;
+  usr_settings->modes[0].bg_scale = 1;
   usr_settings->modes[0].boost_strength = 1;
   usr_settings->modes[0].show_crosshair = false;
-  usr_settings->modes[0].show_boost = true;
-  usr_settings->modes[0].show_shadows = true;
+  usr_settings->modes[0].show_boost = false;
+  usr_settings->modes[0].show_shadows = false;
   usr_settings->modes[0].show_background = true;
-  usr_settings->modes[0].show_accessories = true;
-  usr_settings->modes[0].death_effect = true;
+  usr_settings->modes[0].show_accessories = false;
+  usr_settings->modes[0].death_effect = false;
   usr_settings->modes[0].player_names_outline = false;
   usr_settings->modes[0].render_mode = 0;
   usr_settings->modes[0].const_food_scale = false;
@@ -65,32 +67,19 @@ void user_settings_default(user_settings* usr_settings) {
   usr_settings->modes[1].food_color[2] = 0.7f;
   usr_settings->modes[1].boost_type = 1;
   usr_settings->modes[1].qsm = 1;
-  usr_settings->modes[1].bg_scale = 599 / 4096.0f;
+  usr_settings->modes[1].bg_scale = 1;
   usr_settings->modes[1].boost_strength = 1;
   usr_settings->modes[1].show_crosshair = true;
   usr_settings->modes[1].show_boost = false;
-  usr_settings->modes[1].show_shadows = true;
-  usr_settings->modes[1].show_background = false;
+  usr_settings->modes[1].show_shadows = false;
+  usr_settings->modes[1].show_background = true;
   usr_settings->modes[1].show_accessories = false;
   usr_settings->modes[1].death_effect = false;
   usr_settings->modes[1].player_names_outline = true;
   usr_settings->modes[1].render_mode = 1;
   usr_settings->modes[1].const_food_scale = false;
 
-  usr_settings->hotkeys[HOTKEY_HUD] = (hotkey){GLFW_KEY_H, true, 0, "HUD"};
-  usr_settings->hotkeys[HOTKEY_SHOW_NAMES] =
-      (hotkey){GLFW_KEY_P, true, 0, "Show names"};
-  usr_settings->hotkeys[HOTKEY_BIG_FOOD] =
-      (hotkey){GLFW_KEY_F, false, 0, "Big food"};
-  usr_settings->hotkeys[HOTKEY_ASSIST] =
-      (hotkey){GLFW_KEY_K, false, 1, "Assist"};
-  usr_settings->hotkeys[HOTKEY_BOT] =
-      (hotkey){GLFW_KEY_T, false, 0, "Bot"};
-  usr_settings->hotkeys[HOTKEY_MENU] =
-      (hotkey){GLFW_KEY_Z, true, 0, "Hotkey menu"};
-  usr_settings->hotkeys[HOTKEY_RESTART] =
-      (hotkey){GLFW_KEY_R, false, 1, "Restart"};
-  usr_settings->hotkeys[HOTKEY_QUIT] = (hotkey){GLFW_KEY_Q, false, 1, "Quit"};
+  ntl_hotkey_defaults(usr_settings);
 }
 
 void write_default_settings(user_settings* usr_settings) {
@@ -127,12 +116,12 @@ void read_user_settings(user_settings* usr_settings) {
 }
 
 void save_user_settings(user_settings* usr_settings) {
-  FILE* f = fopen(USER_SETTINGS_FILE, "wb");
+  FILE* f = fopen(USER_SETTINGS_FILE ".tmp", "wb");
   if (f == NULL) {
     printf("Error saving settings.");
-    exit(-1);
+    return;
   }
-
-  fwrite(usr_settings, sizeof(user_settings), 1, f);
-  fclose(f);
+  bool written = fwrite(usr_settings, sizeof(user_settings), 1, f) == 1;
+  if (fclose(f) != 0) written = false;
+  if (written) MoveFileExA(USER_SETTINGS_FILE ".tmp",USER_SETTINGS_FILE,MOVEFILE_REPLACE_EXISTING|MOVEFILE_WRITE_THROUGH);
 }

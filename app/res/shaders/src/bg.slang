@@ -23,7 +23,13 @@ float4 fs_main(vs_output input) {
   float2 sx = input.uv * global.viewport;
   float2 c = global.viewport * 0.5;
   float2 wp = (sx - c) / (global.zoom) + global.view;
-  float2 uv = wp / (global.bg_size * global.bg_scale);
-  float4 bg_col = bg_tex.Sample(uv);
-  return float4(bg_col.rgb * global.bg_color, global.bg_opacity);
+  // NTL Grid's interior line pitch: ~102.5 x 86.5 world units.
+  // Only spacing is retained; no texture, bevel, rounded corner or tile shading.
+  float2 cell = wp / (float2(102.5, 86.5) * max(global.bg_scale, 0.05));
+  float2 distanceToLine = abs(frac(cell + 0.5) - 0.5);
+  float2 footprint = max(fwidth(cell), float2(0.000001));
+  float2 line = 1.0 - smoothstep(float2(0.35), float2(1.15), distanceToLine / footprint);
+  float opacity = max(line.x, line.y);
+  float shade = lerp(0.19, 0.115, opacity);
+  return float4(float3(shade) * global.bg_color, global.bg_opacity);
 }

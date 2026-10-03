@@ -6,6 +6,8 @@
 #include "cimgui/cimgui_impl.h"
 
 #include "user.h"
+#include <windows.h>
+#include <io.h>
 
 void imgui_init(tenv* env) {
   tuser_data* usr = env->usr;
@@ -29,6 +31,10 @@ void imgui_init(tenv* env) {
       .UseDynamicRendering = false});
   igImplGlfw_InitForVulkan(env->wnd->handle, true);
   ImGuiIO* io = igGetIO_Nil();
+  char korean_font[MAX_PATH];
+  GetWindowsDirectoryA(korean_font,MAX_PATH);
+  strcat(korean_font,"/Fonts/malgun.ttf");
+  bool korean_available = _access(korean_font,0)==0;
   // io->MouseDrawCursor = true;
 
   for (int i = 0; i < NUM_FONT_SIZES; i++) {
@@ -51,7 +57,7 @@ void imgui_init(tenv* env) {
         (const ImWchar[]){0xe900, 0xeaea, 0});
 
     usr->imgui_data.regular_font[i] = ImFontAtlas_AddFontFromFileTTF(
-        io->Fonts, "app/res/fonts/regular_regular.ttf", 20 + i * 4, NULL, NULL);
+        io->Fonts, korean_available ? korean_font : "app/res/fonts/regular_regular.ttf", 20 + i * 4, NULL, NULL);
 
     ImFontAtlas_AddFontFromFileTTF(
         io->Fonts, "app/res/fonts/iconfont.ttf", 20 + i * 4, &icons_config,
@@ -71,9 +77,9 @@ void imgui_init(tenv* env) {
                                    20 + i * 4, &icons_config,
                                    (const ImWchar[]){0xe900, 0xeaea, 0});
   }
-  
+
   io->ConfigFlags |= ImGuiConfigFlags_DockingEnable;
-  io->IniFilename = NULL;
+  io->IniFilename = "native-layout.ini";
 
   ImGuiStyle* style = igGetStyle();
   style->DockingNodeHasCloseButton = false;

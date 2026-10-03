@@ -9,6 +9,7 @@ typedef struct mm_renderer {
   VkPipeline pipeline;
   texture** minimap_tex;
   tdbuffer* minimap_buffer;
+  bool* uploaded;
 
   uint8_t minimap[MAX_MINIMAP_SIZE * MAX_MINIMAP_SIZE];
 } mm_renderer;

@@ -14,6 +14,7 @@
 
 TDEF_USER_DATA({
   renderer* r;
+  float render_scale;
 
   struct {
     ImFont* mono_font[NUM_FONT_SIZES];

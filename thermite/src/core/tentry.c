@@ -26,18 +26,23 @@ int tentry(int argc, char** argv, size_t usr_size) {
   tinit(&env);
 
   while (env.config.running) {
-    if (env.ctx->swapchain_ok) {
+    if (env.wnd->size[0] > 0 && env.wnd->size[1] > 0) {
       twindow_poll_input(env.wnd);
     } else {
       twindow_wait_input(env.wnd);
-      continue;
     }
 
+    env.ctx->frame_submitted=false;
     tinput(&env);
-    trender(&env);
+    if (env.config.running && env.ctx->swapchain_ok &&
+        env.wnd->size[0] > 0 && env.wnd->size[1] > 0 && !env.wnd->_refresh)
+      trender(&env);
 
-    tkeyboard_update(env.kb);
-    tmouse_update(env.ms);
+    if(env.ctx->frame_submitted) {
+      tkeyboard_update(env.kb);
+      tmouse_update(env.ms);
+      tidle(&env);
+    }
   }
   tcontext_wait_idle(env.ctx);
 

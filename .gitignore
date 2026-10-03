@@ -6,3 +6,8 @@ thermite/res/shaders/bin
 *.ini
 *.cache
 compile_commands.json
+.tools/
+dist/
+
+__pycache__/
+*.pyc

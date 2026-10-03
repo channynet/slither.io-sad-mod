@@ -7,6 +7,8 @@
 
 typedef struct snake {
   int id;
+  int ntl_id;
+  uint64_t generation;
   int cv;
   int fpos;
   int ftg;
@@ -53,7 +55,7 @@ typedef struct snake {
   float wsep;
   float sep;
   float fchl;
-  
+
   float fxs[GD_EEZ];
   float fys[GD_EEZ];
   float fchls[GD_EEZ];

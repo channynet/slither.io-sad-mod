@@ -127,7 +127,10 @@ renderer* renderer_create(tenv* env) {
                       .maxLod = VK_LOD_CLAMP_NONE},
                   NULL, &r->nearest_sampler);
 
-  r->bg_tex = create_mipmap_texture(ctx, "app/res/textures/background_4k.png");
+  // The gray grid is procedural. Keep a tiny valid descriptor instead of loading
+  // an unused 4096x3548 texture and its mip chain (~74 MiB of texels).
+  const unsigned char white[]={255,255,255,255};
+  r->bg_tex = create_rgba_texture(ctx,white,1,1);
   r->tex_atlas = create_mipmap_texture(ctx, "app/res/textures/tex_atlas_8k.png");
 
   vkCreateRenderPass(
@@ -160,8 +163,13 @@ renderer* renderer_create(tenv* env) {
                       &(VkAttachmentReference){
                           .attachment = 0,
                           .layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL}},
-          .dependencyCount = 0,
-          .pDependencies = NULL},
+          .dependencyCount = 1,
+          .pDependencies = &(VkSubpassDependency){
+              .srcSubpass=0,.dstSubpass=VK_SUBPASS_EXTERNAL,
+              .srcStageMask=VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+              .dstStageMask=VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+              .srcAccessMask=VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+              .dstAccessMask=VK_ACCESS_SHADER_READ_BIT}},
       NULL, &r->render_pass);
 
   r->images = malloc(sizeof(renderer_image_data) * ctx->fif);
@@ -332,12 +340,13 @@ renderer* renderer_create(tenv* env) {
 void renderer_render(renderer* r, tcontext* ctx, vec4 clear_color) {
   tcontext_frame* fr = ctx->frames + ctx->current_frame;
 
-  r->global.viewport[0] = r->size[0];
-  r->global.viewport[1] = r->size[1];
+  // Geometry remains in window coordinates; rasterize into a smaller target.
+  r->global.viewport[0] = ctx->size[0];
+  r->global.viewport[1] = ctx->size[1];
   memcpy(r->global_buffer[ctx->current_frame].data, &r->global,
          sizeof(r->global));
 
-  mm_renderer_prerender(r->mmr, ctx);
+  if(r->global.minimap_opacity>0) mm_renderer_prerender(r->mmr, ctx);
 
   vkCmdBeginRenderPass(
       fr->cmd,
@@ -361,14 +370,14 @@ void renderer_render(renderer* r, tcontext* ctx, vec4 clear_color) {
   vkCmdBindDescriptorSets(fr->cmd, VK_PIPELINE_BIND_POINT_GRAPHICS,
                           r->pipeline_layout, 0, 1,
                           &r->global_set[ctx->current_frame], 0, NULL);
-  bg_renderer_render(r->bgr, ctx);
+  if(r->global.bg_opacity>0) bg_renderer_render(r->bgr, ctx);
   fd_renderer_render(r->fdr, ctx);
   bst_renderer_render(r->bstb, ctx);
   bp_renderer_render(r->bpr, ctx);
   bst_renderer_render(r->bsta, ctx);
   bd_renderer_render(r->bdr, ctx);
   bp_renderer_render(r->astr, ctx);
-  mm_renderer_render(r->mmr, ctx);
+  if(r->global.minimap_opacity>0) mm_renderer_render(r->mmr, ctx);
   vkCmdEndRenderPass(ctx->frames[ctx->current_frame].cmd);
 }
 
@@ -377,8 +386,8 @@ void renderer_render_cursor(renderer* r, tcontext* ctx) {
   vkCmdBindVertexBuffers(fr->cmd, 0, 1, &r->quad_buffer->handle,
                          (VkDeviceSize[]){0});
 
-  vkCmdSetViewport(fr->cmd, 0, 1, &(VkViewport){0, 0, r->size[0], r->size[1]});
-  vkCmdSetScissor(fr->cmd, 0, 1, &(VkRect2D){{0, 0}, {r->size[0], r->size[1]}});
+  vkCmdSetViewport(fr->cmd, 0, 1, &(VkViewport){0, 0, ctx->size[0], ctx->size[1]});
+  vkCmdSetScissor(fr->cmd, 0, 1, &(VkRect2D){{0, 0}, {ctx->size[0], ctx->size[1]}});
   vkCmdBindDescriptorSets(fr->cmd, VK_PIPELINE_BIND_POINT_GRAPHICS,
                           r->pipeline_layout, 0, 1,
                           &r->global_set[ctx->current_frame], 0, NULL);

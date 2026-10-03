@@ -12,6 +12,7 @@ mm_renderer* mm_renderer_create(tcontext* ctx, VkPipelineLayout layout,
                       VK_BUFFER_USAGE_TRANSFER_SRC_BIT);
 
   r->minimap_tex = malloc(ctx->fif * sizeof(texture*));
+  r->uploaded = calloc(ctx->fif,sizeof(bool));
 
   for (int i = 0; i < ctx->fif; i++) {
     r->minimap_tex[i] = create_minimap_texture(ctx, MAX_MINIMAP_SIZE);
@@ -167,7 +168,13 @@ mm_renderer* mm_renderer_create(tcontext* ctx, VkPipelineLayout layout,
 void mm_renderer_prerender(mm_renderer* r, tcontext* ctx) {
   tcontext_frame* fr = ctx->frames + ctx->current_frame;
 
+  // Each in-flight texture has its own last uploaded bytes. Hidden maps are
+  // left alone and refreshed from current data when shown again.
+  if(r->uploaded[ctx->current_frame] &&
+     !memcmp(r->minimap_buffer[ctx->current_frame].data,r->minimap,MAX_MINIMAP_SIZE*MAX_MINIMAP_SIZE)) return;
   memcpy(r->minimap_buffer[ctx->current_frame].data, r->minimap, MAX_MINIMAP_SIZE * MAX_MINIMAP_SIZE);
+  vmaFlushAllocation(ctx->allocator,r->minimap_buffer[ctx->current_frame].memory,0,MAX_MINIMAP_SIZE*MAX_MINIMAP_SIZE);
+  r->uploaded[ctx->current_frame]=true;
 
   vkCmdPipelineBarrier(
       fr->cmd, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
@@ -229,6 +236,7 @@ void mm_renderer_destroy(mm_renderer* r, tcontext* ctx) {
     destroy_texture(ctx, r->minimap_tex[i]);
   }
   free(r->minimap_tex);
+  free(r->uploaded);
   tdbuffer_destroy(ctx, r->minimap_buffer);
   free(r);
 }

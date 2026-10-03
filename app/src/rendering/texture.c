@@ -2,6 +2,41 @@
 #include <external/stb/stb_image.h>
 #include <string.h>
 
+texture* create_rgba_texture(tcontext* ctx,const unsigned char* pixels,int width,int height) {
+  if(!pixels || width<1 || height<1 || width>512 || height>512) return NULL;
+  texture* r=calloc(1,sizeof(*r)); if(!r) return NULL;
+  VkBuffer staging=VK_NULL_HANDLE; VmaAllocation allocation=NULL; VmaAllocationInfo info;
+  VkDeviceSize bytes=(VkDeviceSize)width*height*4;
+  if(vmaCreateBuffer(ctx->allocator,&(VkBufferCreateInfo){.sType=VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,.size=bytes,.usage=VK_BUFFER_USAGE_TRANSFER_SRC_BIT,.sharingMode=VK_SHARING_MODE_EXCLUSIVE},
+    &(VmaAllocationCreateInfo){.flags=VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT|VMA_ALLOCATION_CREATE_MAPPED_BIT,.usage=VMA_MEMORY_USAGE_AUTO},&staging,&allocation,&info)!=VK_SUCCESS) goto fail;
+  memcpy(info.pMappedData,pixels,(size_t)bytes); vmaFlushAllocation(ctx->allocator,allocation,0,bytes);
+  if(vmaCreateImage(ctx->allocator,&(VkImageCreateInfo){.sType=VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,.imageType=VK_IMAGE_TYPE_2D,.format=VK_FORMAT_R8G8B8A8_UNORM,
+    .extent={(uint32_t)width,(uint32_t)height,1},.mipLevels=1,.arrayLayers=1,.samples=VK_SAMPLE_COUNT_1_BIT,.tiling=VK_IMAGE_TILING_OPTIMAL,
+    .usage=VK_IMAGE_USAGE_TRANSFER_DST_BIT|VK_IMAGE_USAGE_SAMPLED_BIT,.sharingMode=VK_SHARING_MODE_EXCLUSIVE,.initialLayout=VK_IMAGE_LAYOUT_UNDEFINED},
+    &(VmaAllocationCreateInfo){.usage=VMA_MEMORY_USAGE_AUTO},&r->image,&r->memory,NULL)!=VK_SUCCESS) goto fail;
+  if(vkResetCommandBuffer(ctx->transfer_cmd,0)!=VK_SUCCESS || vkBeginCommandBuffer(ctx->transfer_cmd,&(VkCommandBufferBeginInfo){.sType=VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,.flags=VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT})!=VK_SUCCESS) goto fail;
+  VkImageMemoryBarrier barrier={.sType=VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,.oldLayout=VK_IMAGE_LAYOUT_UNDEFINED,.newLayout=VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+    .srcAccessMask=0,.dstAccessMask=VK_ACCESS_TRANSFER_WRITE_BIT,.srcQueueFamilyIndex=VK_QUEUE_FAMILY_IGNORED,.dstQueueFamilyIndex=VK_QUEUE_FAMILY_IGNORED,
+    .image=r->image,.subresourceRange={VK_IMAGE_ASPECT_COLOR_BIT,0,1,0,1}};
+  vkCmdPipelineBarrier(ctx->transfer_cmd,VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,VK_PIPELINE_STAGE_TRANSFER_BIT,0,0,NULL,0,NULL,1,&barrier);
+  VkBufferImageCopy region={.imageSubresource={VK_IMAGE_ASPECT_COLOR_BIT,0,0,1},.imageExtent={(uint32_t)width,(uint32_t)height,1}};
+  vkCmdCopyBufferToImage(ctx->transfer_cmd,staging,r->image,VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,1,&region);
+  barrier.oldLayout=VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL; barrier.newLayout=VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+  barrier.srcAccessMask=VK_ACCESS_TRANSFER_WRITE_BIT; barrier.dstAccessMask=VK_ACCESS_SHADER_READ_BIT;
+  vkCmdPipelineBarrier(ctx->transfer_cmd,VK_PIPELINE_STAGE_TRANSFER_BIT,VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,0,0,NULL,0,NULL,1,&barrier);
+  if(vkEndCommandBuffer(ctx->transfer_cmd)!=VK_SUCCESS) goto fail;
+  if(vkQueueSubmit(ctx->queue,1,&(VkSubmitInfo){.sType=VK_STRUCTURE_TYPE_SUBMIT_INFO,.commandBufferCount=1,.pCommandBuffers=&ctx->transfer_cmd},ctx->transfer_fence)!=VK_SUCCESS) goto fail;
+  if(vkWaitForFences(ctx->device,1,&ctx->transfer_fence,VK_TRUE,UINT64_MAX)!=VK_SUCCESS) { vkDeviceWaitIdle(ctx->device); goto fail; }
+  vkResetFences(ctx->device,1,&ctx->transfer_fence);
+  if(vkCreateImageView(ctx->device,&(VkImageViewCreateInfo){.sType=VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,.image=r->image,.viewType=VK_IMAGE_VIEW_TYPE_2D,
+    .format=VK_FORMAT_R8G8B8A8_UNORM,.subresourceRange={VK_IMAGE_ASPECT_COLOR_BIT,0,1,0,1}},NULL,&r->view)!=VK_SUCCESS) goto fail;
+  vmaDestroyBuffer(ctx->allocator,staging,allocation); r->size[0]=width; r->size[1]=height; return r;
+fail:
+  if(staging) vmaDestroyBuffer(ctx->allocator,staging,allocation);
+  if(r->image) vmaDestroyImage(ctx->allocator,r->image,r->memory);
+  free(r); return NULL;
+}
+
 texture* create_mipmap_texture(tcontext* ctx, const char* filename) {
   texture* r = malloc(sizeof(texture));
 
@@ -174,7 +209,7 @@ texture* create_mipmap_texture(tcontext* ctx, const char* filename) {
                                .levelCount = mip_levels,
                                .baseArrayLayer = 0,
                                .layerCount = 1}});
-                               
+
   vkEndCommandBuffer(ctx->transfer_cmd);
 
   vkQueueSubmit(ctx->queue, 1,

@@ -4,5 +4,6 @@
 #include <thermite.h>
 
 void input(tenv* env);
+void input_network(tenv* env);
 
 #endif

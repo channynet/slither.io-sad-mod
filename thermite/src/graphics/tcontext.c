@@ -135,7 +135,7 @@ int _tcontext_select_device(tcontext* context) {
     free(extensions);
 
     if (selected_format != -1 && scores[i].supports_fifo &&
-        scores[i].supports_immediate && scores[i].selected_queue != -1 &&
+        scores[i].selected_queue != -1 &&
         properties.deviceType != VK_PHYSICAL_DEVICE_TYPE_CPU) {
       scores[i].selected_format = formats[selected_format];
       scores[i].score = 0;
@@ -212,6 +212,7 @@ void _tcontext_create_device(tcontext* context) {
   vkGetDeviceQueue(context->device, context->queue_family, 0, &context->queue);
 }
 
+#include "present_policy.h"
 void _tcontext_create_swapchain(tcontext* context, bool vsync) {
   VkSurfaceCapabilitiesKHR capabilities;
   vkGetPhysicalDeviceSurfaceCapabilitiesKHR(context->ph_device,
@@ -219,7 +220,13 @@ void _tcontext_create_swapchain(tcontext* context, bool vsync) {
 
   context->size[0] = capabilities.currentExtent.width;
   context->size[1] = capabilities.currentExtent.height;
-  context->min_image_count = capabilities.minImageCount + 1;
+  uint32_t mode_count=0;
+  vkGetPhysicalDeviceSurfacePresentModesKHR(context->ph_device,context->surface,&mode_count,NULL);
+  VkPresentModeKHR* modes=mode_count ? malloc(mode_count*sizeof(*modes)) : NULL;
+  if(!modes || vkGetPhysicalDeviceSurfacePresentModesKHR(context->ph_device,context->surface,&mode_count,modes)!=VK_SUCCESS) mode_count=0;
+  context->present_mode=tear_free_present_mode(modes,mode_count,vsync);
+  context->min_image_count = swapchain_image_count(capabilities.minImageCount,capabilities.maxImageCount,context->present_mode);
+  free(modes);
 
   vkCreateSwapchainKHR(
       context->device,
@@ -239,8 +246,7 @@ void _tcontext_create_swapchain(tcontext* context, bool vsync) {
           .pQueueFamilyIndices = NULL,
           .preTransform = capabilities.currentTransform,
           .compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR,
-          .presentMode =
-              vsync ? VK_PRESENT_MODE_FIFO_KHR : VK_PRESENT_MODE_IMMEDIATE_KHR,
+          .presentMode = context->present_mode,
           .clipped = VK_TRUE,
           .oldSwapchain = context->old_swapchain},
       NULL, &context->swapchain);
@@ -516,39 +522,25 @@ void tcontext_resize(tcontext* context, const ivec2 size, bool vsync) {
                          context->swapchain_frames[i].framebuffer, NULL);
     vkDestroyImageView(context->device, context->swapchain_frames[i].image_view,
                        NULL);
+    vkDestroySemaphore(context->device, context->render_completes[i], NULL);
   }
   free(context->swapchain_frames);
+  free(context->render_completes);
 
   _tcontext_create_swapchain(context, vsync);
   vkDestroySwapchainKHR(context->device, context->old_swapchain, NULL);
   _tcontext_create_views(context);
 
-  context->swapchain_ok = true;
-}
-
-bool tcontext_begin(tcontext* context) {
-  tcontext_frame* fr = context->frames + context->current_frame;
-  vkWaitForFences(context->device, 1, &fr->wait_fence, VK_TRUE, UINT64_MAX);
-  vkResetFences(context->device, 1, &fr->wait_fence);
-
-  VkResult r = vkAcquireNextImageKHR(context->device, context->swapchain,
-                                     UINT64_MAX, fr->present_complete,
-                                     VK_NULL_HANDLE, &context->current_image);
-
-  if (r == VK_ERROR_OUT_OF_DATE_KHR) {
-    context->swapchain_ok = false;
-    return false;
+  // Presentation semaphores belong to swapchain images, whose count can
+  // change when moving between windowed and fullscreen presentation.
+  context->render_completes = malloc(context->image_count * sizeof(VkSemaphore));
+  for (uint32_t i = 0; i < context->image_count; i++) {
+    vkCreateSemaphore(context->device,
+        &(VkSemaphoreCreateInfo){.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO},
+        NULL, &context->render_completes[i]);
   }
 
-  vkResetCommandBuffer(fr->cmd, 0);
-  vkBeginCommandBuffer(fr->cmd,
-                       &(VkCommandBufferBeginInfo){
-                           .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
-                           .pNext = NULL,
-                           .flags = 0,
-                           .pInheritanceInfo = NULL});
-
-  return true;
+  context->swapchain_ok = true;
 }
 
 void tcontext_clear(tcontext* context, const vec4 clear_color) {

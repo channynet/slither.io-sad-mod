@@ -2,12 +2,15 @@
 
 #include "../user.h"
 #include "../network/server.h"
+#include "native_preferences.h"
+#include "death_review.h"
+#include "target_marker.h"
 
 void show_hot_key(tuser_data* usr, int hotkey, vec3 color, const char* info,
                   float offset, font_size sz) {
   user_settings* usrs = &usr->usrs;
 
-  char hotkey_str[3] = {(char) hotkey, ' ', 0};
+  char hotkey_str[16]; native_key_label(hotkey,hotkey_str,sizeof(hotkey_str));
   igPushFont(usr->imgui_data.mono_font_bold[sz],
              usr->imgui_data.mono_font_bold[sz]->LegacySize);
   igSetCursorPosX(igGetCursorPosX() + offset);
@@ -40,10 +43,16 @@ void display_hotkeys(tuser_data* usr, float offset, font_size sz) {
   show_hot_key(usr, usrs->hotkeys[HOTKEY_RESTART].key, (vec3){1, 0.7f, 0.7f}, usrs->hotkeys[HOTKEY_RESTART].description, offset, sz);
   show_hot_key(usr, usrs->hotkeys[HOTKEY_QUIT].key, (vec3){1, 0.7f, 0.7f}, usrs->hotkeys[HOTKEY_QUIT].description, offset, sz);
 
-  show_hot_key(usr, GLFW_KEY_N, (vec3){0.7f, 1, 0.7f}, "Zoom in", offset, sz);
-  show_hot_key(usr, GLFW_KEY_M, (vec3){0.7f, 1, 0.7f}, "Zoom out", offset,
+  show_hot_key(usr, GLFW_KEY_M, (vec3){0.7f, 1, 0.7f}, "Zoom in", offset, sz);
+  show_hot_key(usr, GLFW_KEY_N, (vec3){0.7f, 1, 0.7f}, "Zoom out", offset,
                sz);
   show_hot_key_str(usr, "\ueaed", (vec3){0.7f, 1, 0.7f}, "Boost", 0, sz);
+  show_hot_key_str(usr,"H H / F8",(vec3){1,1,0.7f},"Team / chat",offset,sz);
+  show_hot_key_str(usr,"Enter",(vec3){1,1,0.7f},"Chat",offset,sz);
+  show_hot_key_str(usr,"Backspace x2",(vec3){1,1,0.7f},"Target selector",offset,sz);
+  show_hot_key_str(usr,"Ctrl+F4",(vec3){1,1,0.7f},"Freeze on death",offset,sz);
+  show_hot_key_str(usr,". .",(vec3){1,1,0.7f},"Settings",offset,sz);
+  show_hot_key_str(usr,"Ctrl+F5/6/7",(vec3){1,1,0.7f},"FPS / resolution / low FX",offset,sz);
 
   for (int i = 0; i < NUM_HOTKEYS - 2; i++) {
     hotkey* hk = usrs->hotkeys + i;
@@ -570,6 +579,8 @@ void game_data_init(tenv* env) {
 }
 
 void game_data_reset(tenv* env) {
+  death_review_reset();
+  target_marker_reset();
   tuser_data* usr = env->usr;
   user_settings* usrs = &env->usr->usrs;
   game_data* gdata = &usr->gdata;
@@ -645,7 +656,7 @@ void game_data_destroy(tenv* env) {
 
   server_destroy(env);
   sbot_destroy(env);
-  
+
   tdarray_destroy(gdata->data.fpsls);
   tdarray_destroy(gdata->data.fmlts);
   int gptz_dp_len = tdarray_length(gdata->data.gptz_dp);

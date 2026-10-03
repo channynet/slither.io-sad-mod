@@ -1,4 +1,5 @@
 #include "../core/tenv.h"
+#include <string.h>
 
 #include "../util/tdarray.h"
 #include "twindow.h"
@@ -6,9 +7,10 @@
 void key_callback(GLFWwindow* window, int key, int scancode, int action,
                   int mods) {
   tenv* env = glfwGetWindowUserPointer(window);
-  if (action == GLFW_PRESS)
+  if (action == GLFW_PRESS) {
     tdarray_push(&env->kb->keys_pressed, &key);
-  else if (action == GLFW_RELEASE)
+    if(key>=0 && key<512) env->kb->press_modifiers[key]=mods;
+  } else if (action == GLFW_RELEASE)
     tdarray_push(&env->kb->keys_released, &key);
 }
 
@@ -21,7 +23,7 @@ tkeyboard* tkeyboard_create(twindow* window) {
   glfwSetKeyCallback(window->handle, key_callback);
   glfwSetCharCallback(window->handle, char_callback);
 
-  tkeyboard* r = malloc(sizeof(tkeyboard));
+  tkeyboard* r = calloc(1,sizeof(tkeyboard));
   r->keys_pressed = tdarray_create(int);
   r->keys_released = tdarray_create(int);
 
@@ -32,6 +34,7 @@ void tkeyboard_update(tkeyboard* keyboard) {
   tdarray_clear(keyboard->keys_pressed);
   tdarray_clear(keyboard->keys_released);
   keyboard->char_pressed = 0;
+  memset(keyboard->press_modifiers,0,sizeof(keyboard->press_modifiers));
 }
 
 int tkeyboard_key_pressed(tkeyboard* keyboard, int key) {

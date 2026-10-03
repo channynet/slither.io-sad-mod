@@ -1,4 +1,7 @@
 #include "callback.h"
+#include "network_pump.h"
+#include "../game/perf_trace.h"
+#include "../game/death_review.h"
 
 #include "../game/food.h"
 #include "../game/snake.h"
@@ -97,6 +100,7 @@ uint8_t* get_skin_compressed(tuser_data* usr) {
 }
 
 void got_packet(tenv* env, uint8_t* a, int a_len) {
+  if (a_len < 1 || death_review.frozen) return;
   tuser_data* usr = env->usr;
   tcontext* ctx = env->ctx;
   user_settings* usrs = &usr->usrs;
@@ -110,7 +114,13 @@ void got_packet(tenv* env, uint8_t* a, int a_len) {
   int dlen = a_len - 1;
 
   int m = 1;
-  if (cmd == '6') {
+  if (cmd == 'S') {
+    if (a_len != 7) return;
+    int id = ((unsigned)a[1] << 8) | a[2];
+    uint32_t serial = ((uint32_t)a[3] << 24) | ((uint32_t)a[4] << 16) | ((uint32_t)a[5] << 8) | a[6];
+    snake* peer = get_snake(gdata, id);
+    if (peer) peer->ntl_id = ((serial & 63u) << 10) | (id & 1023);
+  } else if (cmd == '6') {
     uint8_t secret[27] = {0};
     decode_secret(a, a_len, secret);
     mg_ws_send(c, secret, 27, WEBSOCKET_OP_BINARY);
@@ -383,6 +393,9 @@ void got_packet(tenv* env, uint8_t* a, int a_len) {
       o.tl = o.sct + o.fam;
       o.cfl = o.tl - .6;
       o.id = id;
+      o.ntl_id = id;
+      static uint64_t next_generation;
+      o.generation=++next_generation;
       o.xx = snx;
       o.yy = sny;
       o.cv = cv % NUM_DEFAULT_SKINS;
@@ -417,6 +430,8 @@ void got_packet(tenv* env, uint8_t* a, int a_len) {
       for (int i = snakes_len - 1; i >= 0; i--) {
         snake* o = gdata->data.snakes + i;
         if (o->id == id) {
+          // Preserve the last intact scene before the server removes our body.
+          if(is_kill && id==gdata->data.snake_id && death_review_begin(env)) return;
           if (o->id == gdata->data.snake_id) {
             o->id = gdata->data.snake_id = -1;
           } else
@@ -823,6 +838,7 @@ void got_packet(tenv* env, uint8_t* a, int a_len) {
   } else if (cmd == 'p') {
     gdata->data.wfpr = false;
     gdata->data.pings[gdata->data.cping] = gdata->data.ctm - gdata->data.last_ping_mtm;
+    perf_ping(gdata->data.pings[gdata->data.cping]);
     gdata->data.cping = (gdata->data.cping + 1) % PING_SAMPLE_COUNT;
     if (gdata->data.lagging) {
       gdata->data.etm *= gdata->data.lag_mult;
@@ -1269,6 +1285,7 @@ void got_packet(tenv* env, uint8_t* a, int a_len) {
 
     save_user_settings(usrs);
 
+    if (death_review_begin(env)) return;
     if (usrs->instant_restart) {
       gdata->restart_req = true;
       c->is_closing = true;
@@ -1283,7 +1300,11 @@ void server_callback(struct mg_connection* c, int ev, void* ev_data) {
   game_data* gdata = &usr->gdata;
 
   if (ev == MG_EV_OPEN) {
+    if(!game_prepare_receive(c)) c->is_closing=true;
     printf("Connection opened\n");
+  } else if(ev==MG_EV_READ) {
+    long bytes=*(long*)ev_data;
+    if(bytes>0) perf_received((size_t)bytes);
   } else if (ev == MG_EV_WS_OPEN) {
     printf("Connection established\n");
 
@@ -1292,12 +1313,14 @@ void server_callback(struct mg_connection* c, int ev, void* ev_data) {
   } else if (ev == MG_EV_WS_MSG) {
     struct mg_ws_message* msg = (struct mg_ws_message*)ev_data;
     uint8_t* a = (uint8_t*)msg->data.buf;
+    if (msg->data.len == 0) return;
     int m = 0;
     if (a[m] < 32) {
       int l = msg->data.len;
       while (m < l) {
         int len;
         if (a[m] < 32) {
+          if (m + 1 >= l) { c->is_closing = true; return; }
           len = a[m] << 8 | a[m + 1];
           m += 2;
         } else {
@@ -1305,6 +1328,7 @@ void server_callback(struct mg_connection* c, int ev, void* ev_data) {
           m++;
         }
         uint8_t* a2 = a + m;
+        if (len < 1 || len > l - m) { c->is_closing = true; return; }
         got_packet(env, a2, len);
         m += len;
       }
@@ -1319,5 +1343,6 @@ void server_callback(struct mg_connection* c, int ev, void* ev_data) {
   } else if (ev == MG_EV_CLOSE) {
     printf("Connection closed\n");
     gdata->closed = true;
+    if(gdata->connection==c) gdata->connection=NULL;
   }
 }

@@ -1,0 +1,6 @@
+Black wings example for Slither Native personal tags and cosmetics.
+Generated with the built-in image_gen tool on 2026-10-02; transparent PNG preserved.
+No existing NTL artwork was used.
+
+Generation prompt:
+Use case: stylized-concept. Asset type: transparent PNG game cosmetic sprite for a top-down Slither-like snake and a small overhead badge. Create one symmetric pair of elegant BLACK FEATHERED WINGS, spread horizontally to the left and right, viewed directly from above, with the animal's forward direction at the top of the image. Only the wings: no bird body, no head, no snake, no text, no symbols. Their roots almost meet at the exact center. Layered black and charcoal raven feathers with restrained silver-gray edge highlights so the silhouette reads on a gray game field at small size. Crisp clean alpha edges, polished hand-painted 2D game art, not photorealistic. Wide composition roughly 2:1; fill most of the canvas with modest transparent padding. Real transparent background everywhere outside the feathers, including between the wings. No white background, no checkerboard painted into the pixels, no drop shadow, no glow, no extra objects.

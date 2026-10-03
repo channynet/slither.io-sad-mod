@@ -1,6 +1,7 @@
 #include "title_screen.h"
 
 #include "../network/server.h"
+#include "../network/server_history.h"
 #include "../user.h"
 
 void ui_title_screen_init(tenv* env) {}
@@ -12,7 +13,7 @@ void ui_title_screen(tenv* env) {
   ImGuiStyle* style = igGetStyle();
   ImGuiIO* io = igGetIO_Nil();
   game_data* gdata = &usr->gdata;
-  
+
   // version
   char version_str[16] = {0};
   sprintf(version_str, "v%s", APP_VERSION);
@@ -73,8 +74,22 @@ void ui_title_screen(tenv* env) {
   igSetCursorPosX(ctx->size[0] / 2.0f - logo_size / 2);
   igSetCursorPosY(ctx->size[1] / 2.0f + style->ItemSpacing.y * 2 +
                   frame_height);
+  igSetNextItemWidth(logo_size-frame_height-style->ItemSpacing.x);
   igInputTextWithHint("##ipv4_input", "IPv4:Port", usrs->ipv4, MAX_IPV4_LEN + 1,
                       ImGuiInputTextFlags_None, NULL, NULL);
+  igSameLine(0,-1);
+  igSetNextItemWidth(frame_height);
+  if(igBeginCombo("##recent_servers",NULL,ImGuiComboFlags_NoPreview)) {
+    igTextDisabled("Recent servers");
+    for(int i=0;i<recent_servers.count;i++) {
+      const char* address=recent_servers.addresses[i];
+      if(igSelectable_Bool(address,!strcmp(usrs->ipv4,address),0,(ImVec2){0}))
+        strcpy(usrs->ipv4,address);
+    }
+    if(!recent_servers.count) igTextDisabled("Use Play to save an address.");
+    igEndCombo();
+  }
+  if(igIsItemHovered(0)) igSetTooltip("Recent servers (saved on Play)");
   igPopStyleColor(1);
   igPopItemWidth();
   igSetCursorPosX(ctx->size[0] / 2.0f - logo_size / 2);
@@ -104,6 +119,10 @@ void ui_title_screen(tenv* env) {
   if (igButton("\ue9b6 Quit", (ImVec2){logo_size})) {
     env->config.running = false;
     save_user_settings(usrs);
+  }
+  if(server_history_save_failed) {
+    igSetCursorPosX(ctx->size[0]/2.0f-logo_size/2);
+    igTextColored((ImVec4){1,0.6f,0.3f,1},"Could not save server history.");
   }
 
   igPopFont();
