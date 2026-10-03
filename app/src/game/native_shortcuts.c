@@ -36,6 +36,7 @@ void native_shortcuts(tenv* env) {
     if(tkeyboard_key_pressed(env->kb,GLFW_KEY_F8)) personal_tag_toggle();
     if(tkeyboard_key_pressed(env->kb,GLFW_KEY_F9)) personal_cosmetic_toggle();
     if(tkeyboard_key_pressed(env->kb,GLFW_KEY_F10)) native_prefs.snake_outline=!native_prefs.snake_outline;
+    if(tkeyboard_key_pressed(env->kb,GLFW_KEY_F11)) native_prefs.team_name_enabled=!native_prefs.team_name_enabled;
     if(tkeyboard_key_pressed(env->kb,GLFW_KEY_F12)) native_prefs.head_point=!native_prefs.head_point;
     return;
   }

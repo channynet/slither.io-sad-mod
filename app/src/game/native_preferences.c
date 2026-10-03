@@ -18,7 +18,7 @@ static bool integer(struct mg_str json,const char* key,int low,int high,int* tar
   *target=(int)n; return true;
 }
 bool native_preferences_load(const char* path,native_preferences* out) {
-  *out=(native_preferences){.version=2,.frame_cap=0,.render_scale=1,.team_panel=true,.fullscreen=false,.snake_outline=true,.head_point=true,.death_freeze=true};
+  *out=(native_preferences){.version=2,.frame_cap=0,.render_scale=1,.team_panel=true,.fullscreen=false,.snake_outline=true,.head_point=true,.death_freeze=true,.team_name_enabled=true,.team_name_color={1,.8f,.2f}};
   FILE* f=fopen(path,"rb"); if(!f) return false;
   char data[2048]; size_t n=fread(data,1,sizeof(data)-1,f); bool overflow=!feof(f); fclose(f);
   if(overflow) return false; data[n]=0;
@@ -30,13 +30,23 @@ bool native_preferences_load(const char* path,native_preferences* out) {
   mg_json_get_bool(json,"$.snake_outline",&value.snake_outline);
   mg_json_get_bool(json,"$.head_point",&value.head_point);
   mg_json_get_bool(json,"$.death_freeze",&value.death_freeze);
+  mg_json_get_bool(json,"$.team_name_enabled",&value.team_name_enabled);
+  char* tag=mg_json_get_str(json,"$.team_name_text");
+  if(tag && strlen(tag)<=MAX_NICKNAME_LEN && !strchr(tag,'\n') && !strchr(tag,'\r')) strcpy(value.team_name_text,tag);
+  mg_free(tag);
+  const char* colors[]={"$.team_name_r","$.team_name_g","$.team_name_b"};
+  for(int i=0;i<3;i++) {
+    double component;
+    if(mg_json_get_num(json,colors[i],&component) && isfinite(component) && component>=0 && component<=1)
+      value.team_name_color[i]=(float)component;
+  }
   *out=value; return true;
 }
 bool native_preferences_save(const char* path,const native_preferences* value) {
   char temp[MAX_PATH]; if(snprintf(temp,sizeof(temp),"%s.tmp",path)>=(int)sizeof(temp)) return false;
   FILE* f=fopen(temp,"wb"); if(!f) return false;
-  int count=fprintf(f,"{\n  \"version\": 2,\n  \"frame_cap\": %d,\n  \"render_scale\": %d,\n  \"team_panel\": %s,\n  \"fullscreen\": %s,\n  \"snake_outline\": %s,\n  \"head_point\": %s,\n  \"death_freeze\": %s\n}\n",value->frame_cap,value->render_scale,value->team_panel?"true":"false",value->fullscreen?"true":"false",value->snake_outline?"true":"false",value->head_point?"true":"false",value->death_freeze?"true":"false");
-  bool ok=count>0; if(fclose(f)) ok=false;
+  char* json=mg_mprintf("{\n  \"version\": 2,\n  \"frame_cap\": %d,\n  \"render_scale\": %d,\n  \"team_panel\": %s,\n  \"fullscreen\": %s,\n  \"snake_outline\": %s,\n  \"head_point\": %s,\n  \"death_freeze\": %s,\n  \"team_name_enabled\": %s,\n  \"team_name_text\": %m,\n  \"team_name_r\": %.9g,\n  \"team_name_g\": %.9g,\n  \"team_name_b\": %.9g\n}\n",value->frame_cap,value->render_scale,value->team_panel?"true":"false",value->fullscreen?"true":"false",value->snake_outline?"true":"false",value->head_point?"true":"false",value->death_freeze?"true":"false",value->team_name_enabled?"true":"false",MG_ESC(value->team_name_text),(double)value->team_name_color[0],(double)value->team_name_color[1],(double)value->team_name_color[2]);
+  bool ok=json && fputs(json,f)>=0; mg_free(json); if(fclose(f)) ok=false;
   return ok && MoveFileExA(temp,path,MOVEFILE_REPLACE_EXISTING|MOVEFILE_WRITE_THROUGH);
 }
 void ntl_hotkey_defaults(user_settings* s) {

@@ -410,6 +410,23 @@ void ntl_frame(tenv* env) {
       igSeparator();
       if(igCollapsingHeader_TreeNodeFlags("이미지 태그 / cosmetic",0)) personal_tag_controls(env);
       igSeparator();
+      if(igCollapsingHeader_TreeNodeFlags("팀 이름 색상",0)) {
+        igCheckbox("팀 표기만 강조 · Ctrl+F11",&native_prefs.team_name_enabled);
+        igSetNextItemWidth(180);
+        igInputTextWithHint("팀 표기","예: [TEAM]",native_prefs.team_name_text,sizeof(native_prefs.team_name_text),0,NULL,NULL);
+        igSetItemTooltip("닉네임에서 입력한 글자와 정확히 일치하는 첫 부분만 강조합니다. 대소문자와 괄호도 포함하세요. NTL 팀원 판별과는 별개입니다.");
+        igSetNextItemWidth(180);
+        igColorEdit3("강조색",native_prefs.team_name_color,ImGuiColorEditFlags_NoInputs);
+        igTextWrapped("게임 화면의 팀 표기만 색을 바꿉니다. 나머지 이름과 점수는 기존 표시를 유지합니다. 설정은 자동 저장됩니다.");
+        if(!native_prefs.team_name_text[0]) igTextDisabled("강조할 팀 표기를 입력하세요.");
+        else {
+          igTextDisabled("미리보기:"); igSameLine(0,-1);
+          float* c=native_prefs.team_name_color;
+          ImVec4 color=native_prefs.team_name_enabled ? (ImVec4){c[0],c[1],c[2],1} : (ImVec4){.85f,.85f,.85f,1};
+          igTextColored(color,"%s",native_prefs.team_name_text); igSameLine(0,0);
+          igTextColored((ImVec4){.85f,.85f,.85f,1}," player 10.0K");
+        }
+      }
       igCheckbox("지렁이 외곽선 강조 · Ctrl+F10",&native_prefs.snake_outline);
       igCheckbox("내 머리 앞 기준점 · Ctrl+F12",&native_prefs.head_point);
       igSetItemTooltip("내 머리 앞 중앙을 표시합니다. 서버의 정확한 사망 판정 범위를 나타내지는 않습니다.");

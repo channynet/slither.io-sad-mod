@@ -274,11 +274,23 @@ void redraw(tenv* env) {
             }
           }
 
-          ImDrawList_AddText_Vec2(
-              igGetWindowDrawList(), (ImVec2){ntx, nty},
-              igColorConvertFloat4ToU32(
-                  (ImVec4){ncolor[0], ncolor[1], ncolor[2], mode->player_names_outline ? a : 0.5f * a}),
-              o->nk, NULL);
+          ImU32 name_color=igColorConvertFloat4ToU32(
+              (ImVec4){ncolor[0],ncolor[1],ncolor[2],mode->player_names_outline ? a : 0.5f*a});
+          const char* tag=native_prefs.team_name_enabled && native_prefs.team_name_text[0]
+              ? strstr(o->nk,native_prefs.team_name_text) : NULL;
+          ImDrawList* name_draw=igGetWindowDrawList();
+          if(tag) {
+            // Explicit literal match: never infer NTL membership from name text.
+            const char* end=tag+strlen(native_prefs.team_name_text);
+            ImVec2 before,through;
+            igCalcTextSize(&before,o->nk,tag,false,-1);
+            igCalcTextSize(&through,o->nk,end,false,-1);
+            if(tag!=o->nk) ImDrawList_AddText_Vec2(name_draw,(ImVec2){ntx,nty},name_color,o->nk,tag);
+            ImDrawList_AddText_Vec2(name_draw,(ImVec2){ntx+before.x,nty},
+                igColorConvertFloat4ToU32((ImVec4){native_prefs.team_name_color[0],
+                  native_prefs.team_name_color[1],native_prefs.team_name_color[2],mode->player_names_outline ? a : 0.5f*a}),tag,end);
+            ImDrawList_AddText_Vec2(name_draw,(ImVec2){ntx+through.x,nty},name_color,end,NULL);
+          } else ImDrawList_AddText_Vec2(name_draw,(ImVec2){ntx,nty},name_color,o->nk,NULL);
 
           if (usrs->snake_scores) {
             igPushFont(

@@ -18,6 +18,9 @@ int main(void) {
   assert(!native_preferences_load("missing.json",&p));
   assert(p.frame_cap==0 && p.render_scale==1 && p.team_panel && !p.fullscreen);
   assert(p.snake_outline && p.head_point && p.death_freeze);
+  assert(p.team_name_enabled && !p.team_name_text[0] && p.team_name_color[0]==1);
+  strcpy(p.team_name_text,"[팀\"A]"); p.team_name_enabled=false;
+  p.team_name_color[0]=.25f; p.team_name_color[1]=.75f; p.team_name_color[2]=.5f;
   p.death_freeze=false;
   p.snake_outline=false; p.head_point=false;
   p.frame_cap=2; p.render_scale=0; p.team_panel=false; p.fullscreen=true;
@@ -25,10 +28,13 @@ int main(void) {
   assert(native_preferences_load("roundtrip.json",&q));
   assert(q.frame_cap==2 && q.render_scale==0 && !q.team_panel && q.fullscreen);
   assert(!q.snake_outline && !q.head_point && !q.death_freeze);
+  assert(!q.team_name_enabled && !strcmp(q.team_name_text,p.team_name_text));
+  assert(!memcmp(q.team_name_color,p.team_name_color,sizeof(p.team_name_color)));
   FILE* legacy=fopen("legacy.json","wb");
   fputs("{\"version\":2,\"frame_cap\":1,\"render_scale\":2,\"team_panel\":false,\"fullscreen\":true}",legacy); fclose(legacy);
   assert(native_preferences_load("legacy.json",&q));
   assert(q.snake_outline && q.head_point && q.death_freeze && q.fullscreen && !q.team_panel && q.frame_cap==1 && q.render_scale==2);
+  assert(q.team_name_enabled && !q.team_name_text[0] && q.team_name_color[0]==1);
   FILE* f=fopen("invalid.json","wb"); fputs("{\"version\":2,\"frame_cap\":99,\"render_scale\":1,\"team_panel\":true,\"fullscreen\":false}",f); fclose(f);
   assert(!native_preferences_load("invalid.json",&q));
   f=fopen("truncated.json","wb"); fputs("{\"version\":2",f); fclose(f);
