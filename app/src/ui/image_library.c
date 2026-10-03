@@ -16,7 +16,7 @@ static const char* names[2][10]={
 };
 static const char* kind(const image_library* l) { return l->cosmetic?"cosmetic":"tag"; }
 static void catalog_path(const image_library* l,char* out,size_t n) { snprintf(out,n,"personal-%s-library.json",kind(l)); }
-static image_item defaults(bool cos) { return (image_item){.size=cos?160:96,.gap=cos?-18:24,.rotate=cos}; }
+static image_item defaults(bool cos) { return (image_item){.size=cos?160:96,.gap=cos?-18:24,.rotate=cos,.sway=!cos}; }
 void image_library_seed(image_library* l,bool cos) {
   memset(l,0,sizeof(*l)); l->cosmetic=cos; l->enabled=true; l->count=10;
   for(int i=0;i<10;i++) {
@@ -68,6 +68,8 @@ int image_library_load(image_library* l) {
     ok=ok && number(entry,"$.gap",l->cosmetic?-100:0,l->cosmetic?100:120,&v); if(ok) item->gap=(float)v;
     ok=ok && number(entry,"$.angle",-180,180,&v); if(ok) item->angle=(float)v;
     ok=ok && mg_json_get_bool(entry,"$.rotate",&item->rotate);
+    item->sway=!l->cosmetic; // Old catalogs gain tag sway without changing other settings.
+    if(mg_json_get_tok(entry,"$.sway").len) ok=ok && mg_json_get_bool(entry,"$.sway",&item->sway);
     if(item->id==selected_id) { next.selected=i; found=true; }
   }
   if(!ok || !found) { l->read_only=true; return -1; }
@@ -80,8 +82,8 @@ bool image_library_save(const image_library* l) {
   bool ok=fprintf(f,"{\"version\":1,\"count\":%d,\"selected\":%d,\"enabled\":%s,\"items\":[\n",l->count,l->items[l->selected].id,l->enabled?"true":"false")>0;
   for(int i=0;ok && i<l->count;i++) {
     const image_item* p=&l->items[i];
-    char* row=mg_mprintf("%s{\"id\":%d,\"name\":%m,\"size\":%.3f,\"gap\":%.3f,\"angle\":%.3f,\"rotate\":%s}",
-        i?",\n":"",p->id,MG_ESC(p->name),p->size,p->gap,p->angle,p->rotate?"true":"false");
+    char* row=mg_mprintf("%s{\"id\":%d,\"name\":%m,\"size\":%.3f,\"gap\":%.3f,\"angle\":%.3f,\"rotate\":%s,\"sway\":%s}",
+        i?",\n":"",p->id,MG_ESC(p->name),p->size,p->gap,p->angle,p->rotate?"true":"false",p->sway?"true":"false");
     ok=row && fputs(row,f)>=0; mg_free(row);
   }
   if(fputs("\n]}\n",f)<0) ok=false;

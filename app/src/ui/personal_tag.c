@@ -14,7 +14,7 @@ typedef struct {
   texture* tex;
   VkDescriptorSet descriptor;
   tag_image pending;
-  bool enabled,changed,rotate;
+  bool enabled,changed,rotate,sway;
   float size,gap,angle;
   const char *image_path,*settings_path;
   image_library library;
@@ -26,10 +26,11 @@ typedef struct {
 static personal_image tag={.enabled=true,.size=128,.gap=24,.image_path="personal-tag.rgba",.settings_path="personal-tag.json"};
 static personal_image cosmetic={.enabled=true,.rotate=true,.size=160,.gap=-18,.image_path="personal-cosmetic.rgba",.settings_path="personal-cosmetic.json"};
 static tag_attachment tag_motion;
+static tag_sway tag_swing,preview_swing;
 static void save_settings(personal_image* p) {
   image_item* item=&p->library.items[p->library.selected];
   if(!item->name[0]) strcpy(item->name,"이름 없는 이미지");
-  item->size=p->size; item->gap=p->gap; item->angle=p->angle; item->rotate=p->rotate;
+  item->size=p->size; item->gap=p->gap; item->angle=p->angle; item->rotate=p->rotate; item->sway=p->sway;
   p->library.enabled=p->enabled;
   if(!image_library_save(&p->library)) snprintf(p->message,sizeof(p->message),"설정을 저장하지 못했습니다. 파일 접근 권한을 확인하세요.");
 }
@@ -49,8 +50,8 @@ static bool load_item(personal_image* p,int index,tag_image* out) {
 static void apply_item(personal_image* p,int index,tag_image next) {
   p->library.selected=index;
   const image_item* item=&p->library.items[index];
-  p->size=item->size; p->gap=item->gap; p->angle=item->angle; p->rotate=item->rotate;
-  tag_image_free(&p->pending); p->pending=next; p->changed=true; tag_motion.valid=false;
+  p->size=item->size; p->gap=item->gap; p->angle=item->angle; p->rotate=item->rotate; p->sway=item->sway;
+  tag_image_free(&p->pending); p->pending=next; p->changed=true; tag_motion.valid=false; tag_swing.valid=preview_swing.valid=false;
 }
 static bool select_item(personal_image* p,int index) {
   tag_image next={0};
@@ -73,7 +74,7 @@ static void read_settings(personal_image* p) {
   if(attached && mg_json_get_num(json,"$.angle",&value) && isfinite(value) && value>=-180 && value<=180) p->angle=value;
 }
 void personal_tag_init(tenv* env) {
-  tag_motion.valid=false;
+  tag_motion.valid=false; tag_swing.valid=preview_swing.valid=false;
   personal_image* slots[]={&tag,&cosmetic};
   for(int i=0;i<2;i++) {
     personal_image* p=slots[i]; image_library_seed(&p->library,i==1);
@@ -83,8 +84,7 @@ void personal_tag_init(tenv* env) {
       tag_image legacy={0};
       if(tag_image_load(p->image_path,&legacy)) {
         image_item* item=image_library_add(&p->library,"기존 이미지");
-        if(!item->name[0]) strcpy(item->name,"이름 없는 이미지");
-  item->size=p->size; item->gap=p->gap; item->angle=p->angle; item->rotate=p->rotate;
+        item->size=p->size; item->gap=p->gap; item->angle=p->angle; item->rotate=p->rotate; item->sway=i==0;
         char path[256]; image_library_path(&p->library,p->library.count-1,path,sizeof(path));
         if(tag_image_save(path,&legacy)) p->library.selected=p->library.count-1;
         else { p->library.count--; p->library.read_only=true; }
@@ -209,6 +209,9 @@ static void controls(tenv* env,personal_image* p) {
     save_settings(p);
   }
   if(igCheckbox(cos?"cosmetic 표시 · Ctrl+F9":"태그 표시 · Ctrl+F8",&p->enabled)) save_settings(p);
+  if(!cos && igCheckbox("부드러운 흔들림",&p->sway)) {
+    tag_swing.valid=preview_swing.valid=false; save_settings(p);
+  }
   igSliderFloat("크기",&p->size,24,cos?320:192,"%.0f",ImGuiSliderFlags_AlwaysClamp);
   if(igIsItemDeactivatedAfterEdit()) save_settings(p);
   igSliderFloat(cos?"앞뒤 위치":"연결 줄 길이",&p->gap,cos?-100:0,cos?100:120,"%.0f",ImGuiSliderFlags_AlwaysClamp);
@@ -258,10 +261,10 @@ void personal_cosmetic_preview(tenv* env,float x,float y,float scale,float direc
     (ImVec2){points[0],points[1]},(ImVec2){points[2],points[3]},(ImVec2){points[4],points[5]},(ImVec2){points[6],points[7]},
     (ImVec2){0,0},(ImVec2){1,0},(ImVec2){1,1},(ImVec2){0,1},igGetColorU32_Vec4((ImVec4){1,1,1,alpha}));
 }
-static void draw_tag(float x,float y,float scale,float direction,float trailing,float alpha) {
+static void draw_tag(float x,float y,float scale,float direction,float trailing,float swing,float alpha) {
   float points[8],cord[14];
   tag_attachment_geometry(points,cord,x,y,tag.size,tag.tex->size[0],tag.tex->size[1],
-      scale,direction,trailing,tag.gap,tag.angle);
+      scale,direction,trailing+swing*.35f,tag.gap,tag.angle+swing*57.2957795f);
   ImDrawList* draw=igGetWindowDrawList();
   float thickness=fmaxf(1,1.5f*scale);
   for(int i=0;i<6;i++) {
@@ -275,21 +278,25 @@ static void draw_tag(float x,float y,float scale,float direction,float trailing,
 }
 void personal_tag_preview(tenv* env,float x,float y,float scale,float direction,float alpha) {
   (void)env;
-  if(tag.enabled && tag.tex) draw_tag(x,y,scale,direction,direction,alpha);
+  if(tag.enabled && tag.tex) {
+    float swing=tag.sway?tag_sway_update(&preview_swing,direction,igGetTime()*1000,1):0;
+    draw_tag(x,y,scale,direction,direction,swing,alpha);
+  } else preview_swing.valid=false;
 }
 void personal_tag_draw(tenv* env) {
   game_data* game=&env->usr->gdata;
-  if(game->curr_screen!=PLAYING || game->conn!=CONNECTED || !game->data.follow_view) { tag_motion.valid=false; return; }
-  snake* me=get_snake(game,game->data.snake_id); if(!me || me->dead) { tag_motion.valid=false; return; }
+  if(game->curr_screen!=PLAYING || game->conn!=CONNECTED || !game->data.follow_view) { tag_motion.valid=false; tag_swing.valid=false; return; }
+  snake* me=get_snake(game,game->data.snake_id); if(!me || me->dead) { tag_motion.valid=false; tag_swing.valid=preview_swing.valid=false; return; }
   float x=env->ctx->size[0]*0.5f+(me->xx+me->fx-game->data.view_xx)*game->data.gsc;
   float y=env->ctx->size[1]*0.5f+(me->yy+me->fy-game->data.view_yy)*game->data.gsc;
   float alpha=fminf(1,fmaxf(0,me->alive_amt));
   personal_cosmetic_preview(env,x,y,me->sc*game->data.gsc,me->ehang,alpha);
-  if(!tag.enabled || !tag.tex) { tag_motion.valid=false; return; }
+  if(!tag.enabled || !tag.tex) { tag_motion.valid=false; tag_swing.valid=preview_swing.valid=false; return; }
   float trailing=tag_follow(&tag_motion,me->ehang,game->data.ctm,me->generation);
-  draw_tag(x,y,me->sc*game->data.gsc,me->ehang,trailing,alpha);
+  float swing=tag.sway?tag_sway_update(&tag_swing,me->ehang,game->data.ctm,me->generation):0;
+  draw_tag(x,y,me->sc*game->data.gsc,me->ehang,trailing,swing,alpha);
 }
-void personal_tag_toggle(void) { tag_motion.valid=false; tag.enabled=!tag.enabled; save_settings(&tag); }
+void personal_tag_toggle(void) { tag_motion.valid=false; tag_swing.valid=preview_swing.valid=false; tag.enabled=!tag.enabled; save_settings(&tag); }
 void personal_cosmetic_toggle(void) { cosmetic.enabled=!cosmetic.enabled; save_settings(&cosmetic); }
 void personal_tag_destroy(tenv* env) {
   personal_image* slots[]={&tag,&cosmetic};

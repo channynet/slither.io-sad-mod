@@ -4,6 +4,37 @@
 #include <stdbool.h>
 #include <stdint.h>
 typedef struct { float direction; double time; uint64_t generation; bool valid; } tag_attachment;
+typedef struct {
+  float angle,velocity,heading,phase;
+  double time;
+  uint64_t generation;
+  bool valid;
+} tag_sway;
+// Damped pendulum around the attachment point; turning adds angular inertia.
+// Exact spring integration avoids a frame-rate-dependent stiffness or instability.
+static inline float tag_sway_update(tag_sway* s,float heading,double now,uint64_t generation) {
+  double elapsed=(now-s->time)*.001;
+  if(!s->valid || s->generation!=generation || elapsed<0 || elapsed>.25) {
+    *s=(tag_sway){.heading=heading,.time=now,.generation=generation,.valid=true};
+    return 0;
+  }
+  if(elapsed<=0) return s->angle;
+  float dt=(float)elapsed;
+  float turn=atan2f(sinf(heading-s->heading),cosf(heading-s->heading));
+  float impulse=fmaxf(-1.5f,fminf(1.5f,-3.f*turn));
+  float phase=s->phase+dt*.5f;
+  float target=.10f*sinf(phase*1.8f)+.04f*sinf(phase*2.9f);
+  float damping=2.5f,frequency=sqrtf(24.f-damping*damping);
+  float decay=expf(-damping*dt),c=cosf(frequency*dt),sn=sinf(frequency*dt);
+  float offset=s->angle-target,v=s->velocity+impulse*.5f;
+  s->angle=target+decay*(offset*c+(v+damping*offset)*sn/frequency);
+  s->velocity=decay*(v*c-(damping*v+24.f*offset)*sn/frequency)+impulse*.5f;
+  if(fabsf(s->angle)>.6f) { s->angle=copysignf(.6f,s->angle); s->velocity=0; }
+  s->velocity=fmaxf(-3.f,fminf(3.f,s->velocity));
+  s->phase=fmodf(s->phase+dt,62.8318530718f);
+  s->time=now; s->heading=heading;
+  return s->angle;
+}
 static inline float tag_follow(tag_attachment* state,float heading,double now,uint64_t generation) {
   double dt=(now-state->time)*.001;
   if(!state->valid || generation!=state->generation || dt<0 || dt>.25) state->direction=heading;

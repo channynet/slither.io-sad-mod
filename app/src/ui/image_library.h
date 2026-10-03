@@ -7,7 +7,7 @@ typedef struct {
   int id;
   char name[96];
   float size,gap,angle;
-  bool rotate;
+  bool rotate,sway;
 } image_item;
 typedef struct {
   image_item items[IMAGE_LIBRARY_MAX];

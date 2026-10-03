@@ -32,5 +32,29 @@ int main(void) {
   for(int i=1;i<=60;i++) tag_follow(&a,1,1000+i*1000.0/60,1);
   for(int i=1;i<=120;i++) tag_follow(&b,1,1000+i*1000.0/120,1);
   near(a.direction,b.direction);
-  puts("Head tag: tether anchor, rotation, zoom/aspect ratio, angle pivot, turn following, respawn/pause/clock reset and FPS independence passed");
+  tag_sway swing={0},faster={0};
+  near(tag_sway_update(&swing,0,1000,1),0);
+  for(int i=1;i<=60;i++) tag_sway_update(&swing,0,1000+i*1000.0/60,1);
+  assert(fabsf(swing.angle)>.025f); // visible gentle movement even going straight
+  float old=swing.angle;
+  near(tag_sway_update(&swing,2,2000,1),old); // no duplicate-frame impulse
+  near(tag_sway_update(&swing,2,3000,1),0); // no jump after pause
+  near(tag_sway_update(&swing,1,3016,2),0); // respawn
+  near(tag_sway_update(&swing,0,100,2),0); // clock reset
+  swing=(tag_sway){0}; faster=(tag_sway){0};
+  tag_sway_update(&swing,0,1000,1); tag_sway_update(&faster,0,1000,1);
+  for(int i=1;i<=240;i++) tag_sway_update(&swing,sinf(i/60.f*2),1000+i*1000.0/60,1);
+  for(int i=1;i<=480;i++) tag_sway_update(&faster,sinf(i/120.f*2),1000+i*1000.0/120,1);
+  assert(fabsf(swing.angle-faster.angle)<.002f);
+  assert(fabsf(swing.velocity-faster.velocity)<.005f);
+  swing=(tag_sway){0}; tag_sway_update(&swing,3.13f,1000,1);
+  tag_sway_update(&swing,-3.13f,1016,1); assert(fabsf(swing.velocity)<.1f);
+  for(int i=1;i<=5000;i++) {
+    tag_sway_update(&swing,i%2?3.f:-3.f,1016+i*16.0,1);
+    assert(isfinite(swing.angle) && fabsf(swing.angle)<=.6001f && fabsf(swing.velocity)<=3.001f);
+  }
+  // The image still pivots exactly at the cord endpoint while swinging.
+  tag_attachment_geometry(q,c,100,100,128,512,256,1,0,.12f,24,25);
+  near((q[0]+q[2])/2,c[12]); near((q[1]+q[3])/2,c[13]);
+  puts("Head tag: tether anchor, rotation, zoom/aspect ratio, angle pivot, turn following, respawn/pause/clock reset FPS independence, damped sway, idle motion and angular limits passed");
 }

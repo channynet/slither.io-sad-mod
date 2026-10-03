@@ -19,9 +19,10 @@ int main(void) {
   char a[256],b[256]; image_library_path(&tags,0,a,sizeof(a)); image_library_path(&cos,0,b,sizeof(b));
   assert(strcmp(a,b) && strstr(a,"tag-ruby-heart.png") && strstr(b,"cosmetic-raven-wings.png"));
   image_item* first=image_library_add(&tags,"내 이미지 \"A\" \\ 날개"); assert(first && first->id==100);
-  first->size=173.5f; first->gap=42; first->angle=-73; tags.selected=10; tags.enabled=false;
+  first->sway=false; first->size=173.5f; first->gap=42; first->angle=-73; tags.selected=10; tags.enabled=false;
   assert(image_library_save(&tags));
   image_library_seed(&restored,false); assert(image_library_load(&restored)==1);
+  assert(!restored.items[10].sway && restored.items[0].sway);
   assert(restored.count==11 && restored.selected==10 && !restored.enabled);
   assert(!strcmp(restored.items[10].name,first->name));
   assert(restored.items[10].size==173.5f && restored.items[10].gap==42 && restored.items[10].angle==-73);
@@ -35,6 +36,11 @@ int main(void) {
   while(tags.count<IMAGE_LIBRARY_MAX) assert(image_library_add(&tags,"more"));
   assert(!image_library_add(&tags,"overflow")); assert(image_library_save(&tags));
   assert(image_library_load(&restored)==1 && restored.count==IMAGE_LIBRARY_MAX);
+  // A catalog from before the sway feature keeps its values and defaults to ON.
+  FILE* legacy=fopen("personal-tag-library.json","wb"); assert(legacy);
+  fputs("{\"version\":1,\"count\":1,\"selected\":1,\"enabled\":true,\"items\":[{\"id\":1,\"name\":\"old\",\"size\":96,\"gap\":24,\"angle\":0,\"rotate\":false}]}",legacy); fclose(legacy);
+  image_library_seed(&restored,false); assert(image_library_load(&restored)==1 && restored.items[0].sway);
+  assert(restored.items[0].size==96 && restored.items[0].gap==24);
   invalid("{broken");
   invalid("{\"version\":1,\"count\":65,\"selected\":1,\"enabled\":true,\"items\":[]}");
   invalid("{\"version\":1,\"count\":1,\"selected\":1,\"enabled\":true,\"items\":[{\"id\":1,\"name\":\"x\",\"size\":999,\"gap\":24,\"angle\":0,\"rotate\":false}]}");
