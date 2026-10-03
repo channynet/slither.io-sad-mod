@@ -59,6 +59,19 @@ int main(void) {
   reset(); s.has_food=true; s.food=(def_vec){200,20};
   s.has_previous=true; s.previous_angle=0;
   assert(def_choose(&s).angle>0.03f);
+  // Orbit preference overrides food only when its curved trajectory is safe.
+  reset(); s.orbit_direction=1; s.orbit_center=(def_vec){0,120}; s.orbit_radius=120;
+  s.has_food=true; s.food=(def_vec){0,-200};
+  assert(def_evaluate_orbit(&s).safe);
+  assert(fabsf(def_choose(&s).angle)<0.001f);
+  wall(110,-100,300);
+  assert(!def_evaluate_orbit(&s).safe);
+  assert(def_choose(&s).safe);
+  s.count=0; assert(fabsf(def_choose(&s).angle)<0.001f); // resume orbit after threat disappears
+  // The curved path must also respect the shrinking arena.
+  reset(); s.position=(def_vec){900,0}; s.arena_radius=1000;
+  s.orbit_direction=1; s.orbit_center=(def_vec){900,120}; s.orbit_radius=120;
+  assert(!def_evaluate_orbit(&s).safe); assert(def_choose(&s).safe);
   // Worst retained-obstacle count; report actual planner time, not an FPS claim.
   reset(); for(int i=0;i<512;i++) {
     float a=i*0.0122718463f;
@@ -66,6 +79,6 @@ int main(void) {
   }
   double start=milliseconds(); volatile float sink=0;
   for(int i=0;i<200;i++) sink+=def_choose(&s).angle;
-  printf("Defensive planner: 14 scenario groups passed; 512 obstacles, up to 19 paths, 15 steps: %.3f ms/decision (200 runs)\n",(milliseconds()-start)/200);
+  printf("Defensive planner: 16 scenario groups passed; 512 obstacles, up to 19 paths, 15 steps: %.3f ms/decision (200 runs)\n",(milliseconds()-start)/200);
   return 0;
 }

@@ -7,17 +7,56 @@
 static def_scene scene;
 static uint64_t generation;
 static float previous_angle,last_time;
-static bool valid;
+static bool valid,was_active,manual_sample;
+static float manual_angle,manual_time,manual_rate,manual_turn_time,manual_last_turn;
+static uint64_t manual_generation;
+static def_vec orbit_center;
+static float orbit_radius;
+static int orbit_direction;
 void sbot_init(tenv* env) {
   memset(&env->usr->gdata.bot,0,sizeof(env->usr->gdata.bot));
   valid=false; generation=0; last_time=0;
+  was_active=manual_sample=false; manual_rate=manual_turn_time=0; orbit_direction=0;
 }
 void sbot_go(tenv* env) {
   game_data* g=&env->usr->gdata;
-  if(!env->usr->usrs.hotkeys[HOTKEY_BOT].active || !g->data.follow_view) return;
+  bool active=env->usr->usrs.hotkeys[HOTKEY_BOT].active;
+  if(!g->data.follow_view) { was_active=manual_sample=false; orbit_direction=0; return; }
   snake* me=get_snake(g,g->data.snake_id);
-  if(!me || me->dead) { valid=false; g->bot.output.accel=false; return; }
+  if(!me || me->dead) { valid=was_active=manual_sample=false; orbit_direction=0; g->bot.output.accel=false; return; }
   float now=g->data.ctm;
+  if(!active) {
+    // Only observe the manual heading here: no scene building or path search.
+    float dt=(now-manual_time)/1000;
+    if(manual_sample && manual_generation==me->generation && dt>0 && dt<0.15f) {
+      float rate=def_wrap(me->ang-manual_angle)/dt;
+      if(fabsf(rate)>0.15f && fabsf(rate)<15) {
+        if(rate*manual_rate<=0) { manual_turn_time=0; manual_rate=rate; }
+        float blend=1-expf(-dt/0.08f);
+        manual_rate+=(rate-manual_rate)*blend; manual_turn_time+=dt; manual_last_turn=now;
+      } else {
+        // Brief zero-turn frames are normal between server/input updates.
+        manual_rate*=expf(-dt/0.08f);
+        if(now-manual_last_turn>100) { manual_rate=0; manual_turn_time=0; }
+      }
+    } else { manual_rate=manual_turn_time=0; }
+    manual_sample=true; manual_angle=me->ang; manual_time=now; manual_generation=me->generation;
+    was_active=false; valid=false; orbit_direction=0; g->bot.output.accel=false;
+    return;
+  }
+  if(!was_active || generation!=me->generation) {
+    orbit_direction=0; valid=false;
+    if(!was_active && manual_sample && manual_generation==me->generation &&
+       now>=manual_time && now-manual_time<150 && manual_turn_time>=0.08f && fabsf(manual_rate)>0.15f) {
+      orbit_direction=manual_rate>0?1:-1;
+      float speed=fmaxf(me->sp,me->ssp)*31.25f;
+      float max_turn=fmaxf(0.1f,g->data.mamu*me->scang*me->spang*125);
+      orbit_radius=fmaxf(speed/max_turn,speed/fabsf(manual_rate));
+      orbit_center=(def_vec){me->xx-orbit_direction*sinf(me->ang)*orbit_radius,
+                            me->yy+orbit_direction*cosf(me->ang)*orbit_radius};
+    }
+    was_active=true; manual_sample=false;
+  }
   // At most 30 Hz, independent of FPS. Normal play never enters the planner.
   if(valid && generation==me->generation && now>=last_time && now-last_time<33) return;
   double started=perf_now();
@@ -35,6 +74,7 @@ void sbot_go(tenv* env) {
   scene.latency=fminf(0.5f,fmaxf(0.08f,g->data.ping/1000.0f+0.05f));
   if(g->data.lagging) scene.latency=0.5f;
   scene.has_previous=continuity; scene.previous_angle=previous_angle;
+  scene.orbit_direction=orbit_direction; scene.orbit_center=orbit_center; scene.orbit_radius=orbit_radius;
   for(int i=0;i<tdarray_length(g->data.snakes);i++) {
     snake* s=g->data.snakes+i;
     if(s->id==me->id || s->dead) continue;
@@ -66,4 +106,4 @@ void sbot_go(tenv* env) {
   g->bot.output.accel=false;
   perf_add(PERF_BOT,started);
 }
-void sbot_destroy(tenv* env) { (void)env; valid=false; }
+void sbot_destroy(tenv* env) { (void)env; valid=was_active=manual_sample=false; orbit_direction=0; }

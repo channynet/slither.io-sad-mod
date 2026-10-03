@@ -11,6 +11,9 @@ typedef struct {
   def_vec position,center,food;
   float angle,speed,turn_rate,radius,arena_radius,latency,previous_angle;
   bool has_food,has_previous;
+  def_vec orbit_center;
+  float orbit_radius;
+  int orbit_direction; // -1 or +1; zero disables orbit continuation
   def_obstacle obstacles[DEF_OBSTACLES];
   int count;
   float omitted_clearance;
@@ -21,5 +24,7 @@ float def_point_segment(def_vec p,def_vec a,def_vec b);
 void def_scene_reset(def_scene* scene);
 void def_add_obstacle(def_scene* scene,def_obstacle obstacle);
 def_result def_evaluate(const def_scene* scene,float angle);
+float def_orbit_heading(const def_scene* scene,def_vec position);
+def_result def_evaluate_orbit(const def_scene* scene);
 def_result def_choose(const def_scene* scene);
 #endif

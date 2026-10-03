@@ -54,13 +54,20 @@ void def_add_obstacle(def_scene* s,def_obstacle o) {
   }
   s->obstacles[i]=o;
 }
-def_result def_evaluate(const def_scene* s,float target) {
+float def_orbit_heading(const def_scene* s,def_vec position) {
+  def_vec delta=sub(position,s->orbit_center);
+  float error=length(delta)-s->orbit_radius;
+  return def_wrap(atan2f(delta.y,delta.x)+s->orbit_direction*
+    (DPI/2+atan2f(error,fmaxf(20,s->orbit_radius*0.5f))));
+}
+static def_result evaluate_path(const def_scene* s,float target,bool orbit) {
   def_result r={.angle=def_wrap(target),.clearance=1000,.safe_seconds=DEF_HORIZON,.safe=true};
   def_vec p=s->position; float angle=s->angle;
   const float dt=DEF_HORIZON/DEF_STEPS;
   for(int k=1;k<=DEF_STEPS;k++) {
     float time=k*dt;
     float turn_dt=clamp(time-s->latency,0,dt);
+    if(orbit) target=def_orbit_heading(s,p);
     angle+=clamp(def_wrap(target-angle),-s->turn_rate*turn_dt,s->turn_rate*turn_dt);
     def_vec q={p.x+cosf(angle)*s->speed*dt,p.y+sinf(angle)*s->speed*dt};
     // Chord deviation bound covers the curved motion between samples.
@@ -89,7 +96,19 @@ def_result def_evaluate(const def_scene* s,float target) {
   }
   return r;
 }
+def_result def_evaluate(const def_scene* s,float target) {
+  return evaluate_path(s,target,false);
+}
+def_result def_evaluate_orbit(const def_scene* s) {
+  return evaluate_path(s,def_orbit_heading(s,s->position),true);
+}
 def_result def_choose(const def_scene* s) {
+  // Continue the captured manual circle only while the curved path is safe.
+  // Threats and the arena boundary are checked by the same collision evaluator.
+  if(s->orbit_direction) {
+    def_result orbit=def_evaluate_orbit(s);
+    if(orbit.safe) return orbit;
+  }
   def_result best={0}; float best_score=-FLT_MAX;
   float food_angle=s->has_food?atan2f(s->food.y-s->position.y,s->food.x-s->position.x):s->angle;
   int candidates=DEF_CANDIDATES+(s->has_food?1:0)+(s->has_previous?1:0);
@@ -111,7 +130,7 @@ def_result def_choose(const def_scene* s) {
       float change=def_wrap(target-s->previous_angle);
       score-=change*change*1.5f;
     }
-    if(s->has_food && r.safe && r.clearance>20) {
+    if(!s->orbit_direction && s->has_food && r.safe && r.clearance>20) {
       score+=cosf(def_wrap(target-food_angle))*48;
     }
     if(score>best_score) { best_score=score; best=r; }
