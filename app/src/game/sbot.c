@@ -1,10 +1,22 @@
 #include "sbot.h"
 #include "../user.h"
 #include "defensive_planner.h"
+#include "body_loop.h"
 #include "perf_trace.h"
 #include <math.h>
 #include <string.h>
 static def_scene scene;
+static body_loop own_loop;
+static def_vec own_trail[BODY_LOOP_SCAN];
+static void capture_body(const snake* me,float min_radius) {
+  int count=1; own_trail[0]=(def_vec){me->xx,me->yy};
+  int parts=me->pts?tdarray_length(me->pts):0;
+  for(int i=parts-1;i>=0 && count<BODY_LOOP_SCAN;i--) {
+    const body_part* p=me->pts+i; if(p->dying) continue;
+    own_trail[count++]=(def_vec){p->xx,p->yy};
+  }
+  body_loop_capture(&own_loop,own_trail,count,me->ang,fmaxf(1,me->sc*14.5f),min_radius);
+}
 static uint64_t generation;
 static float previous_angle,last_time;
 static bool valid,was_active,manual_sample;
@@ -16,14 +28,14 @@ static int orbit_direction;
 void sbot_init(tenv* env) {
   memset(&env->usr->gdata.bot,0,sizeof(env->usr->gdata.bot));
   valid=false; generation=0; last_time=0;
-  was_active=manual_sample=false; manual_rate=manual_turn_time=0; orbit_direction=0;
+  was_active=manual_sample=false; manual_rate=manual_turn_time=0; orbit_direction=0; own_loop.count=0;
 }
 void sbot_go(tenv* env) {
   game_data* g=&env->usr->gdata;
   bool active=env->usr->usrs.hotkeys[HOTKEY_BOT].active;
-  if(!g->data.follow_view) { was_active=manual_sample=false; orbit_direction=0; return; }
+  if(!g->data.follow_view) { valid=was_active=manual_sample=false; g->bot.output.accel=false; orbit_direction=0; own_loop.count=0; return; }
   snake* me=get_snake(g,g->data.snake_id);
-  if(!me || me->dead) { valid=was_active=manual_sample=false; orbit_direction=0; g->bot.output.accel=false; return; }
+  if(!me || me->dead) { valid=was_active=manual_sample=false; orbit_direction=0; own_loop.count=0; g->bot.output.accel=false; return; }
   float now=g->data.ctm;
   if(!active) {
     // Only observe the manual heading here: no scene building or path search.
@@ -41,11 +53,14 @@ void sbot_go(tenv* env) {
       }
     } else { manual_rate=manual_turn_time=0; }
     manual_sample=true; manual_angle=me->ang; manual_time=now; manual_generation=me->generation;
-    was_active=false; valid=false; orbit_direction=0; g->bot.output.accel=false;
+    was_active=false; valid=false; orbit_direction=0; own_loop.count=0; g->bot.output.accel=false;
     return;
   }
+  // At most 30 Hz; include the one-time body capture in BOT cost accounting.
+  if(was_active && valid && generation==me->generation && now>=last_time && now-last_time<33) return;
+  double started=perf_now();
   if(!was_active || generation!=me->generation) {
-    orbit_direction=0; valid=false;
+    orbit_direction=0; own_loop.count=0; valid=false;
     if(!was_active && manual_sample && manual_generation==me->generation &&
        now>=manual_time && now-manual_time<150 && manual_turn_time>=0.08f && fabsf(manual_rate)>0.15f) {
       orbit_direction=manual_rate>0?1:-1;
@@ -55,11 +70,11 @@ void sbot_go(tenv* env) {
       orbit_center=(def_vec){me->xx-orbit_direction*sinf(me->ang)*orbit_radius,
                             me->yy+orbit_direction*cosf(me->ang)*orbit_radius};
     }
+    // A completed body lap works even on a straight section of an oval,
+    // when no recent manual turn sample exists. Capture once per activation.
+    capture_body(me,fmaxf(me->sp,me->ssp)*31.25f/fmaxf(0.1f,g->data.mamu*me->scang*me->spang*125));
     was_active=true; manual_sample=false;
   }
-  // At most 30 Hz, independent of FPS. Normal play never enters the planner.
-  if(valid && generation==me->generation && now>=last_time && now-last_time<33) return;
-  double started=perf_now();
   bool continuity=valid && generation==me->generation && now>=last_time && now-last_time<250;
   def_scene_reset(&scene);
   scene.position=(def_vec){me->xx,me->yy};
@@ -74,6 +89,7 @@ void sbot_go(tenv* env) {
   scene.latency=fminf(0.5f,fmaxf(0.08f,g->data.ping/1000.0f+0.05f));
   if(g->data.lagging) scene.latency=0.5f;
   scene.has_previous=continuity; scene.previous_angle=previous_angle;
+  scene.body_path=own_loop.count?&own_loop:NULL;
   scene.orbit_direction=orbit_direction; scene.orbit_center=orbit_center; scene.orbit_radius=orbit_radius;
   for(int i=0;i<tdarray_length(g->data.snakes);i++) {
     snake* s=g->data.snakes+i;
@@ -106,4 +122,4 @@ void sbot_go(tenv* env) {
   g->bot.output.accel=false;
   perf_add(PERF_BOT,started);
 }
-void sbot_destroy(tenv* env) { (void)env; valid=was_active=manual_sample=false; orbit_direction=0; }
+void sbot_destroy(tenv* env) { (void)env; valid=was_active=manual_sample=false; orbit_direction=0; own_loop.count=0; }

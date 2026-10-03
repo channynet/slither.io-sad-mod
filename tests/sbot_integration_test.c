@@ -80,5 +80,41 @@ int main(void) {
   assert(remainderf(atan2f(g->bot.output.ym,g->bot.output.xm)-own->ang,6.28318530718f)>0.02f);
   own->generation++; g->data.ctm+=40; sbot_go(&env);
   assert(fabsf(remainderf(atan2f(g->bot.output.ym,g->bot.output.xm)-own->ang,6.28318530718f))<0.001f);
-  puts("Defensive bot integration: both manual circle directions and radii, OFF/ON reset; own identity, body segments, no boost, cadence, respawn and zero OFF planning passed");
+  // A full body oval takes precedence over a guessed circle, including activation
+  // on its straightest section with no manual turning sample at all.
+  for(int sign=-1;sign<=1;sign+=2) {
+    sbot_init(&env); own->generation++; own->dead=false;
+    own->xx=0; own->yy=140; own->ang=sign>0?3.14159265359f:0;
+    own->pts=tdarray_create(body_part);
+    for(int j=299;j>=1;j--) {
+      float a=1.57079632679f-sign*j*6.28318530718f/240;
+      body_part p={.xx=220*cosf(a),.yy=140*sinf(a)}; tdarray_push(&own->pts,&p);
+    }
+    // Ignore a dying sample without joining to its invalid position.
+    body_part dying={.xx=100000,.yy=100000,.dying=true}; tdarray_push(&own->pts,&dying);
+    usr.usrs.hotkeys[HOTKEY_BOT].active=false;
+    for(int j=0;j<10;j++) { g->data.ctm+=20; sbot_go(&env); }
+    usr.usrs.hotkeys[HOTKEY_BOT].active=true;
+    float total_turn=0,max_error=0;
+    for(int j=0;j<1000;j++) {
+      g->data.ctm+=40; sbot_go(&env);
+      float target=atan2f(g->bot.output.ym,g->bot.output.xm);
+      float delta=fmaxf(-.12f,fminf(.12f,remainderf(target-own->ang,6.28318530718f)));
+      own->xx+=cosf(own->ang+delta/2)*7.2f; own->yy+=sinf(own->ang+delta/2)*7.2f;
+      own->ang+=delta; total_turn+=delta;
+      max_error=fmaxf(max_error,fabsf(hypotf(own->xx/220,own->yy/140)-1));
+      assert(!g->bot.output.accel);
+    }
+    assert(sign*total_turn>30 && max_error<.12f);
+    int prior_calls=calls;
+    usr.usrs.hotkeys[HOTKEY_BOT].active=false;
+    for(int j=0;j<1000;j++) { g->data.ctm+=20; sbot_go(&env); }
+    assert(calls==prior_calls);
+    // New life with no full body lap cannot reuse the previous oval.
+    own->dead=true; sbot_go(&env); own->dead=false; own->generation++;
+    tdarray_destroy(own->pts); own->pts=NULL;
+    usr.usrs.hotkeys[HOTKEY_BOT].active=true; g->data.ctm+=40; sbot_go(&env);
+    assert(fabsf(remainderf(atan2f(g->bot.output.ym,g->bot.output.xm)-own->ang,6.28318530718f))<.001f);
+  }
+  puts("Defensive bot integration: both manual circles and captured body ovals, straight-section activation, OFF/death reset; own identity, body segments, no boost, cadence, respawn and zero OFF planning passed");
 }

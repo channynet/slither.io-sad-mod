@@ -1,4 +1,5 @@
 #include "defensive_planner.h"
+#include "body_loop.h"
 #include <math.h>
 #include <float.h>
 #include <string.h>
@@ -60,14 +61,19 @@ float def_orbit_heading(const def_scene* s,def_vec position) {
   return def_wrap(atan2f(delta.y,delta.x)+s->orbit_direction*
     (DPI/2+atan2f(error,fmaxf(20,s->orbit_radius*0.5f))));
 }
-static def_result evaluate_path(const def_scene* s,float target,bool orbit) {
+static float body_heading(const def_scene* s,def_vec p,float angle) {
+  float lookahead=fmaxf(s->radius*1.5f,s->speed*(0.18f+s->latency*0.3f));
+  return body_loop_heading(s->body_path,p,angle,lookahead);
+}
+static def_result evaluate_path(const def_scene* s,float target,int mode) {
   def_result r={.angle=def_wrap(target),.clearance=1000,.safe_seconds=DEF_HORIZON,.safe=true};
   def_vec p=s->position; float angle=s->angle;
   const float dt=DEF_HORIZON/DEF_STEPS;
   for(int k=1;k<=DEF_STEPS;k++) {
     float time=k*dt;
     float turn_dt=clamp(time-s->latency,0,dt);
-    if(orbit) target=def_orbit_heading(s,p);
+    if(mode==1) target=def_orbit_heading(s,p);
+    else if(mode==2) target=body_heading(s,p,angle);
     angle+=clamp(def_wrap(target-angle),-s->turn_rate*turn_dt,s->turn_rate*turn_dt);
     def_vec q={p.x+cosf(angle)*s->speed*dt,p.y+sinf(angle)*s->speed*dt};
     // Chord deviation bound covers the curved motion between samples.
@@ -97,15 +103,18 @@ static def_result evaluate_path(const def_scene* s,float target,bool orbit) {
   return r;
 }
 def_result def_evaluate(const def_scene* s,float target) {
-  return evaluate_path(s,target,false);
+  return evaluate_path(s,target,0);
 }
 def_result def_evaluate_orbit(const def_scene* s) {
-  return evaluate_path(s,def_orbit_heading(s,s->position),true);
+  return evaluate_path(s,def_orbit_heading(s,s->position),1);
 }
 def_result def_choose(const def_scene* s) {
-  // Continue the captured manual circle only while the curved path is safe.
+  // Prefer the captured body lap, then the manual-circle fallback, while safe.
   // Threats and the arena boundary are checked by the same collision evaluator.
-  if(s->orbit_direction) {
+  if(s->body_path && s->body_path->count>=3) {
+    def_result follow=evaluate_path(s,body_heading(s,s->position,s->angle),2);
+    if(follow.safe) return follow;
+  } else if(s->orbit_direction) {
     def_result orbit=def_evaluate_orbit(s);
     if(orbit.safe) return orbit;
   }
@@ -130,7 +139,7 @@ def_result def_choose(const def_scene* s) {
       float change=def_wrap(target-s->previous_angle);
       score-=change*change*1.5f;
     }
-    if(!s->orbit_direction && s->has_food && r.safe && r.clearance>20) {
+    if(!s->body_path && !s->orbit_direction && s->has_food && r.safe && r.clearance>20) {
       score+=cosf(def_wrap(target-food_angle))*48;
     }
     if(score>best_score) { best_score=score; best=r; }

@@ -21,10 +21,11 @@ with tempfile.TemporaryDirectory(prefix='preferences-test-', dir=BUILD) as sandb
 
 for name, sources, extra in [
     ('bot_steering', ['app/src/game/input.c'], [*flags,'-DCIMGUI_NO_EXPORT','-ffunction-sections','-fdata-sections','-Wl,--gc-sections']),
-    ('sbot_integration', ['app/src/game/sbot.c','app/src/game/defensive_planner.c','thermite/src/util/tdarray.c'], [*flags,'-DCIMGUI_NO_EXPORT']),
-    ('defensive_planner', ['app/src/game/defensive_planner.c'], []),
+    ('sbot_integration', ['app/src/game/sbot.c','app/src/game/defensive_planner.c','app/src/game/body_loop.c','thermite/src/util/tdarray.c'], [*flags,'-DCIMGUI_NO_EXPORT']),
+    ('defensive_planner', ['app/src/game/defensive_planner.c','app/src/game/body_loop.c'], []),
     ('credential_store', ['app/src/network/credential_store.c'], ['-lcrypt32']),
     ('cosmetic_geometry', [], []),
+    ('body_loop', ['app/src/game/body_loop.c','app/src/game/defensive_planner.c'], []),
     ('tag_attachment', [], []),
     ('image_library', ['app/src/ui/image_library.c','app/src/external/mongoose.c'], ['-lws2_32']),
     ('head_point_geometry', [], []),
