@@ -4,8 +4,74 @@
 #include "../network/server_history.h"
 #include "../network/server_status.h"
 #include "../user.h"
+#include <external/stb/stb_image.h>
 
-void ui_title_screen_init(tenv* env) {}
+// Immutable frames are uploaded once at startup. Gameplay never decodes or draws them.
+#define MENU_MEME_MAX_FRAMES 16
+static struct {
+  texture* frames[MENU_MEME_MAX_FRAMES];
+  VkDescriptorSet descriptors[MENU_MEME_MAX_FRAMES];
+  int delays[MENU_MEME_MAX_FRAMES],count,width,height,total_ms;
+} menu_meme;
+
+void ui_title_screen_destroy(tenv* env) {
+  for(int i=0;i<MENU_MEME_MAX_FRAMES;i++) {
+    if(menu_meme.descriptors[i]) igImplVulkan_RemoveTexture(menu_meme.descriptors[i]);
+    if(menu_meme.frames[i]) destroy_texture(env->ctx,menu_meme.frames[i]);
+  }
+  memset(&menu_meme,0,sizeof(menu_meme));
+}
+
+void ui_title_screen_init(tenv* env) {
+  FILE* file=fopen("app/res/menu/slp-cat-knock.gif","rb");
+  if(!file) return;
+  fseek(file,0,SEEK_END); long length=ftell(file); rewind(file);
+  unsigned char* bytes=length>0 && length<=1024*1024 ? malloc(length) : NULL;
+  bool read=bytes && fread(bytes,1,length,file)==(size_t)length;
+  fclose(file);
+  int width=0,height=0,components=0,count=0,*delays=NULL;
+  if(!read || !stbi_info_from_memory(bytes,(int)length,&width,&height,&components) ||
+     width<1 || height<1 || width>512 || height>512) { free(bytes); return; }
+  unsigned char* pixels=stbi_load_gif_from_memory(bytes,(int)length,&delays,&width,&height,&count,&components,4);
+  free(bytes);
+  if(!pixels || !delays || count<1 || count>MENU_MEME_MAX_FRAMES) {
+    stbi_image_free(pixels); stbi_image_free(delays); return;
+  }
+  menu_meme.width=width; menu_meme.height=height;
+  for(int i=0;i<count;i++) {
+    menu_meme.frames[i]=create_rgba_texture(env->ctx,pixels+(size_t)i*width*height*4,width,height);
+    if(!menu_meme.frames[i]) break;
+    menu_meme.descriptors[i]=igImplVulkan_AddTexture(env->usr->r->linear_sampler,
+        menu_meme.frames[i]->view,VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+    if(!menu_meme.descriptors[i]) break;
+    menu_meme.delays[i]=delays[i]>0 ? delays[i] : 100;
+    menu_meme.total_ms+=menu_meme.delays[i];
+    menu_meme.count++;
+  }
+  stbi_image_free(pixels); stbi_image_free(delays);
+  if(menu_meme.count!=count) ui_title_screen_destroy(env);
+}
+
+static void draw_menu_meme(tenv* env,float stats_top) {
+  if(!menu_meme.count) return;
+  // Keep the original aspect ratio and leave a gap above the score/time block.
+  float available=stats_top-48;
+  if(available<24) return;
+  float width=fminf(300.0f,fminf(env->ctx->size[0]-48,available*menu_meme.width/menu_meme.height));
+  if(width<24) return;
+  float height=width*menu_meme.height/menu_meme.width;
+  ImVec2 pos={(env->ctx->size[0]-width)*.5f,stats_top-24-height},window;
+  igGetWindowPos(&window); pos.x+=window.x; pos.y+=window.y;
+  // ImGui time does not reset when Play resets the game's GLFW clock.
+  double elapsed=fmod(igGetTime()*1000,menu_meme.total_ms);
+  int frame=0;
+  while(frame<menu_meme.count-1 && elapsed>=menu_meme.delays[frame])
+    elapsed-=menu_meme.delays[frame++];
+  ImDrawList_AddImage(igGetWindowDrawList(),
+      (ImTextureRef){NULL,(ImTextureID)menu_meme.descriptors[frame]},pos,
+      (ImVec2){pos.x+width,pos.y+height},(ImVec2){0,0},(ImVec2){1,1},igGetColorU32_Vec4((ImVec4){1,1,1,1}));
+}
+
 
 void ui_title_screen(tenv* env) {
   tuser_data* usr = env->usr;
@@ -42,6 +108,7 @@ void ui_title_screen(tenv* env) {
   igSetCursorPosX(ctx->size[0] / 2.0f - logo_size / 2);
   igSetCursorPosY(ctx->size[1] / 2.0f -
                   (igGetFrameHeight() - style->ItemSpacing.x) * 3);
+  draw_menu_meme(env,ctx->size[1]/2.0f-(igGetFrameHeight()-style->ItemSpacing.x)*3);
   int tot_sec = (int)usrs->play_time;
   int hours = tot_sec / 3600;
   int minutes = (tot_sec % 3600) / 60;
@@ -147,5 +214,3 @@ void ui_title_screen(tenv* env) {
 
   igPopFont();
 }
-
-void ui_title_screen_destroy(tenv* env) {}
