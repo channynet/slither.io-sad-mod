@@ -1,0 +1,145 @@
+{
+  "generator": "OpenAI built-in imagegen",
+  "assets": [
+    {
+      "type": "tag",
+      "slug": "ruby-heart",
+      "name": "루비 하트",
+      "prompt": "Use case: stylized-concept. Asset type: a single transparent 2D game accessory sprite for a snake game. Subject: a faceted ruby red heart pendant. Polished hand-painted fantasy game icon, crisp silhouette and restrained shading, readable at 64 pixels. Upright orientation, orthographic flat presentation. Exactly one isolated complete accessory centered in a square canvas with generous 12% transparent padding, no clipping. Small attachment loop at TOP CENTER, pendant hangs downward. Do not draw any chain or cord. True transparent background. No text, letters, watermark, badge frame, floor, cast shadow or background glow.",
+      "file": "tag-ruby-heart.png"
+    },
+    {
+      "type": "tag",
+      "slug": "crescent-moon",
+      "name": "초승달",
+      "prompt": "Use case: stylized-concept. Asset type: a single transparent 2D game accessory sprite for a snake game. Subject: a polished silver crescent moon pendant with tiny blue star. Polished hand-painted fantasy game icon, crisp silhouette and restrained shading, readable at 64 pixels. Upright orientation, orthographic flat presentation. Exactly one isolated complete accessory centered in a square canvas with generous 12% transparent padding, no clipping. Small attachment loop at TOP CENTER, pendant hangs downward. Do not draw any chain or cord. True transparent background. No text, letters, watermark, badge frame, floor, cast shadow or background glow.",
+      "file": "tag-crescent-moon.png"
+    },
+    {
+      "type": "tag",
+      "slug": "gold-star",
+      "name": "황금 별",
+      "prompt": "Use case: stylized-concept. Asset type: a single transparent 2D game accessory sprite for a snake game. Subject: a dimensional warm gold five-point star pendant. Polished hand-painted fantasy game icon, crisp silhouette and restrained shading, readable at 64 pixels. Upright orientation, orthographic flat presentation. Exactly one isolated complete accessory centered in a square canvas with generous 12% transparent padding, no clipping. Small attachment loop at TOP CENTER, pendant hangs downward. Do not draw any chain or cord. True transparent background. No text, letters, watermark, badge frame, floor, cast shadow or background glow.",
+      "file": "tag-gold-star.png"
+    },
+    {
+      "type": "tag",
+      "slug": "blue-flame",
+      "name": "푸른 불꽃",
+      "prompt": "Use case: stylized-concept. Asset type: a single transparent 2D game accessory sprite for a snake game. Subject: an elegant vivid cyan and blue flame emblem pendant. Polished hand-painted fantasy game icon, crisp silhouette and restrained shading, readable at 64 pixels. Upright orientation, orthographic flat presentation. Exactly one isolated complete accessory centered in a square canvas with generous 12% transparent padding, no clipping. Small attachment loop at TOP CENTER, pendant hangs downward. Do not draw any chain or cord. True transparent background. No text, letters, watermark, badge frame, floor, cast shadow or background glow.",
+      "file": "tag-blue-flame.png"
+    },
+    {
+      "type": "tag",
+      "slug": "emerald-leaf",
+      "name": "에메랄드 잎",
+      "prompt": "Use case: stylized-concept. Asset type: a single transparent 2D game accessory sprite for a snake game. Subject: a carved emerald green leaf pendant with gold stem. Polished hand-painted fantasy game icon, crisp silhouette and restrained shading, readable at 64 pixels. Upright orientation, orthographic flat presentation. Exactly one isolated complete accessory centered in a square canvas with generous 12% transparent padding, no clipping. Small attachment loop at TOP CENTER, pendant hangs downward. Do not draw any chain or cord. True transparent background. No text, letters, watermark, badge frame, floor, cast shadow or background glow.",
+      "file": "tag-emerald-leaf.png"
+    },
+    {
+      "type": "tag",
+      "slug": "ice-crystal",
+      "name": "얼음 결정",
+      "prompt": "Use case: stylized-concept. Asset type: a single transparent 2D game accessory sprite for a snake game. Subject: a pale blue six-point ice crystal pendant. Polished hand-painted fantasy game icon, crisp silhouette and restrained shading, readable at 64 pixels. Upright orientation, orthographic flat presentation. Exactly one isolated complete accessory centered in a square canvas with generous 12% transparent padding, no clipping. Small attachment loop at TOP CENTER, pendant hangs downward. Do not draw any chain or cord. True transparent background. No text, letters, watermark, badge frame, floor, cast shadow or background glow.",
+      "file": "tag-ice-crystal.png"
+    },
+    {
+      "type": "tag",
+      "slug": "purple-gem",
+      "name": "보라 보석",
+      "prompt": "Use case: stylized-concept. Asset type: a single transparent 2D game accessory sprite for a snake game. Subject: a faceted violet diamond pendant with silver rim. Polished hand-painted fantasy game icon, crisp silhouette and restrained shading, readable at 64 pixels. Upright orientation, orthographic flat presentation. Exactly one isolated complete accessory centered in a square canvas with generous 12% transparent padding, no clipping. Small attachment loop at TOP CENTER, pendant hangs downward. Do not draw any chain or cord. True transparent background. No text, letters, watermark, badge frame, floor, cast shadow or background glow.",
+      "file": "tag-purple-gem.png"
+    },
+    {
+      "type": "tag",
+      "slug": "lucky-clover",
+      "name": "네잎클로버",
+      "prompt": "Use case: stylized-concept. Asset type: a single transparent 2D game accessory sprite for a snake game. Subject: a bright green four-leaf clover pendant. Polished hand-painted fantasy game icon, crisp silhouette and restrained shading, readable at 64 pixels. Upright orientation, orthographic flat presentation. Exactly one isolated complete accessory centered in a square canvas with generous 12% transparent padding, no clipping. Small attachment loop at TOP CENTER, pendant hangs downward. Do not draw any chain or cord. True transparent background. No text, letters, watermark, badge frame, floor, cast shadow or background glow.",
+      "file": "tag-lucky-clover.png"
+    },
+    {
+      "type": "tag",
+      "slug": "sun-medallion",
+      "name": "태양 문양",
+      "prompt": "Use case: stylized-concept. Asset type: a single transparent 2D game accessory sprite for a snake game. Subject: a small warm orange sun medallion pendant. Polished hand-painted fantasy game icon, crisp silhouette and restrained shading, readable at 64 pixels. Upright orientation, orthographic flat presentation. Exactly one isolated complete accessory centered in a square canvas with generous 12% transparent padding, no clipping. Small attachment loop at TOP CENTER, pendant hangs downward. Do not draw any chain or cord. True transparent background. No text, letters, watermark, badge frame, floor, cast shadow or background glow.",
+      "file": "tag-sun-medallion.png"
+    },
+    {
+      "type": "tag",
+      "slug": "silver-feather",
+      "name": "은빛 깃털",
+      "prompt": "Use case: stylized-concept. Asset type: a single transparent 2D game accessory sprite for a snake game. Subject: a curved silver feather pendant. Polished hand-painted fantasy game icon, crisp silhouette and restrained shading, readable at 64 pixels. Upright orientation, orthographic flat presentation. Exactly one isolated complete accessory centered in a square canvas with generous 12% transparent padding, no clipping. Small attachment loop at TOP CENTER, pendant hangs downward. Do not draw any chain or cord. True transparent background. No text, letters, watermark, badge frame, floor, cast shadow or background glow.",
+      "file": "tag-silver-feather.png"
+    },
+    {
+      "type": "cosmetic",
+      "slug": "raven-wings",
+      "name": "검은 날개",
+      "prompt": "Use case: stylized-concept. Asset type: a single transparent 2D game accessory sprite for a snake game. Subject: a symmetric pair of black raven wings spread sideways, silver edge highlights. Polished hand-painted fantasy game icon, crisp silhouette and restrained shading, readable at 64 pixels. Upright orientation, orthographic flat presentation. Exactly one isolated complete accessory centered in a square canvas with generous 12% transparent padding, no clipping. Designed to sit on a snake head; symmetry around vertical center; top of canvas is forward. Do not draw a snake, head or mannequin. True transparent background. No text, letters, watermark, badge frame, floor, cast shadow or background glow.",
+      "file": "cosmetic-raven-wings.png"
+    },
+    {
+      "type": "cosmetic",
+      "slug": "angel-wings",
+      "name": "천사 날개",
+      "prompt": "Use case: stylized-concept. Asset type: a single transparent 2D game accessory sprite for a snake game. Subject: a symmetric pair of white angel wings spread sideways, pale gold edge highlights. Polished hand-painted fantasy game icon, crisp silhouette and restrained shading, readable at 64 pixels. Upright orientation, orthographic flat presentation. Exactly one isolated complete accessory centered in a square canvas with generous 12% transparent padding, no clipping. Designed to sit on a snake head; symmetry around vertical center; top of canvas is forward. Do not draw a snake, head or mannequin. True transparent background. No text, letters, watermark, badge frame, floor, cast shadow or background glow.",
+      "file": "cosmetic-angel-wings.png"
+    },
+    {
+      "type": "cosmetic",
+      "slug": "bat-wings",
+      "name": "박쥐 날개",
+      "prompt": "Use case: stylized-concept. Asset type: a single transparent 2D game accessory sprite for a snake game. Subject: a symmetric pair of violet-black bat wings spread sideways. Polished hand-painted fantasy game icon, crisp silhouette and restrained shading, readable at 64 pixels. Upright orientation, orthographic flat presentation. Exactly one isolated complete accessory centered in a square canvas with generous 12% transparent padding, no clipping. Designed to sit on a snake head; symmetry around vertical center; top of canvas is forward. Do not draw a snake, head or mannequin. True transparent background. No text, letters, watermark, badge frame, floor, cast shadow or background glow.",
+      "file": "cosmetic-bat-wings.png"
+    },
+    {
+      "type": "cosmetic",
+      "slug": "gold-crown",
+      "name": "황금 왕관",
+      "prompt": "Use case: stylized-concept. Asset type: a single transparent 2D game accessory sprite for a snake game. Subject: a small elegant gold crown with three points and ruby jewels. Polished hand-painted fantasy game icon, crisp silhouette and restrained shading, readable at 64 pixels. Upright orientation, orthographic flat presentation. Exactly one isolated complete accessory centered in a square canvas with generous 12% transparent padding, no clipping. Designed to sit on a snake head; symmetry around vertical center; top of canvas is forward. Do not draw a snake, head or mannequin. True transparent background. No text, letters, watermark, badge frame, floor, cast shadow or background glow.",
+      "file": "cosmetic-gold-crown.png"
+    },
+    {
+      "type": "cosmetic",
+      "slug": "devil-horns",
+      "name": "붉은 뿔",
+      "prompt": "Use case: stylized-concept. Asset type: a single transparent 2D game accessory sprite for a snake game. Subject: a symmetric pair of curved red devil horns, bases near bottom center. Polished hand-painted fantasy game icon, crisp silhouette and restrained shading, readable at 64 pixels. Upright orientation, orthographic flat presentation. Exactly one isolated complete accessory centered in a square canvas with generous 12% transparent padding, no clipping. Designed to sit on a snake head; symmetry around vertical center; top of canvas is forward. Do not draw a snake, head or mannequin. True transparent background. No text, letters, watermark, badge frame, floor, cast shadow or background glow.",
+      "file": "cosmetic-devil-horns.png"
+    },
+    {
+      "type": "cosmetic",
+      "slug": "ice-horns",
+      "name": "얼음 뿔",
+      "prompt": "Use case: stylized-concept. Asset type: a single transparent 2D game accessory sprite for a snake game. Subject: a symmetric pair of crystalline cyan horns, bases near bottom center. Polished hand-painted fantasy game icon, crisp silhouette and restrained shading, readable at 64 pixels. Upright orientation, orthographic flat presentation. Exactly one isolated complete accessory centered in a square canvas with generous 12% transparent padding, no clipping. Designed to sit on a snake head; symmetry around vertical center; top of canvas is forward. Do not draw a snake, head or mannequin. True transparent background. No text, letters, watermark, badge frame, floor, cast shadow or background glow.",
+      "file": "cosmetic-ice-horns.png"
+    },
+    {
+      "type": "cosmetic",
+      "slug": "silver-antlers",
+      "name": "은빛 사슴뿔",
+      "prompt": "Use case: stylized-concept. Asset type: a single transparent 2D game accessory sprite for a snake game. Subject: a symmetric pair of branching silver antlers, bases near bottom center. Polished hand-painted fantasy game icon, crisp silhouette and restrained shading, readable at 64 pixels. Upright orientation, orthographic flat presentation. Exactly one isolated complete accessory centered in a square canvas with generous 12% transparent padding, no clipping. Designed to sit on a snake head; symmetry around vertical center; top of canvas is forward. Do not draw a snake, head or mannequin. True transparent background. No text, letters, watermark, badge frame, floor, cast shadow or background glow.",
+      "file": "cosmetic-silver-antlers.png"
+    },
+    {
+      "type": "cosmetic",
+      "slug": "laurel-wreath",
+      "name": "월계관",
+      "prompt": "Use case: stylized-concept. Asset type: a single transparent 2D game accessory sprite for a snake game. Subject: a gold and emerald U-shaped laurel wreath, opening at top. Polished hand-painted fantasy game icon, crisp silhouette and restrained shading, readable at 64 pixels. Upright orientation, orthographic flat presentation. Exactly one isolated complete accessory centered in a square canvas with generous 12% transparent padding, no clipping. Designed to sit on a snake head; symmetry around vertical center; top of canvas is forward. Do not draw a snake, head or mannequin. True transparent background. No text, letters, watermark, badge frame, floor, cast shadow or background glow.",
+      "file": "cosmetic-laurel-wreath.png"
+    },
+    {
+      "type": "cosmetic",
+      "slug": "cyber-fins",
+      "name": "네온 지느러미",
+      "prompt": "Use case: stylized-concept. Asset type: a single transparent 2D game accessory sprite for a snake game. Subject: a symmetric pair of cyan magenta cybernetic fins spread sideways. Polished hand-painted fantasy game icon, crisp silhouette and restrained shading, readable at 64 pixels. Upright orientation, orthographic flat presentation. Exactly one isolated complete accessory centered in a square canvas with generous 12% transparent padding, no clipping. Designed to sit on a snake head; symmetry around vertical center; top of canvas is forward. Do not draw a snake, head or mannequin. True transparent background. No text, letters, watermark, badge frame, floor, cast shadow or background glow.",
+      "file": "cosmetic-cyber-fins.png"
+    },
+    {
+      "type": "cosmetic",
+      "slug": "flame-wings",
+      "name": "불꽃 날개",
+      "prompt": "Use case: stylized-concept. Asset type: a single transparent 2D game accessory sprite for a snake game. Subject: a symmetric pair of fiery orange and gold wings spread sideways. Polished hand-painted fantasy game icon, crisp silhouette and restrained shading, readable at 64 pixels. Upright orientation, orthographic flat presentation. Exactly one isolated complete accessory centered in a square canvas with generous 12% transparent padding, no clipping. Designed to sit on a snake head; symmetry around vertical center; top of canvas is forward. Do not draw a snake, head or mannequin. True transparent background. No text, letters, watermark, badge frame, floor, cast shadow or background glow.",
+      "file": "cosmetic-flame-wings.png"
+    }
+  ]
+}

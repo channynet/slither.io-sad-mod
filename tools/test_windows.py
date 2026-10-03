@@ -26,6 +26,7 @@ for name, sources, extra in [
     ('credential_store', ['app/src/network/credential_store.c'], ['-lcrypt32']),
     ('cosmetic_geometry', [], []),
     ('tag_attachment', [], []),
+    ('image_library', ['app/src/ui/image_library.c','app/src/external/mongoose.c'], ['-lws2_32']),
     ('head_point_geometry', [], []),
     ('input_timing', [], []),
     ('server_status', ['app/src/network/server_status.c','app/src/network/server_history.c','app/src/external/mongoose.c'], ['-lws2_32']),
