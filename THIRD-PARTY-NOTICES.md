@@ -17,7 +17,7 @@ The source tree includes these components and their original license texts:
 | cglm | thermite/include/cglm/LICENSE.txt |
 | Bundled fonts | app/res/fonts/LICENSE.txt |
 
-Mongoose identifies its terms as GPL-2.0-only or commercial. These are retained as found in upstream; this local build does not change or resolve upstream licensing terms. No public binary publication is part of this task.
+Mongoose identifies its terms as GPL-2.0-only or commercial. These are retained as found in upstream; this local build does not change or resolve upstream licensing terms. Distribution bundles include the corresponding source snapshot and retained license texts.
 
 Windows Malgun Gothic is read from the user's existing Windows installation for Korean text. It is not copied or redistributed. Build tools llvm-mingw and Slang are local build dependencies, not part of the application package. Vulkan-Headers are pinned to `3c65a01745e4a1134d32b9c2c456472212dba16d`.
 
