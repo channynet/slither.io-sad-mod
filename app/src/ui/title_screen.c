@@ -23,44 +23,39 @@ void ui_title_screen_destroy(tenv* env) {
 }
 
 void ui_title_screen_init(tenv* env) {
-  FILE* file=fopen("app/res/menu/slp-cat-knock.gif","rb");
-  if(!file) return;
-  fseek(file,0,SEEK_END); long length=ftell(file); rewind(file);
-  unsigned char* bytes=length>0 && length<=1024*1024 ? malloc(length) : NULL;
-  bool read=bytes && fread(bytes,1,length,file)==(size_t)length;
-  fclose(file);
-  int width=0,height=0,components=0,count=0,*delays=NULL;
-  if(!read || !stbi_info_from_memory(bytes,(int)length,&width,&height,&components) ||
-     width<1 || height<1 || width>512 || height>512) { free(bytes); return; }
-  unsigned char* pixels=stbi_load_gif_from_memory(bytes,(int)length,&delays,&width,&height,&count,&components,4);
-  free(bytes);
-  if(!pixels || !delays || count<1 || count>MENU_MEME_MAX_FRAMES) {
-    stbi_image_free(pixels); stbi_image_free(delays); return;
-  }
-  menu_meme.width=width; menu_meme.height=height;
+  // Decode the GIF's precomposited PNG frames: preserve its existing transparency.
+  // stb's animated GIF background/disposal path leaves a white rectangle here.
+  const int count=4;
   for(int i=0;i<count;i++) {
-    menu_meme.frames[i]=create_rgba_texture(env->ctx,pixels+(size_t)i*width*height*4,width,height);
+    char path[80]; snprintf(path,sizeof(path),"app/res/menu/cat-knock-%d.png",i);
+    int width=0,height=0,components=0;
+    unsigned char* pixels=stbi_load(path,&width,&height,&components,4);
+    if(!pixels) break;
+    bool valid=width>0 && height>0 && width<=512 && height<=512 &&
+               (i==0 || (width==menu_meme.width && height==menu_meme.height));
+    if(valid) menu_meme.frames[i]=create_rgba_texture(env->ctx,pixels,width,height);
+    stbi_image_free(pixels);
     if(!menu_meme.frames[i]) break;
+    menu_meme.width=width; menu_meme.height=height;
     menu_meme.descriptors[i]=igImplVulkan_AddTexture(env->usr->r->linear_sampler,
         menu_meme.frames[i]->view,VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
     if(!menu_meme.descriptors[i]) break;
-    menu_meme.delays[i]=delays[i]>0 ? delays[i] : 100;
+    menu_meme.delays[i]=200;
     menu_meme.total_ms+=menu_meme.delays[i];
     menu_meme.count++;
   }
-  stbi_image_free(pixels); stbi_image_free(delays);
   if(menu_meme.count!=count) ui_title_screen_destroy(env);
 }
 
-static void draw_menu_meme(tenv* env,float stats_top) {
+static void draw_menu_meme(tenv* env) {
   if(!menu_meme.count) return;
-  // Keep the original aspect ratio and leave a gap above the score/time block.
-  float available=stats_top-48;
+  // Anchor to the bottom-right with padding; shrink with small windows.
+  float available=env->ctx->size[1]-48;
   if(available<24) return;
-  float width=fminf(300.0f,fminf(env->ctx->size[0]-48,available*menu_meme.width/menu_meme.height));
+  float width=fminf(300.0f,fminf(env->ctx->size[0]*.25f,available*menu_meme.width/menu_meme.height));
   if(width<24) return;
   float height=width*menu_meme.height/menu_meme.width;
-  ImVec2 pos={(env->ctx->size[0]-width)*.5f,stats_top-24-height},window;
+  ImVec2 pos={env->ctx->size[0]-24-width,env->ctx->size[1]-24-height},window;
   igGetWindowPos(&window); pos.x+=window.x; pos.y+=window.y;
   // ImGui time does not reset when Play resets the game's GLFW clock.
   double elapsed=fmod(igGetTime()*1000,menu_meme.total_ms);
@@ -108,7 +103,7 @@ void ui_title_screen(tenv* env) {
   igSetCursorPosX(ctx->size[0] / 2.0f - logo_size / 2);
   igSetCursorPosY(ctx->size[1] / 2.0f -
                   (igGetFrameHeight() - style->ItemSpacing.x) * 3);
-  draw_menu_meme(env,ctx->size[1]/2.0f-(igGetFrameHeight()-style->ItemSpacing.x)*3);
+  draw_menu_meme(env);
   int tot_sec = (int)usrs->play_time;
   int hours = tot_sec / 3600;
   int minutes = (tot_sec % 3600) / 60;
