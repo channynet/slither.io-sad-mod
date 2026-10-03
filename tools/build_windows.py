@@ -48,7 +48,7 @@ def main():
     sources = [ROOT / f'glfw/src/{name}.c' for name in glfw]
     for folder in ['thermite/src', 'app/src']:
         sources += list((ROOT / folder).rglob('*.c')) + list((ROOT / folder).rglob('*.cpp'))
-    common = ['-O2', '-g0', '-D_GLFW_WIN32', '-DGLFW_INCLUDE_NONE', '-DGLFW_INCLUDE_VULKAN', '-DCGLM_FORCE_DEPTH_ZERO_TO_ONE', '-DCIMGUI_NO_EXPORT', '-DAPP_VERSION="2.6-ntl0.17"', '-DSETTINGS_VERSION="1.3"']
+    common = ['-O2', '-g0', '-D_GLFW_WIN32', '-DGLFW_INCLUDE_NONE', '-DGLFW_INCLUDE_VULKAN', '-DCGLM_FORCE_DEPTH_ZERO_TO_ONE', '-DCIMGUI_NO_EXPORT', '-DAPP_VERSION="2.6-ntl0.18"', '-DSETTINGS_VERSION="1.3"']
     for path in ['glfw/include', 'thermite/include', 'thermite/src', '.tools/Vulkan-Headers/include']:
         common += ['-I', str(ROOT / path)]
     headers = [p for folder in ['thermite/src','app/src','thermite/include'] for p in (ROOT / folder).rglob('*.h')]
