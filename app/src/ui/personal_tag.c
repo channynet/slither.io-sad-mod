@@ -131,11 +131,22 @@ void personal_tag_controls(tenv* env) {
   }
   if(igCollapsingHeader_TreeNodeFlags("내 cosmetic",0)) controls(env,&cosmetic);
 }
-void personal_cosmetic_editor(tenv* env) {
+void personal_image_editor(tenv* env) {
   ImFont* font=env->usr->imgui_data.regular_font[FONT_SIZE_SMALL]; igPushFont(font,font->LegacySize);
   igSetNextWindowPos((ImVec2){env->ctx->size[0]-12,100},ImGuiCond_FirstUseEver,(ImVec2){1,0});
   igSetNextWindowSize((ImVec2){380,600},ImGuiCond_FirstUseEver);
-  if(igBegin("내 cosmetic",NULL,ImGuiWindowFlags_NoDocking)) controls(env,&cosmetic);
+  if(igBegin("태그 / cosmetic",NULL,ImGuiWindowFlags_NoDocking)) {
+    if(igBeginTabBar("personal-image-tabs",0)) {
+      if(igBeginTabItem("태그",NULL,0)) {
+        igTextWrapped("머리에 매다는 이미지 태그 · 변경 내용은 스킨 미리보기에 반영되고 자동 저장됩니다.");
+        controls(env,&tag); igEndTabItem();
+      }
+      if(igBeginTabItem("cosmetic",NULL,0)) {
+        controls(env,&cosmetic); igEndTabItem();
+      }
+      igEndTabBar();
+    }
+  }
   igEnd(); igPopFont();
 }
 void personal_cosmetic_preview(tenv* env,float x,float y,float scale,float direction,float alpha) {
@@ -147,6 +158,25 @@ void personal_cosmetic_preview(tenv* env,float x,float y,float scale,float direc
     (ImVec2){points[0],points[1]},(ImVec2){points[2],points[3]},(ImVec2){points[4],points[5]},(ImVec2){points[6],points[7]},
     (ImVec2){0,0},(ImVec2){1,0},(ImVec2){1,1},(ImVec2){0,1},igGetColorU32_Vec4((ImVec4){1,1,1,alpha}));
 }
+static void draw_tag(float x,float y,float scale,float direction,float trailing,float alpha) {
+  float points[8],cord[14];
+  tag_attachment_geometry(points,cord,x,y,tag.size,tag.tex->size[0],tag.tex->size[1],
+      scale,direction,trailing,tag.gap,tag.angle);
+  ImDrawList* draw=igGetWindowDrawList();
+  float thickness=fmaxf(1,1.5f*scale);
+  for(int i=0;i<6;i++) {
+    ImVec2 a={cord[2*i],cord[2*i+1]},b={cord[2*i+2],cord[2*i+3]};
+    ImDrawList_AddLine(draw,a,b,igGetColorU32_Vec4((ImVec4){0,0,0,alpha}),thickness+1);
+    ImDrawList_AddLine(draw,a,b,igGetColorU32_Vec4((ImVec4){.6f,.6f,.6f,alpha}),thickness);
+  }
+  ImDrawList_AddImageQuad(draw,(ImTextureRef){NULL,(ImTextureID)tag.descriptor},
+    (ImVec2){points[0],points[1]},(ImVec2){points[2],points[3]},(ImVec2){points[4],points[5]},(ImVec2){points[6],points[7]},
+    (ImVec2){0,0},(ImVec2){1,0},(ImVec2){1,1},(ImVec2){0,1},igGetColorU32_Vec4((ImVec4){1,1,1,alpha}));
+}
+void personal_tag_preview(tenv* env,float x,float y,float scale,float direction,float alpha) {
+  (void)env;
+  if(tag.enabled && tag.tex) draw_tag(x,y,scale,direction,direction,alpha);
+}
 void personal_tag_draw(tenv* env) {
   game_data* game=&env->usr->gdata;
   if(game->curr_screen!=PLAYING || game->conn!=CONNECTED || !game->data.follow_view) { tag_motion.valid=false; return; }
@@ -157,19 +187,7 @@ void personal_tag_draw(tenv* env) {
   personal_cosmetic_preview(env,x,y,me->sc*game->data.gsc,me->ehang,alpha);
   if(!tag.enabled || !tag.tex) { tag_motion.valid=false; return; }
   float trailing=tag_follow(&tag_motion,me->ehang,game->data.ctm,me->generation);
-  float points[8],cord[14];
-  tag_attachment_geometry(points,cord,x,y,tag.size,tag.tex->size[0],tag.tex->size[1],
-      me->sc*game->data.gsc,me->ehang,trailing,tag.gap,tag.angle);
-  ImDrawList* draw=igGetWindowDrawList();
-  float thickness=fmaxf(1,1.5f*me->sc*game->data.gsc);
-  for(int i=0;i<6;i++) {
-    ImVec2 a={cord[2*i],cord[2*i+1]},b={cord[2*i+2],cord[2*i+3]};
-    ImDrawList_AddLine(draw,a,b,igGetColorU32_Vec4((ImVec4){0,0,0,alpha}),thickness+1);
-    ImDrawList_AddLine(draw,a,b,igGetColorU32_Vec4((ImVec4){.6f,.6f,.6f,alpha}),thickness);
-  }
-  ImDrawList_AddImageQuad(draw,(ImTextureRef){NULL,(ImTextureID)tag.descriptor},
-    (ImVec2){points[0],points[1]},(ImVec2){points[2],points[3]},(ImVec2){points[4],points[5]},(ImVec2){points[6],points[7]},
-    (ImVec2){0,0},(ImVec2){1,0},(ImVec2){1,1},(ImVec2){0,1},igGetColorU32_Vec4((ImVec4){1,1,1,alpha}));
+  draw_tag(x,y,me->sc*game->data.gsc,me->ehang,trailing,alpha);
 }
 void personal_tag_toggle(void) { tag_motion.valid=false; tag.enabled=!tag.enabled; save_settings(&tag); }
 void personal_cosmetic_toggle(void) { cosmetic.enabled=!cosmetic.enabled; save_settings(&cosmetic); }

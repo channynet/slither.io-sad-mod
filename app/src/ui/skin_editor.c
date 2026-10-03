@@ -195,6 +195,7 @@ void ui_skin_editor(tenv* env) {
   }
 
   personal_cosmetic_preview(env,last_bp_pos[0]+scale/2,last_bp_pos[1]+scale/2,scale/29,0,1);
+  personal_tag_preview(env,last_bp_pos[0]+scale/2,last_bp_pos[1]+scale/2,scale/29,0,1);
 
   igSetCursorPosX(ctx->size[0] * 0.5 - tot_size[0] * 0.5f);
   igSetCursorPosY((ctx->size[1] * 0.5 - tot_size[1] * 0.5f) -
@@ -370,7 +371,7 @@ void ui_skin_editor(tenv* env) {
   }
 
   igPopFont();
-  personal_cosmetic_editor(env);
+  personal_image_editor(env);
 }
 
 void ui_skin_editor_destroy(tenv* env) {}
