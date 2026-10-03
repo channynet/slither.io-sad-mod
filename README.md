@@ -1,3 +1,13 @@
+# slither.io-sad-mod
+
+Windows용 Slither Native 클라이언트입니다. NTL 팀 채팅·위치 표시, 수비형 BOT, 태그·cosmetic 설정과 렌더링 최적화를 포함합니다.
+
+기능과 실행·빌드 방법은 [네이티브 클라이언트 안내](README-NATIVE.md)를 참고하세요. 현재 버전은 **2.6-ntl0.23**입니다.
+
+아래는 기반 프로젝트의 원래 안내입니다.
+
+---
+
 # Vlither
 ## A Desktop Client for Slither.io
 
