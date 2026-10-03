@@ -573,6 +573,7 @@ void tcontext_end(tcontext* context) {
   vkCmdEndRenderPass(fr->cmd);
   vkEndCommandBuffer(fr->cmd);
 
+  double queue_start=glfwGetTime();
   vkQueueSubmit(
       context->queue, 1,
       &(VkSubmitInfo){.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
@@ -589,6 +590,8 @@ void tcontext_end(tcontext* context) {
                           &context->render_completes[context->current_image]},
       fr->wait_fence);
 
+  double present_start=glfwGetTime();
+  context->queue_submit_ms=(present_start-queue_start)*1000;
   VkResult r = vkQueuePresentKHR(
       context->queue,
       &(VkPresentInfoKHR){
@@ -600,6 +603,8 @@ void tcontext_end(tcontext* context) {
           .pSwapchains = &context->swapchain,
           .pImageIndices = &context->current_image,
           .pResults = NULL});
+
+  context->present_ms=(glfwGetTime()-present_start)*1000;
 
   if (r == VK_ERROR_OUT_OF_DATE_KHR) {
     context->swapchain_ok = false;

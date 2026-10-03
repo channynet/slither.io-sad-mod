@@ -1,31 +1,12 @@
 #include "redraw.h"
 #include "native_preferences.h"
+#include "minimap_update.h"
 #include "../network/ntl.h"
 
 #include "../user.h"
 
-void lerp_minimap_float(float* dst, const uint8_t* src, int mmsz, float alpha) {
-  int stride = MAX_MINIMAP_SIZE;
-
-  for (int y = 0; y < mmsz; y++) {
-    for (int x = 0; x < mmsz; x++) {
-      int i = y * stride + x;
-      float target = (float)src[i];
-      dst[i] += alpha * (target - dst[i]);
-    }
-  }
-}
-
-void minimap_float_to_u8(const float* src, uint8_t* dst, int mmsz) {
-  int stride = MAX_MINIMAP_SIZE;
-
-  for (int y = 0; y < mmsz; y++) {
-    for (int x = 0; x < mmsz; x++) {
-      int i = y * stride + x;
-      float v = src[i];
-      dst[i] = (uint8_t)(v + 0.5f);
-    }
-  }
+static float name_text_width(const char* text) {
+  ImVec2 size; igCalcTextSize(&size,text,NULL,false,-1); return size.x;
 }
 
 int arp(snake* o, int q, float xx, float yy) {
@@ -214,27 +195,22 @@ void redraw(tenv* env) {
       float py = hy;
       float a = o->alive_amt * (1 - o->dead_amt);
 
-      if (usrs->hotkeys[HOTKEY_SHOW_NAMES].active) {
+      if (usrs->hotkeys[HOTKEY_SHOW_NAMES].active && o->id != gdata->data.snake_id) {
         int score = (int)floorf((gdata->data.fpsls[sct] +
                                  o->fam / gdata->data.fmlts[sct] - 1) *
                                     15 -
                                 5) /
                     1;
         score = GLM_MIN(GLM_MAX(score, 0), 999999);
-        double score_rep = score / 1000.0;
-        char nk_label_buff[MAX_NICKNAME_LEN + 1 + 7 + 1] = {0};
-        char score_rep_str[9] = {0};
-        sprintf(score_rep_str, " %.1fK", score_rep);
-        sprintf(nk_label_buff, "%s%s", o->nk, score_rep_str);
+        name_layout_update(&o->name_layout,o->nk,score,usrs->snake_scores,
+                           igGetFont(),igGetFontSize(),name_text_width);
+        const char* score_rep_str=o->name_layout.score_text;
 
-        if (o->id != gdata->data.snake_id) {
+        {
           float ntx = o->xx + o->fx;
           float nty = o->yy + o->fy;
-
-          ImVec2 tsize;
-          ImVec2 nsize;
-          igCalcTextSize(&nsize, o->nk, NULL, false, -1);
-          igCalcTextSize(&tsize, nk_label_buff, NULL, false, -1);
+          ImVec2 nsize={o->name_layout.name_width,0};
+          ImVec2 tsize={o->name_layout.total_width,0};
 
           ntx = mww2 + (ntx - gdata->data.view_xx) * gdata->data.gsc;
           nty = mhh2 + (nty - gdata->data.view_yy) * gdata->data.gsc;
@@ -1540,11 +1516,8 @@ void redraw(tenv* env) {
       usr->r->global.bg_color[2] = mode->show_background;
   usr->r->fdr->pipeline_idx = mode->food_type;
 
-  lerp_minimap_float(gdata->data.mm_data_follow, gdata->data.mm_data,
-                     gdata->data.mmsz, 0.05f * gdata->data.vfr);
-
-  minimap_float_to_u8(gdata->data.mm_data_follow, usr->r->mmr->minimap,
-                      gdata->data.mmsz);
+  minimap_update(gdata->data.mm_data_follow,gdata->data.mm_data,usr->r->mmr->minimap,
+                 gdata->data.mmsz,MAX_MINIMAP_SIZE,0.05f*gdata->data.vfr);
 
   gdata->data.frames++;
 

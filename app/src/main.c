@@ -180,10 +180,14 @@ void trender(tenv* env) {
     tcontext_clear(ctx, (vec4){0, 0, 0, 1.0f});
     imgui_render(ctx->frames[ctx->current_frame].cmd);
     renderer_render_cursor(usr->r, ctx);
+    perf_add(PERF_COMMANDS,submit_start);
     tcontext_end(ctx);
+    perf_add_duration(PERF_QUEUE_SUBMIT,ctx->queue_submit_ms);
+    perf_add_duration(PERF_PRESENT,ctx->present_ms);
   }
   perf_add(PERF_SUBMIT,submit_start);
   ctx->frame_submitted=true;
+  perf_context(gdata->curr_screen==PLAYING && gdata->conn==CONNECTED && !death_review.frozen);
   perf_frame(usr->r->bpr->num_instances,usr->r->fdr->num_instances,ctx->present_mode,ctx->image_count);
   renderer_clear_instances(usr->r);
   death_review_finish(env);

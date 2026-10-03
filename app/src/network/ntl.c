@@ -2,6 +2,7 @@
 #include "server.h"
 #include "../game/perf_trace.h"
 #include "ntl_protocol.h"
+#include "team_membership.h"
 #include "credential_store.h"
 #include "../user.h"
 #include "../ui/viewport.h"
@@ -29,6 +30,7 @@ static struct {
   char reply_server[161];
 } shared;
 static ntl_reply visible, previous;
+static team_membership membership;
 static unsigned revision;
 static char status[256]="팀 연결 안 됨", auth[513], team[513], prefix[9], draft[901];
 static wchar_t credentials_path[32768];
@@ -178,10 +180,7 @@ void ntl_destroy(void) {
 bool ntl_mouse_captured(void) { return capture_mouse || native_settings_open || focus_chat; }
 bool ntl_is_teammate(tenv* env,int sid) {
   if(sid<0 || sid>65535 || !active || !updated || GetTickCount64()-updated>10000 || strcmp(visible_server,env->usr->usrs.ipv4)) return false;
-  const char* server=env->usr->usrs.ipv4;
-  for(int i=0;i<visible.count;i++) if(!strcmp(visible.rows[i].nick,own_identity)) server=visible.rows[i].server;
-  for(int i=0;i<visible.count;i++) if(visible.rows[i].sid==sid && !strcmp(visible.rows[i].server,server)) return true;
-  return false;
+  return team_membership_has(&membership,sid);
 }
 void ntl_focus_chat(void) { panel=true; focus_chat=true; }
 void ntl_lightweight_settings(user_settings* settings) {
@@ -221,6 +220,7 @@ static void read_snapshot(void) {
       char plain[2048],name[257]; ntl_plain(delta,plain,sizeof(plain)); ntl_plain(m->nick+8,name,sizeof(name)); log_line(name,plain);
     }
   }
+  team_membership_build(&membership,&visible,own_identity,visible_server);
   // This copy is performed only when an NTL snapshot changed (see caller).
   previous=visible;
 }

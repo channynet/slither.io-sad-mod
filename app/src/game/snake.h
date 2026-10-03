@@ -3,6 +3,7 @@
 
 #include "body_part.h"
 #include "gpt.h"
+#include "name_layout.h"
 #include <stdint.h>
 
 typedef struct snake {
@@ -65,6 +66,7 @@ typedef struct snake {
   uint8_t accessory;
   uint8_t cusk_data[MAX_SKIN_CODE_LEN];
   char nk[MAX_NICKNAME_LEN + 1];
+  name_layout name_layout;
 
   bool cusk;
   bool dead;

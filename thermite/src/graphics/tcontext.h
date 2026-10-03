@@ -33,6 +33,7 @@ typedef struct tcontext {
   int current_frame;
   bool swapchain_ok;
   bool frame_submitted;
+  double queue_submit_ms,present_ms; // CPU call duration, not GPU execution time.
   VkCommandPool cmd_pool;
   tcontext_frame* frames;
   VkSemaphore* render_completes;
