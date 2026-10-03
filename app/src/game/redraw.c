@@ -1,5 +1,6 @@
 #include "redraw.h"
 #include "native_preferences.h"
+#include "../network/ntl.h"
 
 #include "../user.h"
 
@@ -247,6 +248,13 @@ void redraw(tenv* env) {
           vec3 lcolor;
           glm_vec3_lerp((float*)scolor, (vec3){1, 1, 1}, mode->player_names_outline ? 0.8f : 0.7f, lcolor);
 
+          if(native_prefs.uniform_names) {
+            // Membership comes from the same live NTL identity used by targeting.
+            const float* color=ntl_is_teammate(env,o->ntl_id)
+                ? native_prefs.team_name_color : native_prefs.name_color;
+            for(int c=0;c<3;c++) { ncolor[c]=color[c]; lcolor[c]=native_prefs.name_color[c]; }
+          }
+
           ntx = ntx - (usrs->snake_scores ? tsize.x : nsize.x) * 0.5f;
           nty = nty + 32 + 11 * o->sc * gdata->data.gsc;
 
@@ -276,21 +284,7 @@ void redraw(tenv* env) {
 
           ImU32 name_color=igColorConvertFloat4ToU32(
               (ImVec4){ncolor[0],ncolor[1],ncolor[2],mode->player_names_outline ? a : 0.5f*a});
-          const char* tag=native_prefs.team_name_enabled && native_prefs.team_name_text[0]
-              ? strstr(o->nk,native_prefs.team_name_text) : NULL;
-          ImDrawList* name_draw=igGetWindowDrawList();
-          if(tag) {
-            // Explicit literal match: never infer NTL membership from name text.
-            const char* end=tag+strlen(native_prefs.team_name_text);
-            ImVec2 before,through;
-            igCalcTextSize(&before,o->nk,tag,false,-1);
-            igCalcTextSize(&through,o->nk,end,false,-1);
-            if(tag!=o->nk) ImDrawList_AddText_Vec2(name_draw,(ImVec2){ntx,nty},name_color,o->nk,tag);
-            ImDrawList_AddText_Vec2(name_draw,(ImVec2){ntx+before.x,nty},
-                igColorConvertFloat4ToU32((ImVec4){native_prefs.team_name_color[0],
-                  native_prefs.team_name_color[1],native_prefs.team_name_color[2],mode->player_names_outline ? a : 0.5f*a}),tag,end);
-            ImDrawList_AddText_Vec2(name_draw,(ImVec2){ntx+through.x,nty},name_color,end,NULL);
-          } else ImDrawList_AddText_Vec2(name_draw,(ImVec2){ntx,nty},name_color,o->nk,NULL);
+          ImDrawList_AddText_Vec2(igGetWindowDrawList(),(ImVec2){ntx,nty},name_color,o->nk,NULL);
 
           if (usrs->snake_scores) {
             igPushFont(

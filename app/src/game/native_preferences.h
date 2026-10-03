@@ -6,9 +6,8 @@ typedef struct {
   int version, frame_cap, render_scale;
   bool team_panel, fullscreen;
   bool snake_outline, head_point, death_freeze;
-  bool team_name_enabled;
-  char team_name_text[MAX_NICKNAME_LEN+1];
-  float team_name_color[3];
+  bool uniform_names;
+  float name_color[3], team_name_color[3];
 } native_preferences;
 extern native_preferences native_prefs;
 bool native_preferences_load(const char* path, native_preferences* out);
