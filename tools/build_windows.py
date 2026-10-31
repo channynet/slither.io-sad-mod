@@ -33,6 +33,11 @@ def shaders():
     print('Shaders ready', flush=True)
 
 def main():
+    parser=argparse.ArgumentParser()
+    parser.add_argument('--exe-name',default='SlitherNative.exe')
+    options=parser.parse_args()
+    if Path(options.exe_name).name!=options.exe_name or not options.exe_name.lower().endswith('.exe'):
+        raise ValueError('exe-name must be an executable file name')
     BUILD.mkdir(parents=True, exist_ok=True); DIST.mkdir(exist_ok=True)
     shaders()
     # Import the Vulkan loader already supplied by the installed graphics driver.
@@ -48,7 +53,7 @@ def main():
     sources = [ROOT / f'glfw/src/{name}.c' for name in glfw]
     for folder in ['thermite/src', 'app/src']:
         sources += list((ROOT / folder).rglob('*.c')) + list((ROOT / folder).rglob('*.cpp'))
-    common = ['-O2', '-g0', '-D_GLFW_WIN32', '-DGLFW_INCLUDE_NONE', '-DGLFW_INCLUDE_VULKAN', '-DCGLM_FORCE_DEPTH_ZERO_TO_ONE', '-DCIMGUI_NO_EXPORT', '-DAPP_VERSION="2.6-ntl0.26"', '-DSETTINGS_VERSION="1.3"']
+    common = ['-O2', '-g0', '-D_GLFW_WIN32', '-D_WIN32_WINNT=0x0A00', '-DGLFW_INCLUDE_NONE', '-DGLFW_INCLUDE_VULKAN', '-DCGLM_FORCE_DEPTH_ZERO_TO_ONE', '-DCIMGUI_NO_EXPORT', '-DAPP_VERSION="2.6-ntl0.81"', '-DSETTINGS_VERSION="1.3"']
     # Keep local filesystem paths out of distributed assertion/source strings.
     common += [f'-ffile-prefix-map={ROOT}=.', f'-ffile-prefix-map={ROOT.as_posix()}=.']
     for path in ['glfw/include', 'thermite/include', 'thermite/src', '.tools/Vulkan-Headers/include']:
@@ -66,7 +71,7 @@ def main():
         return obj
     with ThreadPoolExecutor(max_workers=2) as pool:
         objects = list(pool.map(compile, sources))
-    args = [*objects, imports, '-static', '-mwindows', '-lwinhttp', '-lbcrypt', '-lcrypt32', '-lcomdlg32', '-lgdi32', '-lws2_32', '-lwinmm', '-ldwmapi', '-o', DIST / 'SlitherNative.exe']
+    args = [*objects, imports, '-static', '-mwindows', '-lwinhttp', '-lbcrypt', '-lcrypt32', '-lcomdlg32', '-lgdi32', '-limm32', '-lws2_32', '-lwinmm', '-ldwmapi', '-liphlpapi', '-lwlanapi', '-lole32', '-lwindowscodecs', '-luuid', '-o', DIST / options.exe_name]
     response = BUILD / 'link.rsp'
     response.write_text('\n'.join('"' + str(arg).replace('\\','/') + '"' for arg in args), encoding='utf-8')
     run([BIN / 'x86_64-w64-mingw32-clang++.exe', '@' + str(response)])
@@ -78,6 +83,6 @@ def main():
         shutil.copy2(ROOT / source, target)
     for name in ['README-NATIVE.md', 'THIRD-PARTY-NOTICES.md']:
         if (ROOT / name).exists(): shutil.copy2(ROOT / name, DIST / name)
-    print('Ready: ' + str(DIST / 'SlitherNative.exe'), flush=True)
+    print('Ready: ' + str(DIST / options.exe_name), flush=True)
 
 if __name__ == '__main__': main()

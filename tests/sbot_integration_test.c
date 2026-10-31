@@ -1,5 +1,6 @@
 #include "../app/src/user.h"
 #include "../app/src/game/perf_trace.h"
+#include "../app/src/game/defensive_planner.h"
 #include <assert.h>
 #include <stdio.h>
 #include <math.h>
@@ -97,6 +98,14 @@ int main(void) {
     usr.usrs.hotkeys[HOTKEY_BOT].active=true;
     float total_turn=0,max_error=0;
     for(int j=0;j<1000;j++) {
+      // Keep the neck at the moving head. A permanently frozen snapshot is
+      // now intentionally expired rather than trusted for the entire test.
+      tdarray_clear(own->pts);
+      float phase=atan2f(own->yy/140,own->xx/220);
+      for(int k=299;k>=1;k--) {
+        float a=phase-sign*k*6.28318530718f/240;
+        body_part p={.xx=220*cosf(a),.yy=140*sinf(a)}; tdarray_push(&own->pts,&p);
+      }
       g->data.ctm+=40; sbot_go(&env);
       float target=atan2f(g->bot.output.ym,g->bot.output.xm);
       float delta=fmaxf(-.12f,fminf(.12f,remainderf(target-own->ang,6.28318530718f)));
@@ -116,5 +125,28 @@ int main(void) {
     usr.usrs.hotkeys[HOTKEY_BOT].active=true; g->data.ctm+=40; sbot_go(&env);
     assert(fabsf(remainderf(atan2f(g->bot.output.ym,g->bot.output.xm)-own->ang,6.28318530718f))<.001f);
   }
-  puts("Defensive bot integration: both manual circles and captured body ovals, straight-section activation, OFF/death reset; own identity, body segments, no boost, cadence, respawn and zero OFF planning passed");
+  // Keep a missing body briefly, expire it, then reacquire a real lap. Never
+  // steer toward an old enclosure after a large server position correction.
+  sbot_init(&env); own->generation++; own->xx=220; own->yy=0; own->ang=1.57079632679f;
+  own->pts=tdarray_create(body_part); g->data.ctm=100000;
+  for(int pass=0;pass<2;pass++) {
+    for(int k=299;k>=1;k--) {
+      float a=-k*6.28318530718f/240;
+      body_part p={.xx=220*cosf(a),.yy=140*sinf(a)}; tdarray_push(&own->pts,&p);
+    }
+    g->data.ctm+=120; sbot_go(&env);
+    assert(def_wrap(atan2f(g->bot.output.ym,g->bot.output.xm)-own->ang)>.02f);
+    tdarray_clear(own->pts);
+    if(!pass) {
+      g->data.ctm+=800; sbot_go(&env);
+      assert(def_wrap(atan2f(g->bot.output.ym,g->bot.output.xm)-own->ang)>.02f);
+      g->data.ctm+=800; sbot_go(&env);
+      assert(fabsf(def_wrap(atan2f(g->bot.output.ym,g->bot.output.xm)-own->ang))<.001f);
+    } else {
+      own->xx+=2000; g->data.ctm+=120; sbot_go(&env);
+      assert(fabsf(def_wrap(atan2f(g->bot.output.ym,g->bot.output.xm)-own->ang))<.001f);
+    }
+  }
+  tdarray_destroy(own->pts); own->pts=NULL;
+  puts("Defensive bot integration: circles/ovals, activation/reset, cadence, zero OFF planning; 800ms missing body retention, stale expiry, reacquisition and detached route rejection passed");
 }

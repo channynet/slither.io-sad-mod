@@ -29,6 +29,11 @@ snake* get_snake(game_data* g,int id) {
 void save_user_settings(user_settings* s) { saves++; }
 void game_data_reset(tenv* env) { death_review_reset(); target_marker_reset(); }
 void server_connect(tenv* env) { connects++; }
+void server_note_end(const char* format, ...) { (void)format; }
+void duel_snake_removed(struct game_data* game,struct snake* o,bool is_kill) { (void)game; (void)o; (void)is_kill; }
+void duel_kill_confirmed(void) {}
+void duel_game_over(struct game_data* game) { (void)game; }
+void duel_connected(void) {}
 void glfwSetTime(double t) {}
 VKAPI_ATTR VkResult VKAPI_CALL vkDeviceWaitIdle(VkDevice d) { waits++; return VK_SUCCESS; }
 int main(void) {
@@ -67,6 +72,22 @@ int main(void) {
   assert(selected.generation==3); // Stale selector cannot pick replacement.
   pressed=-1; target_marker_input(&env,true); pressed=GLFW_KEY_DELETE; target_marker_input(&env,false);
   assert(!selecting && !selected.generation);
+  snake* enemy=get_snake(g,3); strcpy(enemy->target_key,"9_3_27"); enemy->has_serial=true; enemy->serial=12345;
+  target_marker_receive(&env,"9_3_27|2");
+  assert(marked(enemy,GetTickCount64()));
+  char report[48]; target_marker_report(&env,report,sizeof(report)); assert(!strcmp(report,"9_3_27|2"));
+  // Preserve ring assignment when another member sends only a sighting.
+  target_marker_receive(&env,"9_3_27"); target_marker_report(&env,report,sizeof(report)); assert(!strcmp(report,"9_3_27|2"));
+  // A recycled server ID cannot inherit the old mark if serials differ.
+  enemy->serial++; assert(!marked(enemy,GetTickCount64()));
+  target_marker_report(&env,report,sizeof(report)); assert(!report[0]);
+  target_marker_clear_team(); target_marker_receive(&env,"9_3_27");
+  enemy->dead=true; assert(!marked(enemy,GetTickCount64())); enemy->dead=false;
+  assert(!marked(enemy,GetTickCount64()));
+  target_marker_clear_team(); target_marker_receive(&env,"9_3_27");
+  assert(!marked(enemy,GetTickCount64()+300001));
+  target_marker_clear_team(); g->data.follow_view=false;
+  target_marker_receive(&env,"9_3_27"); assert(!marked(enemy,GetTickCount64()));
   tdarray_destroy(g->data.snakes); free(usr);
   puts("Gameplay review: death frame retention, disabled/no-frame cases, reconnect/menu lifecycle, target filtering and recycled IDs passed");
 }

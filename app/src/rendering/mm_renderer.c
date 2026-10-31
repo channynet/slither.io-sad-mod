@@ -13,6 +13,8 @@ mm_renderer* mm_renderer_create(tcontext* ctx, VkPipelineLayout layout,
 
   r->minimap_tex = malloc(ctx->fif * sizeof(texture*));
   r->uploaded = calloc(ctx->fif,sizeof(bool));
+  r->size = 0;
+  r->shadow = calloc((size_t)ctx->fif * MAX_MINIMAP_SIZE * MAX_MINIMAP_SIZE, 1);
 
   for (int i = 0; i < ctx->fif; i++) {
     r->minimap_tex[i] = create_minimap_texture(ctx, MAX_MINIMAP_SIZE);
@@ -170,11 +172,29 @@ void mm_renderer_prerender(mm_renderer* r, tcontext* ctx) {
 
   // Each in-flight texture has its own last uploaded bytes. Hidden maps are
   // left alone and refreshed from current data when shown again.
-  if(r->uploaded[ctx->current_frame] &&
-     !memcmp(r->minimap_buffer[ctx->current_frame].data,r->minimap,MAX_MINIMAP_SIZE*MAX_MINIMAP_SIZE)) return;
-  memcpy(r->minimap_buffer[ctx->current_frame].data, r->minimap, MAX_MINIMAP_SIZE * MAX_MINIMAP_SIZE);
-  vmaFlushAllocation(ctx->allocator,r->minimap_buffer[ctx->current_frame].memory,0,MAX_MINIMAP_SIZE*MAX_MINIMAP_SIZE);
-  r->uploaded[ctx->current_frame]=true;
+  // Only the rows that changed inside the used square are compared, copied and
+  // sent; the first upload defines the whole texture.
+  int frame=ctx->current_frame;
+  int size=r->size>0 && r->size<=MAX_MINIMAP_SIZE?r->size:MAX_MINIMAP_SIZE;
+  uint8_t* shadow=r->shadow+(size_t)frame*MAX_MINIMAP_SIZE*MAX_MINIMAP_SIZE;
+  uint8_t* mapped=r->minimap_buffer[frame].data;
+  int first=0,last=-1,width=size;
+  if(!r->uploaded[frame]) { last=MAX_MINIMAP_SIZE-1; width=MAX_MINIMAP_SIZE; }
+  else {
+    first=size;
+    for(int y=0;y<size;y++) if(memcmp(shadow+y*MAX_MINIMAP_SIZE,r->minimap+y*MAX_MINIMAP_SIZE,size)) {
+      if(first>y) first=y;
+      last=y;
+    }
+    if(last<0) return;
+  }
+  for(int y=first;y<=last;y++) {
+    memcpy(shadow+y*MAX_MINIMAP_SIZE,r->minimap+y*MAX_MINIMAP_SIZE,width);
+    memcpy(mapped+y*MAX_MINIMAP_SIZE,r->minimap+y*MAX_MINIMAP_SIZE,width);
+  }
+  vmaFlushAllocation(ctx->allocator,r->minimap_buffer[frame].memory,(VkDeviceSize)first*MAX_MINIMAP_SIZE,
+                     (VkDeviceSize)(last-first+1)*MAX_MINIMAP_SIZE);
+  r->uploaded[frame]=true;
 
   vkCmdPipelineBarrier(
       fr->cmd, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
@@ -197,12 +217,12 @@ void mm_renderer_prerender(mm_renderer* r, tcontext* ctx) {
   vkCmdCopyBufferToImage(
       fr->cmd, r->minimap_buffer[ctx->current_frame].handle,
       r->minimap_tex[ctx->current_frame]->image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1,
-      &(VkBufferImageCopy){0,
-                           0,
+      &(VkBufferImageCopy){(VkDeviceSize)first * MAX_MINIMAP_SIZE,
+                           MAX_MINIMAP_SIZE,
                            0,
                            {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1},
-                           {0, 0, 0},
-                           {MAX_MINIMAP_SIZE, MAX_MINIMAP_SIZE, 1}});
+                           {0, first, 0},
+                           {width, last - first + 1, 1}});
 
   vkCmdPipelineBarrier(
       fr->cmd, VK_PIPELINE_STAGE_TRANSFER_BIT,
@@ -237,6 +257,7 @@ void mm_renderer_destroy(mm_renderer* r, tcontext* ctx) {
   }
   free(r->minimap_tex);
   free(r->uploaded);
+  free(r->shadow);
   tdbuffer_destroy(ctx, r->minimap_buffer);
   free(r);
 }

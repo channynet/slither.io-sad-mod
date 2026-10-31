@@ -75,6 +75,8 @@ typedef struct user_settings {
 } user_settings;
 
 void user_settings_default(user_settings* usr_settings);
+// Fills the settings from the bytes of a settings file, of this version or of the older, shorter layout.
+bool user_settings_from_file(user_settings* settings, const unsigned char* bytes, size_t size);
 void read_user_settings(user_settings* usr_settings);
 void save_user_settings(user_settings* usr_settings);
 

@@ -1,7 +1,12 @@
 #include "ui_overlay.h"
+#include "input.h"
+#include "perf_trace.h"
 
 #include "../user.h"
 #include "native_preferences.h"
+#include "wall_status.h"
+#include <math.h>
+#include <stdio.h>
 #include "target_marker.h"
 #include "../ui/head_point_geometry.h"
 
@@ -39,6 +44,20 @@ void ui_overlay(tenv* env) {
                                       5) /
                           1;
 
+      if (safe_wall_steering) {          // Safewall is turning us along the wall: show where to
+        float hx2=mww2+(hx-gdata->data.view_xx)*gdata->data.gsc, hy2=mhh2+(hy-gdata->data.view_yy)*gdata->data.gsc;
+        float len=40+60*gdata->data.gsc;
+        ImDrawList_AddLine(igGetWindowDrawList(),(ImVec2){hx2,hy2},
+            (ImVec2){hx2+cosf(safe_wall_angle)*len,hy2+sinf(safe_wall_angle)*len},
+            igColorConvertFloat4ToU32((ImVec4){1,.55f,.1f,.75f*a}),3);
+      }
+      if (body_hug_steering) {           // body hug: a line to the point it is steering for
+        float hx2=mww2+(hx-gdata->data.view_xx)*gdata->data.gsc, hy2=mhh2+(hy-gdata->data.view_yy)*gdata->data.gsc;
+        float tx2=mww2+(body_hug_tx-gdata->data.view_xx)*gdata->data.gsc, ty2=mhh2+(body_hug_ty-gdata->data.view_yy)*gdata->data.gsc;
+        ImU32 c=igColorConvertFloat4ToU32((ImVec4){.3f,.9f,1,.8f*a});
+        ImDrawList_AddLine(igGetWindowDrawList(),(ImVec2){hx2,hy2},(ImVec2){tx2,ty2},c,2.5f);
+        ImDrawList_AddCircleFilled(igGetWindowDrawList(),(ImVec2){tx2,ty2},3.5f,c,12);
+      }
       if (usrs->hotkeys[HOTKEY_ASSIST].active) {
         ImDrawList_AddLine(
             igGetWindowDrawList(),
@@ -52,6 +71,7 @@ void ui_overlay(tenv* env) {
       }
     }
   }
+
 
   usr->r->global.minimap_opacity = 0;
   ImGuiStyle* style = igGetStyle();

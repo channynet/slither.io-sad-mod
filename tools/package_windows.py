@@ -20,11 +20,41 @@ README = f'''Slither Native {VERSION} · Windows x64
 1. ZIP을 폴더에 모두 풀어 주세요.
 2. SlitherNative.exe를 실행하세요. app 폴더를 함께 유지해 주세요.
 3. 닉네임을 입력하고 서버 주소를 확인한 뒤 Play를 누르세요.
-4. F8 → 설정에서 본인의 NTL 인증키/팀 ID를 입력할 수 있습니다.
+4. F8 → 채팅창 아래 … → 팀 연결 / 설정에서 본인의 NTL 인증키/팀 ID를 입력할 수 있습니다.
+   NTL처럼 이름을 붙여 여러 팀키를 저장하고 "저장된 팀키" 목록에서 골라 연결합니다(연결 중에도 바꾸기 가능).
 
 주요 조작: 마우스 이동, Space 가속, 휠 확대/축소, F11 전체 화면.
 H 두 번 또는 F8: 팀 채팅. T 두 번: BOT. V 두 번: 화면 정보.
 오른쪽 아래 고양이 애니메이션은 메뉴에서만 표시됩니다.
+팀원 현황 창에는 FPS·핑·점수·참가 서버가 표시됩니다. 채팅창 아래 … → 팀원 현황에서 켜고 끕니다.
+NTL 팀 연결이 필요하며, 수치가 없거나 오래된 경우 —로 표시합니다. 창 위치·크기·표시 여부는 저장됩니다.
+채팅은 입력창을 클릭해서 시작합니다. Enter는 전송, Esc 또는 입력창 밖 클릭은 게임으로 복귀입니다.
+채팅 중에도 지렁이는 마우스 방향을 따라갑니다. 채팅 입력·클릭으로는 가속하지 않습니다.
+입력하지 않을 때는 일반 게임 단축키가 동작합니다. Enter/Tab으로 채팅이 자동 활성화되지 않습니다.
+입력창에서 Ctrl+A/C/X/V 및 우클릭 복사·붙여넣기를 사용할 수 있습니다.
+받은 메시지는 우클릭하여 복사할 수 있습니다. 채팅 글자는 18px이며 한글 수신 처리가 개선되었습니다.
+Ctrl+F3: 팀원 닉네임 강조. 팀 연결 / 설정 → 이름 색상에서도 변경할 수 있습니다.
+스킨 설정의 태그 / cosmetic 창 → 얼굴에서 웃는 얼굴·집게 모양 눈을 선택할 수 있습니다.
+원래 게임의 웃는 얼굴·빨간 눈자루 모양입니다. 모든 몸 색상과 조합하며 두 가지를 함께 켤 수 있습니다. 얼굴 장식은 내 화면에만 표시됩니다.
+같은 창의 그라데이션 탭에서 2~4개 색을 골라 머리부터 꼬리까지 이어지는 스킨을 만들 수 있습니다.
+Ctrl+F2로 켜고 끕니다. 색상·사용 여부는 자동 저장되며 내 화면에만 표시됩니다.
+같은 창의 불꽃 탭(또는 채팅창 아래 … → 설정 → 불꽃 스킨)에서 몸이 불타는 스킨을 켤 수 있습니다. 내 화면에만 보입니다.
+설정 → 안전 벽: NTL의 Safewall과 같은 방식입니다(기본 켜짐). 벽 가까이에서 마우스가 맵 밖을 가리키면 벽을 따라 미끄러집니다.
+  방식 1·2(NTL 기본 2)와 벽 오프셋 -10~10(NTL Border assist offset, 기본 0)을 고릅니다. 벽에 자주 죽으면 오프셋을 올리세요.
+  "벽과 거리"(기본 1 = 완전 밀착, 0~20)로 벽에서 얼마나 안쪽을 탈지 정합니다. 핑이 높아 벽에 죽으면 올리세요.
+내 FPS와 핑은 V 두 번(화면 정보)으로 볼 수 있습니다.
+내 FPS·핑은 팀 연결 시 팀원에게도 보입니다(NTL 사용 팀원은 NTL 설정 "Show player details"를 켜야 표시).
+S 두 번(플레이 중): SOS. 팀원 화면에 빨간색으로 보이고 "Help me!"를 보냅니다(NTL과 같음). 팀원의 SOS는 화면 위에 알림으로 뜹니다.
+벽 상태: 벽이 줄어들면 빨강, 멈추면 주황, 넓어지면 초록으로 벽을 그립니다.
+F1/F2: 반시계/시계 방향으로 계속 돌기(같은 키로 끄기, NTL과 같음).
+- 두 번: 팀 채팅 기록 지우기.
+NTL 태그: 다른 NTL 사용자의 태그가 보이고, Skin editor → 태그 탭에서 내 NTL 태그(무료 태그, 또는 NTL에서 받은 비밀번호 태그)를 고를 수 있습니다.
+Z: 스크린샷 (screenshots 폴더에 PNG). X: 시작 줌으로 되돌리기. 설정 → "시작 줌"으로 게임 시작 줌을 정합니다.
+E 누르는 동안: 가장 가까운 적의 몸에 히트박스에 맞춰 붙어서 따라가기(지연·회전 계산, 빠져나갈 길을 남김). 가속 중에는 빠져나갈 길이 없거나 머리를 앞지르게 되면 가속을 놓습니다. 거리는 설정 → "몸 붙기".
+7 두 번: 그래픽 (기본 스킨 / 스킨 없음 / 고대비). 설정 → 그래픽에서 내 스킨 유지, 다른 지렁이 불투명도도 바꿉니다.
+팀원 현황 창에서 팀원이 있는 서버 옆 "참가"를 누르면 그 서버로 바로 들어갑니다(게임 중이면 나갔다가 다시 접속).
+시작 화면 서버 주소 옆 ▼ 목록에도 팀원이 있는 서버가 맨 위에 나옵니다.
+서버 주소 칸에는 IP:포트 외에 온라인 주소(예: xxx.trycloudflare.com)도 넣을 수 있습니다.
 
 이 배포본에는 기존 사용자의 닉네임·팀키·서버 기록·설정·개인 이미지·로그가 없습니다.
 닉네임은 빈 상태이고 서버 주소는 프로그램 공통 기본값입니다.
@@ -49,21 +79,35 @@ def main():
         package = staging / NAME
         package.mkdir()
         shutil.copy2(build.DIST / 'SlitherNative.exe', package / 'SlitherNative.exe')
+        tracked = set(filter(None, subprocess.check_output(['git', 'ls-files', '-z'], cwd=ROOT).decode().split('\0')))
         patterns = ['fonts/*.ttf', 'fonts/*.txt', 'textures/*.png',
-                    'shaders/bin/*.spv', 'personal/library/*.png', 'menu/cat-knock-*.png']
+                    'shaders/bin/*.spv', 'personal/library/*.png', 'menu/cat-knock-*.png',
+                    'ntl-tags/tags.txt', 'ntl-tags/README.txt', 'ntl-tags/t*.png',
+                    'ntl-tags-online/*.txt', 'ntl-tags-online/t*.png']
         for pattern in patterns:
             for source in (ROOT / 'app/res').glob(pattern):
+                if source.relative_to(ROOT).as_posix() not in tracked:
+                    continue  # Never include a newly imported personal image.
                 target = package / source.relative_to(ROOT)
                 target.parent.mkdir(parents=True, exist_ok=True)
                 shutil.copy2(source, target)
+        # Original built-in face artwork: explicit allowlist, never user imports.
+        face_assets = {'app/res/faces/jmou3.png', 'app/res/faces/sest5.png'}
+        for relative in sorted(face_assets):
+            target = package / relative
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(ROOT / relative, target)
         shutil.copytree(build.DIST / 'licenses', package / 'licenses')
         for name in ['LICENSE', 'THIRD-PARTY-NOTICES.md']:
             shutil.copy2(ROOT / name, package / name)
         (package / 'README-KO.txt').write_text(README, encoding='utf-8-sig')
 
         # Corresponding source, without Git history, developer notes, build outputs or credentials.
-        tracked = subprocess.check_output(['git', 'ls-files', '-z'], cwd=ROOT).decode().split('\0')
-        sources = set(filter(None, tracked)) | {'tools/package_windows.py'}
+        # Include current, uncommitted code too: the corresponding source must
+        # match this executable, including newly added IME and chat modules.
+        added = subprocess.check_output(['git', 'ls-files', '--others', '--exclude-standard', '-z',
+                                         '--', 'app/src', 'tests', 'tools'], cwd=ROOT).decode().split('\0')
+        sources = tracked | face_assets | {name for name in added if name and Path(name).suffix.lower() in {'.c', '.cpp', '.h', '.py'}}
         for relative in sorted(sources):
             if relative in {'README.md', 'README-NATIVE.md'}:
                 continue

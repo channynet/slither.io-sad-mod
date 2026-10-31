@@ -33,6 +33,8 @@ void tinit(tenv* env);
 void trender(tenv* env);
 void tinput(tenv* env);
 void tidle(tenv* env);
+// Called about 60 times a second while the window is minimized and no frame is drawn.
+void tbackground(tenv* env);
 void tdestroy(tenv* env);
 
 #endif

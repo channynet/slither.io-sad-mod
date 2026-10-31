@@ -8,6 +8,7 @@
 #include "food.h"
 #include "prey.h"
 #include "sbot.h"
+#include "../network/ping_tracker.h"
 
 typedef struct default_skin_data {
   vec3s ec;
@@ -31,6 +32,10 @@ typedef struct accessory_data {
 
 typedef struct game_data {
   screen curr_screen;
+  ping_tracker ping_tracker;
+  bool prompt_ack;
+  double network_polled_at,network_poll_gap;
+  unsigned network_session;
   conn_status conn;
   
   uint8_t default_skins[NUM_DEFAULT_SKINS][64];
@@ -73,6 +78,7 @@ typedef struct game_data {
     float ovyy;
     float flux_grd;
     float real_flux_grd;
+    bool flux_announced;      // the server sent the wall radius (it can move); NTL "V0"
     float view_xx;
     float view_yy;
     float lview_xx;
@@ -120,6 +126,7 @@ typedef struct game_data {
     int flux_grd_pos;
     int mscps;
     int protocol_version;
+    int server_number;              // the game server's number from its first packet (0: none; NTL's tag server wants it)
     int lfesid;
     int lsang;
     int vfrb;

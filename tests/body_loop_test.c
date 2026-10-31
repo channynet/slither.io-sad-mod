@@ -22,9 +22,9 @@ int main(void) {
     assert(body_loop_capture(&loop,trail,300,heading,14.5f,60));
     assert(loop.count==128 && loop.length>1100 && loop.length<1200);
     assert(loop.direction==sign && loop.overlap>200 && loop.body_length>loop.length);
-    assert(body_loop_offset(&loop,14.5f,180,.1f)>0);
+    assert(body_loop_offset(&loop,loop.length,14.5f,180,.1f)>0);
     body_loop short_tail=loop; short_tail.overlap=10;
-    assert(body_loop_offset(&short_tail,14.5f,180,.1f)<0);
+    assert(body_loop_offset(&short_tail,loop.length,14.5f,180,.1f)<0);
     def_scene_reset(&scene); scene.body_path=&loop; scene.position=trail[0]; scene.angle=heading;
     scene.radius=14.5f; scene.speed=180; scene.turn_rate=3; scene.latency=.1f; scene.arena_radius=10000;
     // Food outside the enclosure must not pull a safe body-following bot out.

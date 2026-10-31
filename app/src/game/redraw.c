@@ -1,7 +1,15 @@
+#include "wall_status.h"
+int wall_status_trend = 2;
 #include "redraw.h"
+#include "duel_board.h"
 #include "native_preferences.h"
 #include "minimap_update.h"
 #include "../network/ntl.h"
+#include "../ui/head_face.h"
+#include "../ui/skin_gradient.h"
+#include "../ui/gradient_color.h"
+#include "../ui/fire_skin.h"
+#include "perf_trace.h"
 
 #include "../user.h"
 
@@ -33,6 +41,7 @@ void redraw(tenv* env) {
   float lvy = gdata->data.view_xx;
 
   float mww2 = ctx->size[0] / 2.0f;
+  skin_effect_time = (float)glfwGetTime();
   float mhh2 = ctx->size[1] / 2.0f;
 
   float mwwp50 = ctx->size[0] + 50;
@@ -182,8 +191,8 @@ void redraw(tenv* env) {
   }
 
   igPushFont(
-      usr->imgui_data.mono_font[usrs->snake_names_font_size],
-      usr->imgui_data.mono_font[usrs->snake_names_font_size]->LegacySize);
+      usr->imgui_data.regular_font[usrs->snake_names_font_size],
+      usr->imgui_data.regular_font[usrs->snake_names_font_size]->LegacySize);
   for (int i = snakes_len - 1; i >= 0; i--) {
     snake* o = gdata->data.snakes + i;
     int sct = o->sct + o->rsc;
@@ -224,15 +233,41 @@ void redraw(tenv* env) {
           vec3 lcolor;
           glm_vec3_lerp((float*)scolor, (vec3){1, 1, 1}, mode->player_names_outline ? 0.8f : 0.7f, lcolor);
 
+          bool teammate=ntl_is_teammate(env,o->ntl_id);
+          bool emphasize=teammate && native_prefs.team_name_emphasis;
           if(native_prefs.uniform_names) {
             // Membership comes from the same live NTL identity used by targeting.
-            const float* color=ntl_is_teammate(env,o->ntl_id)
+            const float* color=teammate
                 ? native_prefs.team_name_color : native_prefs.name_color;
             for(int c=0;c<3;c++) { ncolor[c]=color[c]; lcolor[c]=native_prefs.name_color[c]; }
+          }
+          // A teammate's name is always in the team colour and twinkles (about twice a second),
+          // so it stands out at a glance among the others.
+          float twinkle=0;
+          if(emphasize) {
+            twinkle=.5f+.5f*sinf((float)igGetTime()*12.566f+o->id*1.7f);
+            for(int c=0;c<3;c++) ncolor[c]=native_prefs.team_name_color[c]+(1-native_prefs.team_name_color[c])*twinkle*.75f;
           }
 
           ntx = ntx - (usrs->snake_scores ? tsize.x : nsize.x) * 0.5f;
           nty = nty + 32 + 11 * o->sc * gdata->data.gsc;
+
+          if(emphasize && o->nk[0]) {
+            ImDrawList* draw=igGetWindowDrawList();
+            ImVec2 top={ntx-12,nty-3},bottom={ntx+nsize.x+4,nty+igGetFontSize()+3};
+            float* team=native_prefs.team_name_color;
+            ImU32 border=igColorConvertFloat4ToU32((ImVec4){team[0],team[1],team[2],a});
+            ImU32 shine=igColorConvertFloat4ToU32((ImVec4){team[0]+(1-team[0])*twinkle,team[1]+(1-team[1])*twinkle,team[2]+(1-team[2])*twinkle,a});
+            // a soft halo that swells with the twinkle, then the box and a four-pointed star
+            ImDrawList_AddRect(draw,(ImVec2){top.x-2,top.y-2},(ImVec2){bottom.x+2,bottom.y+2},
+                igColorConvertFloat4ToU32((ImVec4){team[0],team[1],team[2],(.15f+.45f*twinkle)*a}),5,0,2+2*twinkle);
+            ImDrawList_AddRectFilled(draw,top,bottom,igColorConvertFloat4ToU32((ImVec4){.025f,.025f,.025f,.85f*a}),3,0);
+            ImDrawList_AddRect(draw,top,bottom,shine,3,0,1+twinkle);
+            ImVec2 star={ntx-6,nty+igGetFontSize()*.5f}; float reach=3+3.5f*twinkle,waist=1.2f;
+            ImDrawList_AddQuadFilled(draw,(ImVec2){star.x,star.y-reach},(ImVec2){star.x+waist,star.y},(ImVec2){star.x,star.y+reach},(ImVec2){star.x-waist,star.y},shine);
+            ImDrawList_AddQuadFilled(draw,(ImVec2){star.x-reach,star.y},(ImVec2){star.x,star.y-waist},(ImVec2){star.x+reach,star.y},(ImVec2){star.x,star.y+waist},shine);
+            (void)border;
+          }
 
           if (mode->player_names_outline) {
             for (int x = -1; x <= 1; x++) {
@@ -258,14 +293,20 @@ void redraw(tenv* env) {
             }
           }
 
+          if(emphasize && o->nk[0]) {   // a glow in the team colour behind the letters
+            float* team=native_prefs.team_name_color;
+            ImU32 glow=igColorConvertFloat4ToU32((ImVec4){team[0],team[1],team[2],(.25f+.45f*twinkle)*a});
+            for(int x=-1;x<=1;x++) for(int y=-1;y<=1;y++) if(x || y)
+              ImDrawList_AddText_Vec2(igGetWindowDrawList(),(ImVec2){ntx+x*1.5f,nty+y*1.5f},glow,o->nk,NULL);
+          }
           ImU32 name_color=igColorConvertFloat4ToU32(
-              (ImVec4){ncolor[0],ncolor[1],ncolor[2],mode->player_names_outline ? a : 0.5f*a});
+              (ImVec4){ncolor[0],ncolor[1],ncolor[2],(mode->player_names_outline || emphasize) ? a : 0.5f*a});
           ImDrawList_AddText_Vec2(igGetWindowDrawList(),(ImVec2){ntx,nty},name_color,o->nk,NULL);
 
           if (usrs->snake_scores) {
             igPushFont(
-                usr->imgui_data.mono_font_bold[usrs->snake_names_font_size],
-                usr->imgui_data.mono_font_bold[usrs->snake_names_font_size]
+                usr->imgui_data.regular_font[usrs->snake_names_font_size],
+                usr->imgui_data.regular_font[usrs->snake_names_font_size]
                     ->LegacySize);
             ImDrawList_AddText_Vec2(
                 igGetWindowDrawList(), (ImVec2){ntx + nsize.x, nty},
@@ -273,6 +314,32 @@ void redraw(tenv* env) {
                     (ImVec4){lcolor[0], lcolor[1], lcolor[2], mode->player_names_outline ? a : 0.7f * a}),
                 score_rep_str, NULL);
             igPopFont();
+          }
+
+          // Our kills and deaths against this opponent, under the name.
+          int duel_kills,duel_deaths;
+          if(duel_board_record(o->nk,&duel_kills,&duel_deaths)) {
+            char kills_text[16],deaths_text[16];
+            snprintf(kills_text,sizeof(kills_text),"%d",duel_kills);
+            snprintf(deaths_text,sizeof(deaths_text),"%d",duel_deaths);
+            ImVec2 ksize,msize,dsize;
+            igCalcTextSize(&ksize,kills_text,NULL,false,-1);
+            igCalcTextSize(&msize," : ",NULL,false,-1);
+            igCalcTextSize(&dsize,deaths_text,NULL,false,-1);
+            float label_width=usrs->snake_scores ? tsize.x : nsize.x;
+            float dx=ntx+label_width*.5f-(ksize.x+msize.x+dsize.x)*.5f,dy=nty+igGetFontSize()+2;
+            float alpha=(mode->player_names_outline || emphasize) ? a : 0.75f*a;
+            ImDrawList* draw=igGetWindowDrawList();
+            const char* parts[3]={kills_text," : ",deaths_text};
+            float widths[3]={ksize.x,msize.x,dsize.x};
+            ImVec4 colors[3]={{.45f,1,.55f,alpha},{1,1,1,alpha*.8f},{1,.45f,.45f,alpha}};
+            for(int part=0;part<3;part++) {
+              if(mode->player_names_outline)
+                for(int x=-1;x<=1;x++) for(int y=-1;y<=1;y++) if(x || y)
+                  ImDrawList_AddText_Vec2(draw,(ImVec2){dx+x,dy+y},igColorConvertFloat4ToU32((ImVec4){0,0,0,a}),parts[part],NULL);
+              ImDrawList_AddText_Vec2(draw,(ImVec2){dx,dy},igColorConvertFloat4ToU32(colors[part]),parts[part],NULL);
+              dx+=widths[part];
+            }
           }
         }
       }
@@ -635,6 +702,12 @@ void redraw(tenv* env) {
           }
         }
 
+        bool gradient=(native_prefs.gradient_enabled || native_prefs.fire_skin) && o->id==gdata->data.snake_id;
+        {
+          int first=o->cusk && o->cusk_len ? o->cusk_data[0] : gdata->default_skins[o->cv][1];
+          if(first<0 || first>=NUM_COLOR_GROUPS) first=0;
+          skin_graphics_begin(gdata->cg_glow_colors[first].raw,o->id==gdata->data.snake_id);
+        }
         if (mode->render_mode == 0) {
           float shadow_strength = 0.25f;
 
@@ -696,7 +769,7 @@ void redraw(tenv* env) {
 
                 int cg_id = o->cusk_data[(int)j % o->cusk_len];
 
-                bp_renderer_push(usr->r->bpr,
+                skin_gradient_body(env,gradient,mode->render_mode,(int)j,bp,
                                  &(bp_instance){{fix - (gdata->data.gsc * lsz),
                                                  fiy - (gdata->data.gsc * lsz),
                                                  gdata->data.gsc * 2 * lsz,
@@ -742,7 +815,7 @@ void redraw(tenv* env) {
                         ->default_skins[o->cv][1 + ((int)j % default_skin_len)];
                 float se = gdata->worm_effect[(int)j % WORM_EFFECT_LEN];
 
-                bp_renderer_push(usr->r->bpr,
+                skin_gradient_body(env,gradient,mode->render_mode,(int)j,bp,
                                  &(bp_instance){{fix - (gdata->data.gsc * lsz),
                                                  fiy - (gdata->data.gsc * lsz),
                                                  gdata->data.gsc * 2 * lsz,
@@ -815,8 +888,7 @@ void redraw(tenv* env) {
                 int cg_id = o->cusk_data[(int)j % o->cusk_len];
                 vec3s* cg_col = gdata->cg_colors + cg_id;
 
-                bp_renderer_push(
-                    usr->r->bpr,
+                skin_gradient_body(env,gradient,mode->render_mode,(int)j,bp,
                     &(bp_instance){
                         {fix - (gdata->data.gsc * lsz),
                          fiy - (gdata->data.gsc * lsz),
@@ -864,8 +936,7 @@ void redraw(tenv* env) {
                         ->default_skins[o->cv][1 + ((int)j % default_skin_len)];
                 vec3s* cg_col = gdata->cg_colors + cg_id;
 
-                bp_renderer_push(
-                    usr->r->bpr,
+                skin_gradient_body(env,gradient,mode->render_mode,(int)j,bp,
                     &(bp_instance){
                         {fix - (gdata->data.gsc * lsz),
                          fiy - (gdata->data.gsc * lsz),
@@ -938,8 +1009,7 @@ void redraw(tenv* env) {
                 int cg_id = o->cusk_data[0];
                 vec3s* cg_col = gdata->cg_colors + cg_id;
 
-                bp_renderer_push(
-                    usr->r->bpr,
+                skin_gradient_body(env,gradient,mode->render_mode,(int)j,bp,
                     &(bp_instance){
                         {fix - (gdata->data.gsc * lsz),
                          fiy - (gdata->data.gsc * lsz),
@@ -985,8 +1055,7 @@ void redraw(tenv* env) {
                 int cg_id = gdata->default_skins[o->cv][1];
                 vec3s* cg_col = gdata->cg_colors + cg_id;
 
-                bp_renderer_push(
-                    usr->r->bpr,
+                skin_gradient_body(env,gradient,mode->render_mode,(int)j,bp,
                     &(bp_instance){
                         {fix - (gdata->data.gsc * lsz),
                          fiy - (gdata->data.gsc * lsz),
@@ -995,6 +1064,13 @@ void redraw(tenv* env) {
                         {cg_col->r, cg_col->g, cg_col->b, a}});
               }
           }
+        }
+
+        if (native_prefs.fire_skin && o->id == gdata->data.snake_id && !o->dead) {
+          fire_body body = {gdata->data.pbx, gdata->data.pby, gdata->data.pba, gdata->data.pbu, bp,
+                            lsz * .8f, gdata->data.view_xx, gdata->data.view_yy, gdata->data.gsc,
+                            mww2, mhh2, a, native_prefs.fire_strength};
+          fire_skin_effects(usr->r->bstb, usr->r->bsta, &body, skin_effect_time);
         }
 
         // debugging
@@ -1094,6 +1170,7 @@ void redraw(tenv* env) {
                                   (.6 + .4 * cosf(j / 4 - 1.15 * o->sfr));
                     int cg_id = o->cusk_data[0];
                     vec3s* shc = gdata->cg_glow_colors + cg_id;
+                    vec3s tint; if(gradient) { skin_effect_color(tint.raw,(int)j,bp); shc=&tint; }
 
                     bst_renderer_push(
                         usr->r->bstb,
@@ -1129,6 +1206,7 @@ void redraw(tenv* env) {
                     int default_skin_len = gdata->default_skins[o->cv][0];
                     int cg_id = gdata->default_skins[o->cv][1];
                     vec3s* shc = gdata->cg_glow_colors + cg_id;
+                    vec3s tint; if(gradient) { skin_effect_color(tint.raw,(int)j,bp); shc=&tint; }
 
                     bst_renderer_push(
                         usr->r->bstb,
@@ -1169,6 +1247,7 @@ void redraw(tenv* env) {
                                   (.5 + .5 * cosf(j / 4 - o->sfr));
                     int cg_id = o->cusk_data[0];
                     vec3s* shc = gdata->cg_glow_colors + cg_id;
+                    vec3s tint; if(gradient) { skin_effect_color(tint.raw,(int)j,bp); shc=&tint; }
 
                     bst_renderer_push(
                         usr->r->bsta,
@@ -1204,6 +1283,7 @@ void redraw(tenv* env) {
                     int default_skin_len = gdata->default_skins[o->cv][0];
                     int cg_id = gdata->default_skins[o->cv][1];
                     vec3s* shc = gdata->cg_glow_colors + cg_id;
+                    vec3s tint; if(gradient) { skin_effect_color(tint.raw,(int)j,bp); shc=&tint; }
 
                     bst_renderer_push(
                         usr->r->bsta,
@@ -1248,6 +1328,7 @@ void redraw(tenv* env) {
                                   (.6 + .4 * cosf(j / 4 - 1.15 * o->sfr));
                     int cg_id = o->cusk_data[(int)j % o->cusk_len];
                     vec3s* shc = gdata->cg_glow_colors + cg_id;
+                    vec3s tint; if(gradient) { skin_effect_color(tint.raw,(int)j,bp); shc=&tint; }
 
                     bst_renderer_push(
                         usr->r->bstb,
@@ -1285,6 +1366,7 @@ void redraw(tenv* env) {
                         gdata->default_skins[o->cv]
                                             [1 + ((int)j % default_skin_len)];
                     vec3s* shc = gdata->cg_glow_colors + cg_id;
+                    vec3s tint; if(gradient) { skin_effect_color(tint.raw,(int)j,bp); shc=&tint; }
 
                     bst_renderer_push(
                         usr->r->bstb,
@@ -1325,6 +1407,7 @@ void redraw(tenv* env) {
                                   (.5 + .5 * cosf(j / 4 - o->sfr));
                     int cg_id = o->cusk_data[(int)j % o->cusk_len];
                     vec3s* shc = gdata->cg_glow_colors + cg_id;
+                    vec3s tint; if(gradient) { skin_effect_color(tint.raw,(int)j,bp); shc=&tint; }
 
                     bst_renderer_push(
                         usr->r->bsta,
@@ -1362,6 +1445,7 @@ void redraw(tenv* env) {
                         gdata->default_skins[o->cv]
                                             [1 + ((int)j % default_skin_len)];
                     vec3s* shc = gdata->cg_glow_colors + cg_id;
+                    vec3s tint; if(gradient) { skin_effect_color(tint.raw,(int)j,bp); shc=&tint; }
 
                     bst_renderer_push(
                         usr->r->bsta,
@@ -1389,58 +1473,75 @@ void redraw(tenv* env) {
                        ? o->alive_amt * o->alive_amt * sqrtf(1 - o->dead_amt)
                        : a;
 
-        bp_renderer_push(
-            usr->r->bpr,
-            &(bp_instance){
-                {(mww2 + (ex + hx - gdata->data.view_xx) * gdata->data.gsc) -
-                     iris_r,
-                 (mhh2 + (ey + hy - gdata->data.view_yy) * gdata->data.gsc) -
-                     iris_r,
-                 iris_r * 2, 0},
-                gdata->cg_uvs[BLANK_UV],
-                {dfs->ec.r, dfs->ec.g, dfs->ec.b, ea}});
+        bool custom_face=o->id==gdata->data.snake_id && head_face_available(native_prefs.face_smile,native_prefs.face_claws);
+        if(!custom_face) {
+          bp_renderer_push(
+              usr->r->bpr,
+              &(bp_instance){
+                  {(mww2 + (ex + hx - gdata->data.view_xx) * gdata->data.gsc) -
+                       iris_r,
+                   (mhh2 + (ey + hy - gdata->data.view_yy) * gdata->data.gsc) -
+                       iris_r,
+                   iris_r * 2, 0},
+                  gdata->cg_uvs[BLANK_UV],
+                  {dfs->ec.r, dfs->ec.g, dfs->ec.b, ea}});
 
-        ex = cosf(fang) * ed + cosf(fang + PI / 2) * (esp + .5);
-        ey = sinf(fang) * ed + sinf(fang + PI / 2) * (esp + .5);
+          ex = cosf(fang) * ed + cosf(fang + PI / 2) * (esp + .5);
+          ey = sinf(fang) * ed + sinf(fang + PI / 2) * (esp + .5);
 
-        bp_renderer_push(
-            usr->r->bpr,
-            &(bp_instance){
-                {(mww2 + (ex + hx - gdata->data.view_xx) * gdata->data.gsc) -
-                     iris_r,
-                 (mhh2 + (ey + hy - gdata->data.view_yy) * gdata->data.gsc) -
-                     iris_r,
-                 iris_r * 2, 0},
-                gdata->cg_uvs[BLANK_UV],
-                {dfs->ec.r, dfs->ec.g, dfs->ec.b, ea}});
+          bp_renderer_push(
+              usr->r->bpr,
+              &(bp_instance){
+                  {(mww2 + (ex + hx - gdata->data.view_xx) * gdata->data.gsc) -
+                       iris_r,
+                   (mhh2 + (ey + hy - gdata->data.view_yy) * gdata->data.gsc) -
+                       iris_r,
+                   iris_r * 2, 0},
+                  gdata->cg_uvs[BLANK_UV],
+                  {dfs->ec.r, dfs->ec.g, dfs->ec.b, ea}});
 
-        ex = cosf(fang) * (ed + .5) + o->rex * ssc + cosf(fang - PI / 2) * esp;
-        ey = sinf(fang) * (ed + .5) + o->rey * ssc + sinf(fang - PI / 2) * esp;
+          ex = cosf(fang) * (ed + .5) + o->rex * ssc + cosf(fang - PI / 2) * esp;
+          ey = sinf(fang) * (ed + .5) + o->rey * ssc + sinf(fang - PI / 2) * esp;
 
-        bp_renderer_push(
-            usr->r->bpr,
-            &(bp_instance){
-                {(mww2 + (ex + hx - gdata->data.view_xx) * gdata->data.gsc) -
-                     pupil_r,
-                 (mhh2 + (ey + hy - gdata->data.view_yy) * gdata->data.gsc) -
-                     pupil_r,
-                 pupil_r * 2, 0},
-                gdata->cg_uvs[BLANK_UV],
-                {dfs->ppc.r, dfs->ppc.g, dfs->ppc.b, ea}});
+          bp_renderer_push(
+              usr->r->bpr,
+              &(bp_instance){
+                  {(mww2 + (ex + hx - gdata->data.view_xx) * gdata->data.gsc) -
+                       pupil_r,
+                   (mhh2 + (ey + hy - gdata->data.view_yy) * gdata->data.gsc) -
+                       pupil_r,
+                   pupil_r * 2, 0},
+                  gdata->cg_uvs[BLANK_UV],
+                  {dfs->ppc.r, dfs->ppc.g, dfs->ppc.b, ea}});
 
-        ex = cosf(fang) * (ed + .5) + o->rex * ssc + cosf(fang + PI / 2) * esp;
-        ey = sinf(fang) * (ed + .5) + o->rey * ssc + sinf(fang + PI / 2) * esp;
+          ex = cosf(fang) * (ed + .5) + o->rex * ssc + cosf(fang + PI / 2) * esp;
+          ey = sinf(fang) * (ed + .5) + o->rey * ssc + sinf(fang + PI / 2) * esp;
 
-        bp_renderer_push(
-            usr->r->bpr,
-            &(bp_instance){
-                {(mww2 + (ex + hx - gdata->data.view_xx) * gdata->data.gsc) -
-                     pupil_r,
-                 (mhh2 + (ey + hy - gdata->data.view_yy) * gdata->data.gsc) -
-                     pupil_r,
-                 pupil_r * 2, 0},
-                gdata->cg_uvs[BLANK_UV],
-                {dfs->ppc.r, dfs->ppc.g, dfs->ppc.b, ea}});
+          bp_renderer_push(
+              usr->r->bpr,
+              &(bp_instance){
+                  {(mww2 + (ex + hx - gdata->data.view_xx) * gdata->data.gsc) -
+                       pupil_r,
+                   (mhh2 + (ey + hy - gdata->data.view_yy) * gdata->data.gsc) -
+                       pupil_r,
+                   pupil_r * 2, 0},
+                  gdata->cg_uvs[BLANK_UV],
+                  {dfs->ppc.r, dfs->ppc.g, dfs->ppc.b, ea}});
+
+        }
+        if(custom_face) {
+          // Stalks take the colour of the head: the first gradient colour, else the first skin colour.
+          float head_rgb[3];
+          if(native_prefs.gradient_enabled || native_prefs.fire_skin) skin_effect_color(head_rgb,0,2);
+          else {
+            int head_cg=o->cusk ? o->cusk_data[0] : gdata->default_skins[o->cv][1];
+            if(head_cg<0 || head_cg>=NUM_COLOR_GROUPS) head_cg=9;
+            head_rgb[0]=gdata->cg_colors[head_cg].r; head_rgb[1]=gdata->cg_colors[head_cg].g; head_rgb[2]=gdata->cg_colors[head_cg].b;
+          }
+          head_face_draw(mww2+(hx-gdata->data.view_xx)*gdata->data.gsc,
+            mhh2+(hy-gdata->data.view_yy)*gdata->data.gsc,ssc*gdata->data.gsc,gdata->data.gsc,fang,ea,
+            native_prefs.face_smile,native_prefs.face_claws,o->rex,o->rey,head_rgb);
+        }
 
         // accessory:
         if (mode->show_accessories && o->accessory < NUM_ACCESSORIES) {
@@ -1490,6 +1591,7 @@ void redraw(tenv* env) {
     }
   }
 
+
   igPopFont();
 
   usr->r->global.view[0] = gdata->data.view_xx;
@@ -1500,10 +1602,17 @@ void redraw(tenv* env) {
   usr->r->global.bd_color[0] = usrs->bd_color[0];
   usr->r->global.bd_color[1] = usrs->bd_color[1];
   usr->r->global.bd_color[2] = usrs->bd_color[2];
+  {
+    static wall_status history;
+    int trend = wall_status_update(&history, glfwGetTime(), gdata->data.real_flux_grd);
+    wall_status_trend = gdata->data.flux_announced ? trend : 2;
+    if (native_prefs.wall_semaphore && gdata->data.flux_announced) wall_status_color(trend, usr->r->global.bd_color);
+  }
   usr->r->global.bg_scale = mode->bg_scale;
   usr->r->global.bg_opacity = 1;
-  usr->r->global.bd_opacity = 0.8f;
+  usr->r->global.bd_opacity = native_prefs.glass_border ? 0.3f : 0.8f;
   usr->r->global.minimap_data_size = gdata->data.mmsz;
+  usr->r->mmr->size = gdata->data.mmsz;
 
   if (mode->show_crosshair)
     spr_renderer_push(usr->r->cr,
@@ -1528,17 +1637,10 @@ void redraw(tenv* env) {
   }
 
   // ping calc
-  float sum = 0;
-  for (int i = 0; i < PING_SAMPLE_COUNT; i++) {
-    sum += gdata->data.pings[i];
-  }
-  sum /= PING_SAMPLE_COUNT;
+  float sum = gdata->data.ping;
 
   gdata->data.ping_follow = glm_lerp(gdata->data.ping_follow,
                                      GLM_MAX(GOOD_PING, GLM_MIN(sum, BAD_PING)),
                                      0.1f * gdata->data.vfr);
 
-  if (gdata->data.cping == PING_SAMPLE_COUNT - 1) {
-    gdata->data.ping = (int)roundf(sum);
-  }
 }

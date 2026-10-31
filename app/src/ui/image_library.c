@@ -1,6 +1,6 @@
 #include "image_library.h"
 #include "../external/mongoose.h"
-#include <windows.h>
+#include "../platform/compat.h"
 #include <errno.h>
 #include <math.h>
 #include <stdio.h>

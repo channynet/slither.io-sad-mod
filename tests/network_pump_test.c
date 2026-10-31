@@ -1,4 +1,5 @@
 #include "../app/src/network/network_pump.h"
+#include "../app/src/network/socket_latency.h"
 #include <windows.h>
 #include <assert.h>
 #include <stdio.h>
@@ -14,6 +15,7 @@ static void server_event(struct mg_connection* c,int ev,void* data) {
 static void client_event(struct mg_connection* c,int ev,void* data) {
   peer* p=c->fn_data;
   if(ev==MG_EV_OPEN && p->improved) assert(game_prepare_receive(c));
+  if(ev==MG_EV_CONNECT && p->improved) socket_prompt_ack((SOCKET)(uintptr_t)c->fd);
   if(ev==MG_EV_WS_OPEN) p->ready=true;
   if(ev==MG_EV_WS_MSG) {
     struct mg_ws_message* msg=data; unsigned sequence;
@@ -35,6 +37,8 @@ static int burst(bool improved) {
   cp.live=mg_ws_connect(&client,url,client_event,&cp,NULL); assert(cp.live);
   for(int i=0;!cp.ready && i<1000;i++) { mg_mgr_poll(&server,0); mg_mgr_poll(&client,0); Sleep(1); }
   assert(cp.ready && sp.live);
+  socket_latency transport=socket_latency_read((SOCKET)(uintptr_t)cp.live->fd);
+  assert(transport.rtt_ms>=0 && transport.min_rtt_ms>=0);
   for(unsigned i=0;i<256;i++) { unsigned char msg[96]; memset(msg,i,sizeof(msg)); memcpy(msg,&i,4); mg_ws_send(sp.live,msg,sizeof(msg),WEBSOCKET_OP_BINARY); }
   for(int i=0;sp.live->send.len && i<1000;i++) { mg_mgr_poll(&server,0); Sleep(1); }
   int calls=0;

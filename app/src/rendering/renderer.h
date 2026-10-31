@@ -64,6 +64,13 @@ typedef struct renderer {
   bp_renderer* astr;
   mm_renderer* mmr;
   spr_renderer* cr;
+
+  // GPU time of the game scene (timestamps around its render pass), one pair per frame in flight.
+  VkQueryPool gpu_queries;
+  bool* gpu_query_written;
+  bool* gpu_ui_written;
+  bool gpu_ui_ok;
+  double gpu_ns_per_tick;
 } renderer;
 
 renderer* renderer_create(tenv* env);
@@ -73,4 +80,8 @@ void renderer_destroy(renderer* r, tcontext* ctx);
 void renderer_resize(renderer* r, tcontext* ctx, ivec2 size);
 void renderer_clear_instances(renderer* r);
 
+// GPU timestamps per frame: the game scene's passes, then the UI pass.
+enum { GPU_START, GPU_BG, GPU_FOOD, GPU_GLOW_UNDER, GPU_BODY, GPU_GLOW_OVER, GPU_BORDER, GPU_EXTRA, GPU_END,
+       GPU_UI_START, GPU_UI_END, GPU_MARKS };
+void renderer_gpu_ui(renderer* r, tcontext* ctx, bool end);
 #endif

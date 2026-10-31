@@ -1,9 +1,10 @@
+#include <stddef.h>
 #include "user_settings.h"
 
 #include <string.h>
 #include <thermite.h>
 #include "native_preferences.h"
-#include <windows.h>
+#include "../platform/compat.h"
 
 void user_settings_default(user_settings* usr_settings) {
   usr_settings->ui_font_size = FONT_SIZE_SMALL;
@@ -95,6 +96,24 @@ void write_default_settings(user_settings* usr_settings) {
   fclose(f);
 }
 
+bool user_settings_from_file(user_settings* settings, const unsigned char* bytes, size_t size) {
+  const size_t grown = MAX_IPV4_LEN - OLD_IPV4_LEN;
+  const size_t address = offsetof(user_settings, ipv4), after = address + OLD_IPV4_LEN + 1;
+  _Static_assert((MAX_IPV4_LEN - OLD_IPV4_LEN) % 8 == 0, "the fields after the address must keep their alignment");
+  _Static_assert(offsetof(user_settings, skin_code) == offsetof(user_settings, ipv4) + MAX_IPV4_LEN + 1, "no padding after the address");
+  if (size == sizeof(user_settings)) {
+    memcpy(settings, bytes, size);
+  } else if (size == sizeof(user_settings) - grown) {
+    memset(settings, 0, sizeof(*settings));
+    memcpy(settings, bytes, after);
+    memcpy((unsigned char*)settings + after + grown, bytes + after, size - after);
+  } else {
+    return false;
+  }
+  settings->ipv4[MAX_IPV4_LEN] = 0;
+  return true;
+}
+
 void read_user_settings(user_settings* usr_settings) {
   FILE* f = fopen(USER_SETTINGS_FILE, "rb");
 
@@ -104,8 +123,12 @@ void read_user_settings(user_settings* usr_settings) {
     return;
   }
 
-  size_t read = fread(usr_settings, sizeof(user_settings), 1, f);
+  // The file is the structure itself. Up to 0.50 the server address was 48 bytes shorter;
+  // such a file is read with the rest moved along, so nothing the player set is lost.
+  unsigned char bytes[sizeof(user_settings) + 1];
+  size_t size = fread(bytes, 1, sizeof(bytes), f);
   fclose(f);
+  size_t read = user_settings_from_file(usr_settings, bytes, size) ? 1 : 0;
 
   if (read != 1 || strncmp(usr_settings->version, SETTINGS_VERSION,
                            strlen(SETTINGS_VERSION)) != 0) {

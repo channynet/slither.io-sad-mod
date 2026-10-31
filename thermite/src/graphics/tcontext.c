@@ -1,17 +1,43 @@
 #include "tcontext.h"
 
+#include <stdlib.h>
 #include <string.h>
+
+static bool _tcontext_has_extension(const VkExtensionProperties* list, uint32_t count, const char* name) {
+  for (uint32_t i = 0; i < count; i++)
+    if (strcmp(list[i].extensionName, name) == 0) return true;
+  return false;
+}
 
 void _tcontext_create_instance(tcontext* context) {
   uint32_t instance_ext_count;
-  const char** instance_ext_names =
+  const char** required =
       glfwGetRequiredInstanceExtensions(&instance_ext_count);
+  const char* instance_ext_names[16];
+  if (instance_ext_count > 12) instance_ext_count = 12;
+  for (uint32_t i = 0; i < instance_ext_count; i++) instance_ext_names[i] = required[i];
+
+  // macOS runs Vulkan through MoltenVK, a "portability" implementation: when it is reached
+  // through a loader the instance has to ask for such devices, or none are listed.
+  VkInstanceCreateFlags flags = 0;
+  uint32_t available_count = 0;
+  vkEnumerateInstanceExtensionProperties(NULL, &available_count, NULL);
+  VkExtensionProperties* available = calloc(available_count ? available_count : 1, sizeof(*available));
+  if (available) vkEnumerateInstanceExtensionProperties(NULL, &available_count, available);
+  else available_count = 0;
+  if (_tcontext_has_extension(available, available_count, "VK_KHR_portability_enumeration")) {
+    instance_ext_names[instance_ext_count++] = "VK_KHR_portability_enumeration";
+    flags |= 0x00000001; /* VK_INSTANCE_CREATE_ENUMERATE_PORTABILITY_BIT_KHR */
+  }
+  if (_tcontext_has_extension(available, available_count, VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME))
+    instance_ext_names[instance_ext_count++] = VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME;
+  free(available);
 
   vkCreateInstance(
       &(VkInstanceCreateInfo){
           .sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO,
           .pNext = NULL,
-          .flags = 0,
+          .flags = flags,
           .pApplicationInfo =
               &(VkApplicationInfo){.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO,
                                    .pNext = NULL,
@@ -187,6 +213,15 @@ int _tcontext_select_device(tcontext* context) {
 }
 
 void _tcontext_create_device(tcontext* context) {
+  // A portability device (MoltenVK) must have its "portability subset" switched on.
+  const char* device_ext_names[2] = {VK_KHR_SWAPCHAIN_EXTENSION_NAME, "VK_KHR_portability_subset"};
+  uint32_t device_ext_count = 1, available_count = 0;
+  vkEnumerateDeviceExtensionProperties(context->ph_device, NULL, &available_count, NULL);
+  VkExtensionProperties* available = calloc(available_count ? available_count : 1, sizeof(*available));
+  if (available) vkEnumerateDeviceExtensionProperties(context->ph_device, NULL, &available_count, available);
+  else available_count = 0;
+  if (_tcontext_has_extension(available, available_count, "VK_KHR_portability_subset")) device_ext_count = 2;
+  free(available);
   vkCreateDevice(
       context->ph_device,
       &(VkDeviceCreateInfo){
@@ -204,9 +239,8 @@ void _tcontext_create_device(tcontext* context) {
                   .pQueuePriorities = &(float){1.0f}},
           .enabledLayerCount = 0,
           .ppEnabledLayerNames = NULL,
-          .enabledExtensionCount = 1,
-          .ppEnabledExtensionNames =
-              (const char*[]){VK_KHR_SWAPCHAIN_EXTENSION_NAME}},
+          .enabledExtensionCount = device_ext_count,
+          .ppEnabledExtensionNames = device_ext_names},
       NULL, &context->device);
 
   vkGetDeviceQueue(context->device, context->queue_family, 0, &context->queue);
@@ -220,6 +254,10 @@ void _tcontext_create_swapchain(tcontext* context, bool vsync) {
 
   context->size[0] = capabilities.currentExtent.width;
   context->size[1] = capabilities.currentExtent.height;
+  VkFormat f = context->surface_format.format;
+  context->can_capture = (capabilities.supportedUsageFlags & VK_IMAGE_USAGE_TRANSFER_SRC_BIT) &&
+      (f == VK_FORMAT_B8G8R8A8_UNORM || f == VK_FORMAT_B8G8R8A8_SRGB ||
+       f == VK_FORMAT_R8G8B8A8_UNORM || f == VK_FORMAT_R8G8B8A8_SRGB);
   uint32_t mode_count=0;
   vkGetPhysicalDeviceSurfacePresentModesKHR(context->ph_device,context->surface,&mode_count,NULL);
   VkPresentModeKHR* modes=mode_count ? malloc(mode_count*sizeof(*modes)) : NULL;
@@ -240,7 +278,8 @@ void _tcontext_create_swapchain(tcontext* context, bool vsync) {
           .imageColorSpace = context->surface_format.colorSpace,
           .imageExtent = capabilities.currentExtent,
           .imageArrayLayers = 1,
-          .imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
+          .imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT |
+                        (context->can_capture ? VK_IMAGE_USAGE_TRANSFER_SRC_BIT : 0),
           .imageSharingMode = VK_SHARING_MODE_EXCLUSIVE,
           .queueFamilyIndexCount = 0,
           .pQueueFamilyIndices = NULL,
@@ -497,6 +536,13 @@ tcontext* tcontext_create(twindow* window, bool vsync, int fif) {
   context->fif = fif;
   context->old_swapchain = VK_NULL_HANDLE;
   context->swapchain_ok = true;
+  context->can_capture = context->capture_request = context->capture_ready = context->capture_failed = false;
+  context->capture_pending = context->capture_bgra = false;
+  context->capture_frame = 0;
+  context->capture_pixels = NULL;
+  context->capture_buffer = VK_NULL_HANDLE;
+  context->capture_alloc = NULL;
+  context->capture_size = 0;
   context->current_frame = 0;
 
   _tcontext_create_instance(context);
@@ -567,10 +613,91 @@ void tcontext_clear(tcontext* context, const vec4 clear_color) {
       VK_SUBPASS_CONTENTS_INLINE);
 }
 
+// Screenshot: copy the swapchain image (left in PRESENT_SRC by the render pass) into a
+// host-visible buffer, then back to PRESENT_SRC for presentation.
+static bool _tcontext_capture_record(tcontext* context, VkCommandBuffer cmd) {
+  if (!context->can_capture || context->size[0] <= 0 || context->size[1] <= 0) return false;
+  VkDeviceSize need = (VkDeviceSize)context->size[0] * context->size[1] * 4;
+  if (context->capture_buffer && context->capture_size != need) {
+    vmaDestroyBuffer(context->allocator, context->capture_buffer, context->capture_alloc);
+    context->capture_buffer = VK_NULL_HANDLE; context->capture_alloc = NULL;
+  }
+  if (!context->capture_buffer) {
+    if (vmaCreateBuffer(context->allocator,
+            &(VkBufferCreateInfo){.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO, .size = need,
+                                  .usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+                                  .sharingMode = VK_SHARING_MODE_EXCLUSIVE},
+            &(VmaAllocationCreateInfo){.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT,
+                                       .usage = VMA_MEMORY_USAGE_AUTO},
+            &context->capture_buffer, &context->capture_alloc, NULL) != VK_SUCCESS) {
+      context->capture_buffer = VK_NULL_HANDLE; context->capture_alloc = NULL;
+      return false;
+    }
+    context->capture_size = need;
+  }
+  VkImage image = context->swapchain_frames[context->current_image].image;
+  VkImageSubresourceRange range = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
+  vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 0, 0, NULL, 0, NULL, 1,
+      &(VkImageMemoryBarrier){.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+          .srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT, .dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT,
+          .oldLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR, .newLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+          .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED, .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+          .image = image, .subresourceRange = range});
+  vkCmdCopyImageToBuffer(cmd, image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, context->capture_buffer, 1,
+      &(VkBufferImageCopy){.bufferOffset = 0, .bufferRowLength = 0, .bufferImageHeight = 0,
+          .imageSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1},
+          .imageOffset = {0, 0, 0}, .imageExtent = {(uint32_t)context->size[0], (uint32_t)context->size[1], 1}});
+  vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT | VK_PIPELINE_STAGE_HOST_BIT, 0, 0, NULL, 1,
+      &(VkBufferMemoryBarrier){.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER,
+          .srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT, .dstAccessMask = VK_ACCESS_HOST_READ_BIT,
+          .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED, .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+          .buffer = context->capture_buffer, .offset = 0, .size = VK_WHOLE_SIZE}, 1,
+      &(VkImageMemoryBarrier){.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+          .srcAccessMask = VK_ACCESS_TRANSFER_READ_BIT, .dstAccessMask = 0,
+          .oldLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, .newLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
+          .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED, .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+          .image = image, .subresourceRange = range});
+  context->capture_w = context->size[0];
+  context->capture_h = context->size[1];
+  return true;
+}
+
+// The frame that copied the image has finished: hand the bytes over as they are (the channel
+// order is fixed by the saver thread, so the game thread only copies).
+static void _tcontext_capture_poll(tcontext* context) {
+  if (!context->capture_pending || context->capture_frame == context->current_frame) return;
+  VkResult done = vkGetFenceStatus(context->device, context->frames[context->capture_frame].wait_fence);
+  if (done == VK_NOT_READY) return;
+  context->capture_pending = false;
+  context->capture_failed = true;
+  if (done != VK_SUCCESS) return;
+  void* mapped = NULL;
+  if (vmaMapMemory(context->allocator, context->capture_alloc, &mapped) != VK_SUCCESS || !mapped) return;
+  vmaInvalidateAllocation(context->allocator, context->capture_alloc, 0, VK_WHOLE_SIZE);
+  size_t bytes = (size_t)context->capture_w * context->capture_h * 4;
+  unsigned char* out = malloc(bytes);
+  if (out) {
+    memcpy(out, mapped, bytes);
+    VkFormat f = context->surface_format.format;
+    context->capture_bgra = f == VK_FORMAT_B8G8R8A8_UNORM || f == VK_FORMAT_B8G8R8A8_SRGB;
+    free(context->capture_pixels);
+    context->capture_pixels = out;
+    context->capture_ready = true;
+    context->capture_failed = false;
+  }
+  vmaUnmapMemory(context->allocator, context->capture_alloc);
+}
+
 void tcontext_end(tcontext* context) {
   tcontext_frame* fr = context->frames + context->current_frame;
 
   vkCmdEndRenderPass(fr->cmd);
+  _tcontext_capture_poll(context);
+  bool busy = context->capture_ready || context->capture_pending;
+  bool capturing = context->capture_request && !busy && _tcontext_capture_record(context, fr->cmd);
+  if (context->capture_request && !capturing && !busy) context->capture_failed = true;
+  if (capturing) { context->capture_pending = true; context->capture_frame = context->current_frame; }
+  if (!busy || capturing) context->capture_request = false;
   vkEndCommandBuffer(fr->cmd);
 
   double queue_start=glfwGetTime();
@@ -616,6 +743,8 @@ void tcontext_end(tcontext* context) {
 void tcontext_wait_idle(tcontext* context) { vkQueueWaitIdle(context->queue); }
 
 void tcontext_destroy(tcontext* context) {
+  if (context->capture_buffer) vmaDestroyBuffer(context->allocator, context->capture_buffer, context->capture_alloc);
+  free(context->capture_pixels);
   vkDestroyDescriptorPool(context->device, context->descriptor_pool, NULL);
   vmaDestroyAllocator(context->allocator);
 

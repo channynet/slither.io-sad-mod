@@ -10,6 +10,10 @@ typedef struct mm_renderer {
   texture** minimap_tex;
   tdbuffer* minimap_buffer;
   bool* uploaded;
+  // Side length actually used (top-left of the 512x512 storage); 0 = all of it.
+  int size;
+  // What each in-flight GPU buffer holds, kept in ordinary memory for comparing.
+  uint8_t* shadow;
 
   uint8_t minimap[MAX_MINIMAP_SIZE * MAX_MINIMAP_SIZE];
 } mm_renderer;

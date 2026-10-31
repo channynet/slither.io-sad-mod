@@ -13,6 +13,8 @@ typedef struct {
   bool has_food,has_previous;
   const struct body_loop* body_path; // refreshed own-body lap; NULL when inactive
   float body_offset;
+  bool has_previous_body;
+  float previous_body_offset;
   def_vec orbit_center;
   float orbit_radius;
   int orbit_direction; // -1 or +1; zero disables orbit continuation
@@ -20,7 +22,7 @@ typedef struct {
   int count;
   float omitted_clearance;
 } def_scene;
-typedef struct { float angle,clearance,safe_seconds; bool safe; } def_result;
+typedef struct { float angle,clearance,safe_seconds; bool safe; bool following_body; float body_offset; } def_result;
 float def_wrap(float angle);
 float def_point_segment(def_vec p,def_vec a,def_vec b);
 void def_scene_reset(def_scene* scene);
@@ -28,5 +30,7 @@ void def_add_obstacle(def_scene* scene,def_obstacle obstacle);
 def_result def_evaluate(const def_scene* scene,float angle);
 float def_orbit_heading(const def_scene* scene,def_vec position);
 def_result def_evaluate_orbit(const def_scene* scene);
+def_result def_evaluate_body(const def_scene* scene,float offset);
+float def_body_outward_offset(const def_scene* scene);
 def_result def_choose(const def_scene* scene);
 #endif

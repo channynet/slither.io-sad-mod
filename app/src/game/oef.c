@@ -1,4 +1,5 @@
 #include "oef.h"
+#include "ntl_bot.h"
 
 #include "../user.h"
 
@@ -435,6 +436,6 @@ void oef(tenv* env) {
     }
   }
 
-  // OFF: observe manual rotation only. ON: run the defensive planner.
-  sbot_go(env);
+  // The NTL-style bot; it does nothing while the bot key is off.
+  ntl_bot_go(env);
 }

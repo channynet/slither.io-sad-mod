@@ -1,5 +1,6 @@
 #include "server_history.h"
-#include <windows.h>
+#include "server_address.h"
+#include "../platform/compat.h"
 #include <ctype.h>
 #include <stdio.h>
 #include <string.h>
@@ -7,25 +8,8 @@ server_history recent_servers;
 bool server_history_save_failed;
 static const char* history_path="server-history.txt";
 
-// Accept only the IPv4:port format supported by the existing game input.
-static bool normalize(const char* input,char output[MAX_IPV4_LEN+1]) {
-  if(!input) return false;
-  const char* p=input; while(isspace((unsigned char)*p)) p++;
-  unsigned parts[5]={0};
-  for(int i=0;i<5;i++) {
-    int digits=0;
-    while(isdigit((unsigned char)*p)) {
-      if(++digits>5) return false;
-      parts[i]=parts[i]*10+(unsigned)(*p++-'0');
-    }
-    if(!digits || parts[i]>(i<4?255u:65535u)) return false;
-    if(i<4 && *p++!=(i<3?'.':':')) return false;
-  }
-  while(isspace((unsigned char)*p)) p++;
-  if(*p || !parts[4]) return false;
-  int n=snprintf(output,MAX_IPV4_LEN+1,"%u.%u.%u.%u:%u",parts[0],parts[1],parts[2],parts[3],parts[4]);
-  return n>0 && n<=MAX_IPV4_LEN;
-}
+// IPv4:port or a server name; see server_address.h.
+static bool normalize(const char* input,char output[MAX_IPV4_LEN+1]) { return server_address_clean(input,output); }
 bool server_history_add(server_history* history,const char* address) {
   char clean[MAX_IPV4_LEN+1]; if(!normalize(address,clean)) return false;
   int at=history->count;
@@ -35,6 +19,15 @@ bool server_history_add(server_history* history,const char* address) {
   if(at>=SERVER_HISTORY_LIMIT) at=SERVER_HISTORY_LIMIT-1;
   memmove(history->addresses[1],history->addresses[0],(size_t)at*sizeof(history->addresses[0]));
   strcpy(history->addresses[0],clean); return true;
+}
+bool server_history_remove(server_history* history,const char* address) {
+  char clean[MAX_IPV4_LEN+1]; if(!normalize(address,clean)) return false;
+  for(int i=0;i<history->count;i++) if(!strcmp(history->addresses[i],clean)) {
+    for(int j=i;j+1<history->count;j++) strcpy(history->addresses[j],history->addresses[j+1]);
+    history->count--; memset(history->addresses[history->count],0,sizeof(history->addresses[0]));
+    return true;
+  }
+  return false;
 }
 bool server_history_load(const char* path,server_history* history) {
   memset(history,0,sizeof(*history));
@@ -69,6 +62,12 @@ void server_history_remember(const char* address) {
   bool changed=server_history_add(&recent_servers,address);
   if(changed || server_history_save_failed)
     server_history_save_failed=!server_history_save(history_path,&recent_servers);
+}
+// Removes one saved address on the user's request and persists the shorter list.
+bool server_history_forget(const char* address) {
+  if(!server_history_remove(&recent_servers,address)) return false;
+  server_history_save_failed=!server_history_save(history_path,&recent_servers);
+  return true;
 }
 void server_history_init(const char* last_address) {
   server_history_load(history_path,&recent_servers);

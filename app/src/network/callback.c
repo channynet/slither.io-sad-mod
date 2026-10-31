@@ -1,11 +1,18 @@
 #include "callback.h"
+#include <stdarg.h>
+#include "../platform/compat.h"
+#include "server.h"
 #include "network_pump.h"
 #include "server_status.h"
+#include "target_identity.h"
+#include "socket_latency.h"
 #include "../game/perf_trace.h"
 #include "../game/death_review.h"
+#include "../game/duel_board.h"
 
 #include "../game/food.h"
 #include "../game/snake.h"
+#include "../game/ntl_tags.h"
 #include "../user.h"
 
 void snl(game_data* gdata, snake* o) {
@@ -20,6 +27,31 @@ void snl(game_data* gdata, snake* o) {
   }
   o->fl = o->fls[o->flpos];
   o->fltg = GD_EEZ;
+}
+
+static char last_error[160];
+static char end_reason[120];
+static double opened_at;
+void server_note_end(const char* format, ...) {
+  if(end_reason[0]) return;
+  va_list args; va_start(args,format); vsnprintf(end_reason,sizeof(end_reason),format,args); va_end(args);
+}
+static void log_session_end(tenv* env,bool playing) {
+  WIN32_FILE_ATTRIBUTE_DATA info;
+  if(GetFileAttributesExA("session-log.txt",GetFileExInfoStandard,&info) && info.nFileSizeLow>512*1024)
+    MoveFileExA("session-log.txt","session-log.previous.txt",MOVEFILE_REPLACE_EXISTING);
+  FILE* f=fopen("session-log.txt","ab"); if(!f) return;
+  SYSTEMTIME now; GetLocalTime(&now);
+  fprintf(f,"%04d-%02d-%02d %02d:%02d:%02d %s #%u %s %.1fs score %d: %s\n",now.wYear,now.wMonth,now.wDay,now.wHour,now.wMinute,now.wSecond,
+          env->usr->usrs.ipv4,(unsigned)env->usr->gdata.network_session,playing?"playing":"connecting",
+          opened_at>0?(perf_now()-opened_at)/1000.0:0.0,env->usr->gdata.data.score,end_reason[0]?end_reason:"closed by the server");
+  fclose(f);
+  end_reason[0]=0; opened_at=0;
+}
+const char* server_last_error(void) { return last_error; }
+void server_clear_error(void) { last_error[0]=0; }
+void server_set_error(const char* format, ...) {
+  va_list args; va_start(args,format); vsnprintf(last_error,sizeof(last_error),format,args); va_end(args);
 }
 
 void decode_secret(const uint8_t* packet, size_t packet_len, uint8_t* result) {
@@ -120,7 +152,7 @@ void got_packet(tenv* env, uint8_t* a, int a_len) {
     int id = ((unsigned)a[1] << 8) | a[2];
     uint32_t serial = ((uint32_t)a[3] << 24) | ((uint32_t)a[4] << 16) | ((uint32_t)a[5] << 8) | a[6];
     snake* peer = get_snake(gdata, id);
-    if (peer) peer->ntl_id = ((serial & 63u) << 10) | (id & 1023);
+    if (peer) { peer->ntl_id = ((serial & 63u) << 10) | (id & 1023); peer->serial=serial; peer->has_serial=true; }
   } else if (cmd == '6') {
     uint8_t secret[27] = {0};
     decode_secret(a, a_len, secret);
@@ -131,8 +163,23 @@ void got_packet(tenv* env, uint8_t* a, int a_len) {
     uint8_t* skin_compressed = NULL;
     int skin_compressed_len = 0;
 
+    // An NTL tag chosen (a free one) rides in the skin code's header, as NTL sends it: with an
+    // official skin, the skin code then spells out that skin's own colours.
+    int own_tag = ntl_tag_own();
+    bool tag_in_skin = own_tag >= 0 && ntl_tag_is_free(own_tag);
+    bool send_skin = usrs->custom_skin || tag_in_skin;
     if (usrs->custom_skin) {
       skin_compressed = get_skin_compressed(usr);
+    } else if (tag_in_skin) {
+      skin_compressed = tdarray_create(uint8_t);
+      const uint8_t* colours = gdata->default_skins[usrs->default_skin % NUM_DEFAULT_SKINS];
+      for (int i = 1; i <= colours[0] && i < 64; ) {
+        uint8_t run = 0, colour = colours[i];
+        while (i <= colours[0] && i < 64 && colours[i] == colour && run < 255) { run++; i++; }
+        tdarray_push(&skin_compressed, &run); tdarray_push(&skin_compressed, &colour);
+      }
+    }
+    if (send_skin) {
       skin_compressed_len = tdarray_length(skin_compressed);
       ba = malloc(8 + 20 + nick_len + 8 + skin_compressed_len);
     } else {
@@ -160,15 +207,10 @@ void got_packet(tenv* env, uint8_t* a, int a_len) {
     ba[m] = usrs->accessory;
     m++;
 
-    if (usrs->custom_skin) {
-      ba[m++] = 255;
-      ba[m++] = 255;
-      ba[m++] = 255;
-      ba[m++] = 0;
-      ba[m++] = 0;
-      ba[m++] = 0;
-      ba[m++] = rand() % 256;
-      ba[m++] = rand() % 256;
+    if (send_skin) {
+      uint8_t header[8] = {255, 255, 255, 0, 0, 0, rand() % 256, rand() % 256};
+      if (tag_in_skin) ntl_tag_write_skin_header(header, own_tag, usrs->custom_skin ? 255 : usrs->default_skin);
+      for (int i = 0; i < 8; i++) ba[m++] = header[i];
 
       for (int i = 0; i < skin_compressed_len; i++) {
         ba[m] = skin_compressed[i];
@@ -213,10 +255,16 @@ void got_packet(tenv* env, uint8_t* a, int a_len) {
       m++;
     }
 
+    gdata->data.server_number = 0;
+    if (m + 1 < alen) {
+      int number = a[m] << 8 | a[m + 1];
+      gdata->data.server_number = number > 0 && number <= 9999 ? number : 0;
+    }
     if (m < alen) {
       m += 2;
     }
 
+    gdata->data.flux_announced = m < alen;
     if (m < alen) {
       gdata->data.flux_grd = a[m] << 16 | a[m + 1] << 8 | a[m + 2];
       m += 3;
@@ -261,6 +309,12 @@ void got_packet(tenv* env, uint8_t* a, int a_len) {
       m += nl;
       int skl = a[m];
       m++;
+      if(skl>alen-m) return;
+      target_identity(o.target_key,id,cv,a+m,skl,gdata->default_skins);
+      // NTL tags ride in the skin code's header; an NTL skin code may stand for an official skin.
+      o.ntl_tag = ntl_tag_from_skin_header(a + m, skl);
+      o.official_skin = skl == 0 ? cv % NUM_DEFAULT_SKINS
+                        : skl >= 8 && (a[m + 1] == 18 || a[m + 1] == 38) && a[m + 2] != 255 ? a[m + 2] % NUM_DEFAULT_SKINS : -1;
       if (skl > 0) {
         // printf("TAG DATA:\n");
         // for (int unread = 0; unread < 8; unread++) {
@@ -268,7 +322,7 @@ void got_packet(tenv* env, uint8_t* a, int a_len) {
         // }
         // printf("TAG DATA END:\n");
 
-        for (int j = 8; j < skl; j += 2) {
+        for (int j = 8; j+1 < skl; j += 2) {
           for (int i = 0; i < a[m + j]; i++) {
             if (o.cusk_len < MAX_SKIN_CODE_LEN) {
               o.cusk_data[o.cusk_len++] = a[m + j + 1];
@@ -309,8 +363,8 @@ void got_packet(tenv* env, uint8_t* a, int a_len) {
           lx = xx;
           ly = yy;
           fp = true;
-        } else if (m == alen_m2) {
-          // head
+        } else if (m == alen_m2 && gdata->data.protocol_version >= 15) {
+          // head (protocol 15+ ends with an angle; older servers send one more offset pair)
           float iang = a[m] << 8 | a[m + 1];
           po.iang = iang;
           m += 2;
@@ -383,8 +437,12 @@ void got_packet(tenv* env, uint8_t* a, int a_len) {
         gdata->data.lfesid = -1;
 
         gdata->conn = CONNECTED;
-        if (gdata->data.protocol_version != PROTOCOL_VERSION) {
+        if (gdata->data.protocol_version < MIN_PROTOCOL_VERSION ||
+            gdata->data.protocol_version > PROTOCOL_VERSION) {
           printf("Protocol version %d is not supported.\n", gdata->data.protocol_version);
+          snprintf(last_error,sizeof(last_error),"이 서버의 프로토콜 %d은(는) 지원하지 않습니다 (지원: %d~%d).",
+                   gdata->data.protocol_version,MIN_PROTOCOL_VERSION,PROTOCOL_VERSION);
+          server_note_end("unsupported protocol %d",gdata->data.protocol_version);
           c->is_closing = true;
         }
         glfwSetTime(0);
@@ -397,6 +455,20 @@ void got_packet(tenv* env, uint8_t* a, int a_len) {
       o.ntl_id = id;
       static uint64_t next_generation;
       o.generation=++next_generation;
+      // A server may send a snake again with the same id (a practice server resizing the
+      // player's snake at once). The new body replaces the old one in its place in the list
+      // (the player's own snake is the last one), so the player's snake stays the player's.
+      int replace_at = -1;
+      for (int i = tdarray_length(gdata->data.snakes) - 1; i >= 0; i--) {
+        snake* e = gdata->data.snakes + i;
+        if (e->id != id || e->dead) continue;
+        o.generation = e->generation;
+        o.alive_amt = e->alive_amt;               // no fade-in: it is the same snake
+        tdarray_push(&gdata->data.pts_dp, &e->pts);
+        tdarray_push(&gdata->data.gptz_dp, &e->gptz);
+        replace_at = i;
+        break;
+      }
       o.xx = snx;
       o.yy = sny;
       o.cv = cv % NUM_DEFAULT_SKINS;
@@ -423,7 +495,8 @@ void got_packet(tenv* env, uint8_t* a, int a_len) {
       if (o.wsep < mwsep) o.wsep = mwsep;
       o.sep = o.wsep;
       snl(gdata, &o);
-      tdarray_insert(&gdata->data.snakes, 0, &o);
+      if (replace_at >= 0) gdata->data.snakes[replace_at] = o;
+      else tdarray_insert(&gdata->data.snakes, 0, &o);
     } else {
       bool is_kill = a[m] == 1;
       m++;
@@ -431,7 +504,9 @@ void got_packet(tenv* env, uint8_t* a, int a_len) {
       for (int i = snakes_len - 1; i >= 0; i--) {
         snake* o = gdata->data.snakes + i;
         if (o->id == id) {
+          duel_snake_removed(gdata, o, is_kill);
           // Preserve the last intact scene before the server removes our body.
+          if(id==gdata->data.snake_id) server_note_end("own snake removed by the server (kill=%d)",(int)is_kill);
           if(is_kill && id==gdata->data.snake_id && death_review_begin(env)) return;
           if (o->id == gdata->data.snake_id) {
             o->id = gdata->data.snake_id = -1;
@@ -465,6 +540,8 @@ void got_packet(tenv* env, uint8_t* a, int a_len) {
       int id = a[m] << 8 | a[m + 1];
       m += 2;
       o = get_snake(gdata, id);
+      // Some servers address the player's own snake by id as well.
+      is_my_snake = o && o->id == gdata->data.snake_id;
     }
 
     if (o) {
@@ -622,8 +699,12 @@ void got_packet(tenv* env, uint8_t* a, int a_len) {
     bool adding_only = cmd == 'n' || cmd == 'N' || cmd == '+';
     snake* o = NULL;
     bool is_my_snake = false;
-    if (cmd == 'G' || cmd == 'N' || cmd == '=' && dlen == 6 ||
-        cmd == '+' && dlen == 9) {
+    // Protocol 14 and older: no head angle, own-snake packets are told apart by length.
+    bool angle_moves = gdata->data.protocol_version >= 15;
+    if (angle_moves ? (cmd == 'G' || cmd == 'N' || cmd == '=' && dlen == 6 ||
+                       cmd == '+' && dlen == 9)
+                    : (cmd == 'g' && dlen == 4 || cmd == 'G' && dlen == 2 ||
+                       cmd == 'n' && dlen == 7 || cmd == 'N' && dlen == 5)) {
       int snakes_len = tdarray_length(gdata->data.snakes);
       o = gdata->data.snakes + (snakes_len - 1);
       is_my_snake = true;
@@ -631,6 +712,8 @@ void got_packet(tenv* env, uint8_t* a, int a_len) {
       int id = a[m] << 8 | a[m + 1];
       m += 2;
       o = get_snake(gdata, id);
+      // Some servers address the player's own snake by id as well.
+      is_my_snake = o && o->id == gdata->data.snake_id;
     }
     if (o) {
       if (adding_only)
@@ -654,7 +737,19 @@ void got_packet(tenv* env, uint8_t* a, int a_len) {
       body_part tmppo = {0};
       body_part* po = &tmppo;
       float msl = o->msl;
-      if (cmd == '+' || cmd == '=') {
+      if (!angle_moves) {
+        if (cmd == 'g' || cmd == 'n') {
+          xx = a[m] << 8 | a[m + 1];
+          m += 2;
+          yy = a[m] << 8 | a[m + 1];
+          m += 2;
+        } else {
+          xx = o->pts[lpo_i].xx + a[m] - 128;
+          m++;
+          yy = o->pts[lpo_i].yy + a[m] - 128;
+          m++;
+        }
+      } else if (cmd == '+' || cmd == '=') {
         float iang = a[m] << 8 | a[m + 1];
         po->iang = iang;
         m += 2;
@@ -837,9 +932,14 @@ void got_packet(tenv* env, uint8_t* a, int a_len) {
       }
     }
   } else if (cmd == 'p') {
+    if(!gdata->data.wfpr || !ping_received(&gdata->ping_tracker,glfwGetTime()*1000.0,&gdata->data.ping)) return;
     gdata->data.wfpr = false;
-    gdata->data.pings[gdata->data.cping] = gdata->data.ctm - gdata->data.last_ping_mtm;
+    gdata->data.pings[gdata->data.cping] = gdata->ping_tracker.last;
     perf_ping(gdata->data.pings[gdata->data.cping]);
+    socket_latency latency=socket_latency_read((SOCKET)(uintptr_t)c->fd);
+    perf_connection(gdata->network_session,latency.rtt_ms,latency.min_rtt_ms,latency.retrans,
+      gdata->ping_tracker.queue_ms,gdata->network_poll_gap,gdata->prompt_ack);
+    gdata->network_poll_gap=0;
     server_status_game_ping(usrs->ipv4,gdata->data.pings[gdata->data.cping]);
     gdata->data.cping = (gdata->data.cping + 1) % PING_SAMPLE_COUNT;
     if (gdata->data.lagging) {
@@ -847,6 +947,7 @@ void got_packet(tenv* env, uint8_t* a, int a_len) {
       gdata->data.lagging = false;
     }
   } else if (cmd == 'z') {
+    gdata->data.flux_announced = true;
     gdata->data.real_flux_grd = a[m] << 16 | a[m + 1] << 8 | a[m + 2];
     m += 3;
     int k = gdata->data.flux_grd_pos;
@@ -1158,6 +1259,42 @@ void got_packet(tenv* env, uint8_t* a, int a_len) {
         .cv2 = GLM_MIN(NUM_PREY_SIZES - 1, GLM_MAX(0, (int)floorf(NUM_PREY_SIZES * rad / 9)))
       }));
     }
+  } else if (cmd == 'u') {
+    // Protocol 14 and older: fixed 80x80 minimap, filled forward from the top-left.
+    gdata->data.mmsz = 80;
+    for (int row = 0; row < 80; row++)
+      memset(gdata->data.mm_data + row * MAX_MINIMAP_SIZE, 0, 80);
+    int i;
+    int k = 0;
+    int xx = 0;
+    int yy = 0;
+    while (m < alen) {
+      if (yy >= 80) break;
+      k = a[m++];
+      if (k >= 128) {
+        k -= 128;
+        for (i = 0; i < k; i++) {
+          xx++;
+          if (xx >= 80) {
+            xx = 0;
+            yy++;
+            if (yy >= 80) break;
+          }
+        }
+      } else
+        for (i = 0; i < 7; i++) {
+          if ((k & gdata->u_m[i]) > 0) {
+            gdata->data.mm_data[yy * MAX_MINIMAP_SIZE + xx] = 255;
+          }
+          xx++;
+          if (xx >= 80) {
+            xx = 0;
+            yy++;
+            if (yy >= 80) break;
+          }
+        }
+    }
+    gdata->data.mmgad = true;
   } else if (cmd == 'M') {
     int sz = a[m] << 8 | a[m + 1];
     m += 2;
@@ -1279,7 +1416,10 @@ void got_packet(tenv* env, uint8_t* a, int a_len) {
     }
   } else if (cmd == 'k') {
     gdata->data.kills++;
+    duel_kill_confirmed();
   } else if (cmd == 'v') {
+    server_note_end("game over packet from the server (v=%d)",dlen>0?(int)a[1]:-1);
+    if(dlen<1 || a[1]!=2) duel_game_over(gdata);
     gdata->data.follow_view = false;
     gdata->data.lview_xx = gdata->data.view_xx;
     gdata->data.lview_yy = gdata->data.view_yy;
@@ -1291,6 +1431,7 @@ void got_packet(tenv* env, uint8_t* a, int a_len) {
 
     if (death_review_begin(env)) return;
     if (usrs->instant_restart) {
+      // (already noted as a game over packet; the restart is automatic)
       gdata->restart_req = true;
       c->is_closing = true;
     }
@@ -1304,13 +1445,21 @@ void server_callback(struct mg_connection* c, int ev, void* ev_data) {
   game_data* gdata = &usr->gdata;
 
   if (ev == MG_EV_OPEN) {
-    if(!game_prepare_receive(c)) c->is_closing=true;
+    end_reason[0]=0; opened_at=perf_now();
+    if(!game_prepare_receive(c)) { server_note_end("could not allocate the receive buffer"); c->is_closing=true; }
     printf("Connection opened\n");
+  } else if(ev==MG_EV_CONNECT) {
+    gdata->prompt_ack=socket_prompt_ack((SOCKET)(uintptr_t)c->fd);
+  } else if(ev==MG_EV_WRITE) {
+    long bytes=*(long*)ev_data;
+    if(bytes>0) ping_written(&gdata->ping_tracker,glfwGetTime()*1000.0,(size_t)bytes);
   } else if(ev==MG_EV_READ) {
     long bytes=*(long*)ev_data;
     if(bytes>0) perf_received((size_t)bytes);
   } else if (ev == MG_EV_WS_OPEN) {
     printf("Connection established\n");
+    // Nothing has been sent yet, so the server has not created a snake for this connection.
+    if(server_path_check(env,c)) { server_note_end("slow path, reconnecting"); c->is_closing = true; return; }
 
     mg_ws_send(c, (uint8_t[]){1}, 1, WEBSOCKET_OP_BINARY);
     mg_ws_send(c, (uint8_t[]){'c', 0}, 2, WEBSOCKET_OP_BINARY);
@@ -1324,7 +1473,7 @@ void server_callback(struct mg_connection* c, int ev, void* ev_data) {
       while (m < l) {
         int len;
         if (a[m] < 32) {
-          if (m + 1 >= l) { c->is_closing = true; return; }
+          if (m + 1 >= l) { server_note_end("truncated packet header (%d bytes)",l); c->is_closing = true; return; }
           len = a[m] << 8 | a[m + 1];
           m += 2;
         } else {
@@ -1332,7 +1481,7 @@ void server_callback(struct mg_connection* c, int ev, void* ev_data) {
           m++;
         }
         uint8_t* a2 = a + m;
-        if (len < 1 || len > l - m) { c->is_closing = true; return; }
+        if (len < 1 || len > l - m) { server_note_end("bad packet length %d at %d of %d",len,m,l); c->is_closing = true; return; }
         got_packet(env, a2, len);
         m += len;
       }
@@ -1343,10 +1492,15 @@ void server_callback(struct mg_connection* c, int ev, void* ev_data) {
     }
   } else if (ev == MG_EV_ERROR) {
     printf("Connection error: %s, closing connection...\n", (char*)ev_data);
+    server_note_end("socket error: %.80s",(char*)ev_data);
+    // Only before the game starts: a socket error after playing is the normal end of a session.
+    if(!last_error[0] && gdata->conn!=CONNECTED) snprintf(last_error,sizeof(last_error),"서버에 연결하지 못했습니다: %.80s",(char*)ev_data);
     c->is_closing = true;
   } else if (ev == MG_EV_CLOSE) {
     printf("Connection closed\n");
-    gdata->closed = true;
+    if(gdata->connection==c) log_session_end(env,gdata->conn==CONNECTED);
+    // A connection dropped for its slow path is replaced by server_poll, not reported as closed.
+    if(!(server_path_retrying() && gdata->connection==c)) gdata->closed = true;
     if(gdata->connection==c) gdata->connection=NULL;
   }
 }

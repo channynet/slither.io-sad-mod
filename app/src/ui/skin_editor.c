@@ -1,5 +1,9 @@
 #include "skin_editor.h"
 #include "personal_tag.h"
+#include "head_face.h"
+#include "gradient_color.h"
+#include "skin_gradient.h"
+#include "../game/native_preferences.h"
 
 #include <string.h>
 
@@ -66,12 +70,13 @@ void ui_skin_editor(tenv* env) {
                               [1 + ((MAX_SKIN_CODE_LEN - 1 - cbp) % sk_len)];
     }
 
-    if (cg_id != -1) {
+    if (native_prefs.gradient_enabled || native_prefs.fire_skin || cg_id != -1) {
+      if(cg_id<0) cg_id=9;
       float we =
           gdata->worm_effect[(MAX_SKIN_CODE_LEN - 1 - cbp) % WORM_EFFECT_LEN] *
               (!usrs->custom_skin) +
           usrs->custom_skin;
-      bp_renderer_push(usr->r->bpr, &(bp_instance){{igGetCursorPosX() +
+      skin_gradient_body(env,native_prefs.gradient_enabled||native_prefs.fire_skin,0,MAX_SKIN_CODE_LEN-1-cbp,MAX_SKIN_CODE_LEN, &(bp_instance){{igGetCursorPosX() +
                                                         i * (8 * (scale / 48)),
                                                     igGetCursorPosY(), scale},
                                                    gdata->cg_uvs[cg_id],
@@ -97,6 +102,7 @@ void ui_skin_editor(tenv* env) {
   }
 
   vec2 last_bp_pos;
+  int head_cg = 9, head_index = 0;  // the last body part drawn is the head
 
   for (int i = 0; i < MAX_SKIN_CODE_LEN / 2; i++) {
     int cg_id;
@@ -113,12 +119,15 @@ void ui_skin_editor(tenv* env) {
     last_bp_pos[0] = igGetCursorPosX() + i * (8 * (scale / 48));
     last_bp_pos[1] = igGetCursorPosY();
 
-    if (cg_id != -1) {
+    head_cg = cg_id < 0 ? 9 : cg_id;
+    head_index = MAX_SKIN_CODE_LEN - 1 - cbp;
+    if (native_prefs.gradient_enabled || native_prefs.fire_skin || cg_id != -1) {
+      if(cg_id<0) cg_id=9;
       float we =
           gdata->worm_effect[(MAX_SKIN_CODE_LEN - 1 - cbp) % WORM_EFFECT_LEN] *
               (!usrs->custom_skin) +
           usrs->custom_skin;
-      bp_renderer_push(usr->r->bpr, &(bp_instance){{last_bp_pos[0],
+      skin_gradient_body(env,native_prefs.gradient_enabled||native_prefs.fire_skin,0,MAX_SKIN_CODE_LEN-1-cbp,MAX_SKIN_CODE_LEN, &(bp_instance){{last_bp_pos[0],
                                                     last_bp_pos[1], scale, PI},
                                                    gdata->cg_uvs[cg_id],
                                                    {we, we, we, 1}});
@@ -140,47 +149,55 @@ void ui_skin_editor(tenv* env) {
   float ex = ed;
   float ey = -esp - .5;
 
-  bp_renderer_push(
-      usr->r->bpr,
-      &(bp_instance){{((last_bp_pos[0] + scale / 2) + ex) - iris_r,
-                      ((last_bp_pos[1] + scale / 2) + ey) - iris_r, iris_r * 2},
-                     gdata->cg_uvs[BLANK_UV],
-                     {dfs->ec.r, dfs->ec.g, dfs->ec.b, 1}});
+  if(!head_face_available(native_prefs.face_smile,native_prefs.face_claws)) {
+    bp_renderer_push(
+        usr->r->bpr,
+        &(bp_instance){{((last_bp_pos[0] + scale / 2) + ex) - iris_r,
+                        ((last_bp_pos[1] + scale / 2) + ey) - iris_r, iris_r * 2},
+                       gdata->cg_uvs[BLANK_UV],
+                       {dfs->ec.r, dfs->ec.g, dfs->ec.b, 1}});
 
-  ex = ed;
-  ey = esp + .5;
+    ex = ed;
+    ey = esp + .5;
 
-  bp_renderer_push(
-      usr->r->bpr,
-      &(bp_instance){{((last_bp_pos[0] + scale / 2) + ex) - iris_r,
-                      ((last_bp_pos[1] + scale / 2) + ey) - iris_r, iris_r * 2},
-                     gdata->cg_uvs[BLANK_UV],
-                     {dfs->ec.r, dfs->ec.g, dfs->ec.b, 1}});
+    bp_renderer_push(
+        usr->r->bpr,
+        &(bp_instance){{((last_bp_pos[0] + scale / 2) + ex) - iris_r,
+                        ((last_bp_pos[1] + scale / 2) + ey) - iris_r, iris_r * 2},
+                       gdata->cg_uvs[BLANK_UV],
+                       {dfs->ec.r, dfs->ec.g, dfs->ec.b, 1}});
 
-  ex = ed + .5 + 2 * ssc;
-  ey = -esp;
+    ex = ed + .5 + 2 * ssc;
+    ey = -esp;
 
-  bp_renderer_push(
-      usr->r->bpr,
-      &(bp_instance){
-          {((last_bp_pos[0] + scale / 2) + ex) - pupil_r,
-           ((last_bp_pos[1] + scale / 2) + ey) - pupil_r, pupil_r * 2},
-          gdata->cg_uvs[BLANK_UV],
-          {dfs->ppc.r, dfs->ppc.g, dfs->ppc.b, 1}});
+    bp_renderer_push(
+        usr->r->bpr,
+        &(bp_instance){
+            {((last_bp_pos[0] + scale / 2) + ex) - pupil_r,
+             ((last_bp_pos[1] + scale / 2) + ey) - pupil_r, pupil_r * 2},
+            gdata->cg_uvs[BLANK_UV],
+            {dfs->ppc.r, dfs->ppc.g, dfs->ppc.b, 1}});
 
-  ex = (ed + .5) + 2 * ssc;
-  ey = esp;
+    ex = (ed + .5) + 2 * ssc;
+    ey = esp;
 
-  bp_renderer_push(
-      usr->r->bpr,
-      &(bp_instance){
-          {((last_bp_pos[0] + scale / 2) + ex) - pupil_r,
-           ((last_bp_pos[1] + scale / 2) + ey) - pupil_r, pupil_r * 2},
-          gdata->cg_uvs[BLANK_UV],
-          {dfs->ppc.r, dfs->ppc.g, dfs->ppc.b, 1}});
-
-
-
+    bp_renderer_push(
+        usr->r->bpr,
+        &(bp_instance){
+            {((last_bp_pos[0] + scale / 2) + ex) - pupil_r,
+             ((last_bp_pos[1] + scale / 2) + ey) - pupil_r, pupil_r * 2},
+            gdata->cg_uvs[BLANK_UV],
+            {dfs->ppc.r, dfs->ppc.g, dfs->ppc.b, 1}});
+  }
+  float head_rgb[3];
+  if(native_prefs.gradient_enabled || native_prefs.fire_skin)
+    skin_effect_color(head_rgb,head_index,MAX_SKIN_CODE_LEN);
+  else {
+    if(head_cg>=NUM_COLOR_GROUPS) head_cg=9;
+    head_rgb[0]=gdata->cg_colors[head_cg].r; head_rgb[1]=gdata->cg_colors[head_cg].g; head_rgb[2]=gdata->cg_colors[head_cg].b;
+  }
+  head_face_draw(last_bp_pos[0]+scale/2,last_bp_pos[1]+scale/2,ssc,1,0,1,
+                 native_prefs.face_smile,native_prefs.face_claws,2,0,head_rgb);
   if (usrs->accessory < NUM_ACCESSORIES) {
     accessory_data* acc = gdata->accessories + usrs->accessory;
     ex = acc->of * ed;

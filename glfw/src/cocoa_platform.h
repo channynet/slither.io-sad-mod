@@ -156,6 +156,12 @@ typedef struct _GLFWwindowNS
     // since the last cursor motion event was processed
     // This is kept to counteract Cocoa doing the same internally
     double          cursorWarpDeltaX, cursorWarpDeltaY;
+
+    // Slither Native: the input method (Hangul composition) only runs while a text box has focus
+    GLFWbool        textInput;
+    GLFWbool        imeCommand;
+    void            (*preedit)(GLFWwindow*, const char*);
+    float           caretX, caretY, caretHeight;   // text caret, content coordinates (top-left origin)
 } _GLFWwindowNS;
 
 // Cocoa-specific global data

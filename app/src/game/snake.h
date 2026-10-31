@@ -9,6 +9,9 @@
 typedef struct snake {
   int id;
   int ntl_id;
+  char target_key[48];
+  uint32_t serial;
+  bool has_serial;
   uint64_t generation;
   int cv;
   int fpos;
@@ -23,6 +26,8 @@ typedef struct snake {
   int rsc;
   int iiv;
   int edir;
+  int ntl_tag;                    // the free NTL tag its skin code carries (-1: none)
+  int official_skin;              // the official skin it shows (its custom skin code's own, or cv; -1: a custom skin)
 
   float xx;
   float yy;

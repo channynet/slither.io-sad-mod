@@ -20,6 +20,8 @@ void glfwSetWindowUserPointer(GLFWwindow* w,void* p) { assert(0); }
 GLFWframebuffersizefun glfwSetFramebufferSizeCallback(GLFWwindow* w,GLFWframebuffersizefun f) { assert(0); return NULL; }
 void glfwRestoreWindow(GLFWwindow* w) { assert(0); }
 void glfwSetWindowMonitor(GLFWwindow* w,GLFWmonitor* m,int x,int y,int a,int b,int r) { assert(0); }
+void glfwGetMonitorPos(GLFWmonitor* m,int* x,int* y) { assert(0); }
+void glfwSetWindowAttrib(GLFWwindow* w,int a,int v) { assert(0); }
 void glfwGetWindowPos(GLFWwindow* w,int* x,int* y) { assert(0); }
 void glfwGetWindowSize(GLFWwindow* w,int* x,int* y) { assert(0); }
 int glfwGetKey(GLFWwindow* w,int k) { assert(0); return 0; }

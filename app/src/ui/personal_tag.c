@@ -4,11 +4,19 @@
 #include "cosmetic_geometry.h"
 #include "tag_attachment.h"
 #include "../user.h"
+#include "../game/native_preferences.h"
+#include "skin_gradient.h"
+#include "ntl_tags_ui.h"
+#include "../game/ntl_tags.h"
+#include <math.h>
+#ifdef _WIN32
 #include <windows.h>
 #include <commdlg.h>
-#include <math.h>
 #define GLFW_EXPOSE_NATIVE_WIN32
 #include <GLFW/glfw3native.h>
+#else
+#include "../platform/compat.h"
+#endif
 
 typedef struct {
   texture* tex;
@@ -140,8 +148,27 @@ void personal_tag_prepare(tenv* env) {
     if(!p->library.read_only) snprintf(p->message,sizeof(p->message),"내 화면에만 표시 · 아이템별 자동 저장");
   }
 }
+#ifndef _WIN32
+#ifdef __APPLE__
+#include "../platform/mac_dialog.h"
+static bool pick_file(const char* title,char* out,size_t cap) { return mac_choose_image(title,out,cap); }
+#else
+// Linux test build: zenity or kdialog as a helper process.
+static bool pick_file(const char* title,char* out,size_t cap) {
+  char command[1024];
+  snprintf(command,sizeof(command),"(zenity --file-selection --title='%s' --file-filter='*.png *.jpg *.jpeg *.bmp' || "
+      "kdialog --getopenfilename . '*.png *.jpg *.jpeg *.bmp') 2>/dev/null",title);
+  FILE* pipe=popen(command,"r"); if(!pipe) return false;
+  bool got=fgets(out,(int)cap,pipe)!=NULL; pclose(pipe);
+  if(!got) return false;
+  size_t n=strlen(out); while(n && (out[n-1]=='\n' || out[n-1]=='\r')) out[--n]=0;
+  return n>0;
+}
+#endif
+#endif
 static void choose_image(tenv* env,personal_image* p) {
   wchar_t path[32768]={0};
+#ifdef _WIN32
   OPENFILENAMEW dialog={0}; dialog.lStructSize=sizeof(dialog); dialog.hwndOwner=glfwGetWin32Window(env->wnd->handle);
   dialog.lpstrFilter=L"Images (PNG, JPG, BMP)\0*.png;*.jpg;*.jpeg;*.bmp\0\0";
   dialog.lpstrFile=path; dialog.nMaxFile=32768;
@@ -152,6 +179,13 @@ static void choose_image(tenv* env,personal_image* p) {
     if(error) snprintf(p->message,sizeof(p->message),"파일 선택 창을 열지 못했습니다 (오류 %lu)",error);
     return;
   }
+#else
+  (void)env;
+  char chosen[4096];
+  if(!pick_file(p==&tag?"내 머리에 다는 태그 이미지 선택":"내 cosmetic 이미지 선택",chosen,sizeof(chosen))) return;
+  if(!MultiByteToWideChar(CP_UTF8,0,chosen,-1,path,32768)) return;
+  for(wchar_t* c=path;*c;c++) if(*c==L'/') *c=L'\\';      // the name below is cut at the last '\\'
+#endif
   tag_image next={0};
   if(!decode_file(path,&next)) { snprintf(p->message,sizeof(p->message),"PNG/JPG/BMP, 16MB 이하, 가로·세로 4096px 이하를 선택하세요"); return; }
   char name[96];
@@ -229,6 +263,7 @@ static void controls(tenv* env,personal_image* p) {
   igPopID();
 }
 void personal_tag_controls(tenv* env) {
+  if(igCollapsingHeader_TreeNodeFlags("NTL 태그",0)) ntl_tags_controls(env);
   if(igCollapsingHeader_TreeNodeFlags("내 이미지 태그",ImGuiTreeNodeFlags_DefaultOpen)) {
     igTextWrapped("머리에 연결되어 뒤따라 도는 태그입니다. 일반 이미지는 위쪽 중앙을 연결점으로 사용합니다. 내 화면에만 보입니다."); controls(env,&tag);
   }
@@ -240,12 +275,27 @@ void personal_image_editor(tenv* env) {
   igSetNextWindowSize((ImVec2){380,600},ImGuiCond_FirstUseEver);
   if(igBegin("태그 / cosmetic",NULL,ImGuiWindowFlags_NoDocking)) {
     if(igBeginTabBar("personal-image-tabs",0)) {
+      if(igBeginTabItem("그라데이션",NULL,0)) {
+        skin_gradient_controls(); igEndTabItem();
+      }
+      if(igBeginTabItem("불꽃",NULL,0)) {
+        fire_skin_controls(); igEndTabItem();
+      }
       if(igBeginTabItem("태그",NULL,0)) {
+        ntl_tags_controls(env);
+        igSeparatorText("내 이미지 태그");
         igTextWrapped("머리에 매다는 이미지 태그 · 변경 내용은 스킨 미리보기에 반영되고 자동 저장됩니다.");
         controls(env,&tag); igEndTabItem();
       }
       if(igBeginTabItem("cosmetic",NULL,0)) {
         controls(env,&cosmetic); igEndTabItem();
+      }
+      if(igBeginTabItem("얼굴",NULL,0)) {
+        igTextWrapped("기본 스킨과 직접 만든 스킨 모두에 적용됩니다. 내 화면에만 보이며 자동 저장됩니다.");
+        igCheckbox("웃는 얼굴",&native_prefs.face_smile);
+        igCheckbox("집게 모양 눈",&native_prefs.face_claws);
+        igTextWrapped("두 가지를 함께 켤 수 있습니다. 모두 끄면 원래 눈으로 돌아갑니다. 장식은 충돌 판정에 영향을 주지 않습니다.");
+        igEndTabItem();
       }
       igEndTabBar();
     }
@@ -278,7 +328,7 @@ static void draw_tag(float x,float y,float scale,float direction,float trailing,
 }
 void personal_tag_preview(tenv* env,float x,float y,float scale,float direction,float alpha) {
   (void)env;
-  if(tag.enabled && tag.tex) {
+  if(tag.enabled && tag.tex && ntl_tag_prefs.mode!=1) {
     float swing=tag.sway?tag_sway_update(&preview_swing,direction,igGetTime()*1000,1):0;
     draw_tag(x,y,scale,direction,direction,swing,alpha);
   } else preview_swing.valid=false;
@@ -291,7 +341,7 @@ void personal_tag_draw(tenv* env) {
   float y=env->ctx->size[1]*0.5f+(me->yy+me->fy-game->data.view_yy)*game->data.gsc;
   float alpha=fminf(1,fmaxf(0,me->alive_amt));
   personal_cosmetic_preview(env,x,y,me->sc*game->data.gsc,me->ehang,alpha);
-  if(!tag.enabled || !tag.tex) { tag_motion.valid=false; tag_swing.valid=preview_swing.valid=false; return; }
+  if(!tag.enabled || !tag.tex || ntl_tag_prefs.mode==1) { tag_motion.valid=false; tag_swing.valid=preview_swing.valid=false; return; }   // (an NTL tag chosen instead)
   float trailing=tag_follow(&tag_motion,me->ehang,game->data.ctm,me->generation);
   float swing=tag.sway?tag_sway_update(&tag_swing,me->ehang,game->data.ctm,me->generation):0;
   draw_tag(x,y,me->sc*game->data.gsc,me->ehang,trailing,swing,alpha);

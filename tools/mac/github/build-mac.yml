@@ -1,0 +1,23 @@
+# GitHub의 맥 빌드 서버에서 SlitherNative.app과 배포용 ZIP을 만듭니다.
+# 이 파일을 저장소의 .github/workflows/build-mac.yml 로 두고, Actions 탭에서 "Run workflow"를 누르세요.
+name: build-mac
+on:
+  workflow_dispatch:
+  push:
+    tags: ['v*']
+jobs:
+  mac:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build (Universal: Apple Silicon + Intel)
+        run: python3 tools/build_unix.py
+      - name: Check the app
+        run: |
+          lipo -info dist/SlitherNative.app/Contents/MacOS/SlitherNative
+          codesign --verify --deep --strict dist/SlitherNative.app
+          otool -L dist/SlitherNative.app/Contents/MacOS/SlitherNative
+      - uses: actions/upload-artifact@v4
+        with:
+          name: SlitherNative-macOS
+          path: dist/*.zip

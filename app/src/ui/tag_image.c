@@ -1,6 +1,6 @@
 #include "tag_image.h"
 #include <external/stb/stb_image.h>
-#include <windows.h>
+#include "../platform/compat.h"
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>

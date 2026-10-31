@@ -1,6 +1,8 @@
 #include "server_status.h"
+#include "server_address.h"
+#include "socket_latency.h"
 #include "../external/mongoose.h"
-#include <windows.h>
+#include "../platform/compat.h"
 #include <stdio.h>
 #include <string.h>
 #include <time.h>
@@ -46,10 +48,10 @@ static void save(void) {
 }
 static void load(void) {
   FILE* f=fopen(cache_path,"rb"); if(!f) return;
-  char line[160],address[32],clean[MAX_IPV4_LEN+1],extra;
+  char line[200],address[MAX_IPV4_LEN+1],clean[MAX_IPV4_LEN+1],extra;
   int players; long long stamp; int64_t now=(int64_t)time(NULL);
   while(fgets(line,sizeof(line),f)) {
-    if(sscanf(line,"%31s %d %lld %c",address,&players,&stamp,&extra)!=3 ||
+    if(sscanf(line,"%67s %d %lld %c",address,&players,&stamp,&extra)!=3 ||
        players<0 || players>65535 || stamp<=0 || stamp>now || !clean_address(address,clean)) continue;
     int i=find(clean,true); entries[i].value.players=players; entries[i].value.players_at=stamp;
   }
@@ -62,6 +64,7 @@ static double precise_ms(void) {
 typedef struct { double sent; int samples; float values[3]; bool done; } probe;
 static void probe_callback(struct mg_connection* c,int ev,void* data) {
   probe* p=c->fn_data;
+  if(ev==MG_EV_CONNECT) socket_prompt_ack((SOCKET)(uintptr_t)c->fd);
   if(ev==MG_EV_WS_OPEN) {
     p->sent=precise_ms(); mg_ws_send(c,"p",1,WEBSOCKET_OP_BINARY);
   } else if(ev==MG_EV_WS_MSG) {
@@ -76,8 +79,10 @@ static void probe_callback(struct mg_connection* c,int ev,void* data) {
 }
 static int measure(const char* address) {
   struct mg_mgr mgr; mg_mgr_init(&mgr);
-  probe p={0}; char url[80]; snprintf(url,sizeof(url),"ws://%s/ptc",address);
-  struct mg_connection* c=mg_ws_connect(&mgr,url,probe_callback,&p,"Origin: https://slither.com\r\n");
+  probe p={0}; char url[160],host[MAX_IPV4_LEN+1];
+  struct mg_connection* c=server_address_url(address,"/ptc",url,sizeof(url),host,sizeof(host),PROBE_TIMEOUT)
+    ? mg_ws_connect(&mgr,url,probe_callback,&p,"Origin: https://slither.com\r\n") : NULL;
+  server_address_host(c,host);
   ULONGLONG start=GetTickCount64();
   while(c && !p.done && GetTickCount64()-start<PROBE_TIMEOUT &&
         !InterlockedCompareExchange(&stopping,0,0) && InterlockedCompareExchange(&menu,0,0)) mg_mgr_poll(&mgr,10);

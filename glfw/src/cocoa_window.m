@@ -195,6 +195,17 @@ static NSUInteger translateKeyToModifierFlag(int key)
 //
 static const NSRange kEmptyRange = { NSNotFound, 0 };
 
+// The framebuffer rectangle. With GLFW_SCALE_FRAMEBUFFER (GLFW_COCOA_RETINA_FRAMEBUFFER) off the
+// Metal layer keeps a contents scale of 1, so the framebuffer is the view size in points, not in
+// backing pixels. Reporting backing pixels there made the swapchain, ImGui and the mouse disagree
+// by the Retina factor (Slither Native change).
+static NSRect framebufferRect(_GLFWwindow* window, NSRect contentRect)
+{
+    if (!window->ns.scaleFramebuffer)
+        return contentRect;
+    return [window->ns.view convertRectToBacking:contentRect];
+}
+
 
 //------------------------------------------------------------------------
 // Delegate for window related notifications
@@ -242,7 +253,7 @@ static const NSRange kEmptyRange = { NSNotFound, 0 };
     }
 
     const NSRect contentRect = [window->ns.view frame];
-    const NSRect fbRect = [window->ns.view convertRectToBacking:contentRect];
+    const NSRect fbRect = framebufferRect(window, contentRect);
 
     if (fbRect.size.width != window->ns.fbWidth ||
         fbRect.size.height != window->ns.fbHeight)
@@ -507,9 +518,10 @@ static const NSRange kEmptyRange = { NSNotFound, 0 };
 - (void)viewDidChangeBackingProperties
 {
     const NSRect contentRect = [window->ns.view frame];
-    const NSRect fbRect = [window->ns.view convertRectToBacking:contentRect];
-    const float xscale = fbRect.size.width / contentRect.size.width;
-    const float yscale = fbRect.size.height / contentRect.size.height;
+    const NSRect backingRect = [window->ns.view convertRectToBacking:contentRect];
+    const NSRect fbRect = framebufferRect(window, contentRect);
+    const float xscale = backingRect.size.width / contentRect.size.width;
+    const float yscale = backingRect.size.height / contentRect.size.height;
 
     if (xscale != window->ns.xscale || yscale != window->ns.yscale)
     {
@@ -563,6 +575,27 @@ static const NSRange kEmptyRange = { NSNotFound, 0 };
 {
     const int key = translateKey([event keyCode]);
     const int mods = translateFlags([event modifierFlags]);
+
+    // Slither Native: outside a text box the keys go to the game only. The input method never
+    // sees them, so a Korean keyboard cannot hold back keys (Space, H H, ...) in a composition.
+    if (!window->ns.textInput)
+    {
+        _glfwInputKey(window, key, [event keyCode], GLFW_PRESS, mods);
+        return;
+    }
+
+    // While a syllable is being composed the input method goes first: Enter must commit the
+    // syllable before the box sees Enter (otherwise the last syllable lands in the next
+    // message), and Backspace that only edits the composition must not also delete a letter.
+    // A key the input method passes on (as a command) still reaches the app afterwards.
+    if ([self hasMarkedText])
+    {
+        window->ns.imeCommand = GLFW_FALSE;
+        [self interpretKeyEvents:@[event]];
+        if (window->ns.imeCommand)
+            _glfwInputKey(window, key, [event keyCode], GLFW_PRESS, mods);
+        return;
+    }
 
     _glfwInputKey(window, key, [event keyCode], GLFW_PRESS, mods);
 
@@ -676,11 +709,19 @@ static const NSRange kEmptyRange = { NSNotFound, 0 };
         markedText = [[NSMutableAttributedString alloc] initWithAttributedString:string];
     else
         markedText = [[NSMutableAttributedString alloc] initWithString:string];
+
+    if (window->ns.preedit)
+    {
+        const char* utf8 = [[markedText string] UTF8String];
+        window->ns.preedit((GLFWwindow*) window, utf8 ? utf8 : "");
+    }
 }
 
 - (void)unmarkText
 {
     [[markedText mutableString] setString:@""];
+    if (window->ns.preedit)
+        window->ns.preedit((GLFWwindow*) window, "");
 }
 
 - (NSArray*)validAttributesForMarkedText
@@ -702,8 +743,14 @@ static const NSRange kEmptyRange = { NSNotFound, 0 };
 - (NSRect)firstRectForCharacterRange:(NSRange)range
                          actualRange:(NSRangePointer)actualRange
 {
+    // Slither Native: at the text caret (in screen coordinates), so the Hanja list opens there.
     const NSRect frame = [window->ns.view frame];
-    return NSMakeRect(frame.origin.x, frame.origin.y, 0.0, 0.0);
+    const CGFloat height = window->ns.caretHeight > 0 ? window->ns.caretHeight : 1;
+    const NSRect inView = NSMakeRect(window->ns.caretX,
+                                     frame.size.height - window->ns.caretY - height,
+                                     1.0, height);
+    const NSRect inWindow = [window->ns.view convertRect:inView toView:nil];
+    return [window->ns.object convertRectToScreen:inWindow];
 }
 
 - (void)insertText:(id)string replacementRange:(NSRange)replacementRange
@@ -717,6 +764,14 @@ static const NSRange kEmptyRange = { NSNotFound, 0 };
         characters = [string string];
     else
         characters = (NSString*) string;
+
+    // The committed text replaces the composition (Slither Native: GLFW kept it marked).
+    if ([markedText length] > 0)
+    {
+        [[markedText mutableString] setString:@""];
+        if (window->ns.preedit)
+            window->ns.preedit((GLFWwindow*) window, "");
+    }
 
     NSRange range = NSMakeRange(0, [characters length]);
     while (range.length)
@@ -741,6 +796,7 @@ static const NSRange kEmptyRange = { NSNotFound, 0 };
 
 - (void)doCommandBySelector:(SEL)selector
 {
+    window->ns.imeCommand = GLFW_TRUE;
 }
 
 @end
@@ -1132,7 +1188,7 @@ void _glfwGetFramebufferSizeCocoa(_GLFWwindow* window, int* width, int* height)
     @autoreleasepool {
 
     const NSRect contentRect = [window->ns.view frame];
-    const NSRect fbRect = [window->ns.view convertRectToBacking:contentRect];
+    const NSRect fbRect = framebufferRect(window, contentRect);
 
     if (width)
         *width = (int) fbRect.size.width;
@@ -2066,6 +2122,68 @@ GLFWAPI id glfwGetCocoaView(GLFWwindow* handle)
     }
 
     return window->ns.view;
+}
+
+//////////////////////////////////////////////////////////////////////////
+//////                  Slither Native additions (macOS)              //////
+//////////////////////////////////////////////////////////////////////////
+
+// Whether a text box has focus: only then does the input method compose text.
+GLFWAPI void glfwSetCocoaTextInputSN(GLFWwindow* handle, int enabled)
+{
+    _GLFWwindow* window = (_GLFWwindow*) handle;
+    _GLFW_REQUIRE_INIT();
+    if (_glfw.platform.platformID != GLFW_PLATFORM_COCOA || !window)
+        return;
+
+    @autoreleasepool {
+    if (!enabled && window->ns.textInput && [window->ns.view hasMarkedText])
+    {
+        [[window->ns.view inputContext] discardMarkedText];
+        [window->ns.view unmarkText];
+    }
+    window->ns.textInput = enabled ? GLFW_TRUE : GLFW_FALSE;
+    } // autoreleasepool
+}
+
+// Where the text caret is (content coordinates, origin at the top left), for the input method.
+GLFWAPI void glfwSetCocoaImeCaretSN(GLFWwindow* handle, float x, float y, float height)
+{
+    _GLFWwindow* window = (_GLFWwindow*) handle;
+    _GLFW_REQUIRE_INIT();
+    if (_glfw.platform.platformID != GLFW_PLATFORM_COCOA || !window)
+        return;
+    window->ns.caretX = x;
+    window->ns.caretY = y;
+    window->ns.caretHeight = height;
+}
+
+// Called with the syllable being composed (UTF-8), and with "" when it is finished or dropped.
+GLFWAPI void glfwSetCocoaPreeditCallbackSN(GLFWwindow* handle, void (*callback)(GLFWwindow*, const char*))
+{
+    _GLFWwindow* window = (_GLFWwindow*) handle;
+    _GLFW_REQUIRE_INIT();
+    if (_glfw.platform.platformID != GLFW_PLATFORM_COCOA || !window)
+        return;
+    window->ns.preedit = callback;
+}
+
+// False while the window cannot be seen: minimized, hidden, on another Space or fully covered.
+// macOS then hands out no new frames to draw into, so the game must not wait for one.
+GLFWAPI int glfwGetCocoaWindowVisibleSN(GLFWwindow* handle)
+{
+    _GLFWwindow* window = (_GLFWwindow*) handle;
+    _GLFW_REQUIRE_INIT_OR_RETURN(GLFW_TRUE);
+    if (_glfw.platform.platformID != GLFW_PLATFORM_COCOA || !window)
+        return GLFW_TRUE;
+
+    @autoreleasepool {
+    if ([window->ns.object isMiniaturized] || ![window->ns.object isVisible])
+        return GLFW_FALSE;
+    if ([window->ns.object respondsToSelector:@selector(occlusionState)])
+        return ([window->ns.object occlusionState] & NSWindowOcclusionStateVisible) ? GLFW_TRUE : GLFW_FALSE;
+    return GLFW_TRUE;
+    } // autoreleasepool
 }
 
 #endif // _GLFW_COCOA

@@ -9,7 +9,11 @@ static def_scene scene;
 static body_loop own_loop;
 static def_vec own_trail[BODY_LOOP_SCAN];
 static float body_refreshed_at;
-static void capture_body(const snake* me,float min_radius) {
+static float body_valid_at;
+static float body_initial_lap,body_initial_length;
+static float previous_body_offset;
+static bool previous_body;
+static void capture_body(const snake* me,float min_radius,float now) {
   int count=1; own_trail[0]=(def_vec){me->xx,me->yy};
   int parts=me->pts?tdarray_length(me->pts):0;
   for(int i=parts-1;i>=0 && count<BODY_LOOP_SCAN;i--) {
@@ -17,10 +21,18 @@ static void capture_body(const snake* me,float min_radius) {
     own_trail[count++]=(def_vec){p->xx,p->yy};
   }
   body_loop next;
-  if(body_loop_capture(&next,own_trail,count,me->ang,fmaxf(1,me->sc*14.5f),min_radius) &&
-     (!own_loop.count || (next.direction==own_loop.direction &&
-       next.length>own_loop.length*.75f && next.length<own_loop.length*1.25f)))
-    own_loop=next; // A missing/delayed body update must not erase a valid route.
+  float radius=fmaxf(1,me->sc*14.5f);
+  bool captured=body_loop_capture(&next,own_trail,count,me->ang,radius,min_radius);
+  if(!captured) captured=body_loop_capture_follow(&next,own_trail,count,me->ang,radius,min_radius);
+  if(captured &&
+     (!own_loop.count || next.open || own_loop.open || (next.direction==own_loop.direction &&
+       next.length>own_loop.length*.75f && next.length<own_loop.length*1.25f))) {
+    if(!own_loop.count || (own_loop.open && !next.open)) { body_initial_lap=next.length; body_initial_length=next.body_length; }
+    if(previous_body && previous_body_offset<0)
+      previous_body_offset=body_loop_rebase_inward(&own_loop,&next,
+          (def_vec){me->xx,me->yy},me->ang,previous_body_offset);
+    own_loop=next; body_valid_at=now;
+  } // Short missing snapshots preserve the route, but never indefinitely.
 }
 static uint64_t generation;
 static float previous_angle,last_time;
@@ -76,11 +88,17 @@ void sbot_go(tenv* env) {
                             me->yy+orbit_direction*cosf(me->ang)*orbit_radius};
     }
     // A completed lap also works on a straight section of an oval.
-    capture_body(me,fmaxf(me->sp,me->ssp)*31.25f/fmaxf(0.1f,g->data.mamu*me->scang*me->spang*125));
+    capture_body(me,fmaxf(me->sp,me->ssp)*31.25f/fmaxf(0.1f,g->data.mamu*me->scang*me->spang*125),now);
     body_refreshed_at=now; was_active=true; manual_sample=false;
   }
   if(now<body_refreshed_at || now-body_refreshed_at>=100) {
-    capture_body(me,fmaxf(me->sp,me->ssp)*31.25f/fmaxf(.1f,g->data.mamu*me->scang*me->spang*125));
+    float radius=fmaxf(1,me->sc*14.5f);
+    // Reacquire after an old snapshot or a genuine escape/position correction.
+    // Do not keep steering back to a detached enclosure at another location.
+    if(own_loop.count && (now<body_valid_at || now-body_valid_at>1500 ||
+       body_loop_distance(&own_loop,(def_vec){me->xx,me->yy})>fmaxf(radius*8,fmaxf(me->sp,me->ssp)*15.625f)))
+      own_loop.count=0;
+    capture_body(me,fmaxf(me->sp,me->ssp)*31.25f/fmaxf(.1f,g->data.mamu*me->scang*me->spang*125),now);
     body_refreshed_at=now;
   }
   bool continuity=valid && generation==me->generation && now>=last_time && now-last_time<250;
@@ -98,7 +116,14 @@ void sbot_go(tenv* env) {
   if(g->data.lagging) scene.latency=0.5f;
   scene.has_previous=continuity; scene.previous_angle=previous_angle;
   scene.body_path=own_loop.count?&own_loop:NULL;
-  scene.body_offset=body_loop_offset(scene.body_path,scene.radius,scene.speed,scene.latency);
+  float target_lap=body_initial_lap+(own_loop.body_length-body_initial_length);
+  scene.body_offset=body_loop_offset(scene.body_path,target_lap,scene.radius,scene.speed,scene.latency);
+  scene.has_previous_body=continuity && previous_body;
+  scene.previous_body_offset=previous_body_offset;
+  if(scene.body_path) {
+    orbit_direction=0; // The real body supersedes the older guessed circle.
+    if(now-body_valid_at>250) scene.body_offset=fminf(0,scene.body_offset);
+  }
   scene.orbit_direction=orbit_direction; scene.orbit_center=orbit_center; scene.orbit_radius=orbit_radius;
   for(int i=0;i<tdarray_length(g->data.snakes);i++) {
     snake* s=g->data.snakes+i;
@@ -125,6 +150,8 @@ void sbot_go(tenv* env) {
     if(score>food_score) { food_score=score; scene.food=(def_vec){f->xx,f->yy}; scene.has_food=true; }
   }
   def_result result=def_choose(&scene);
+  previous_body=result.following_body;
+  previous_body_offset=result.body_offset;
   previous_angle=result.angle; generation=me->generation; last_time=now; valid=true;
   g->bot.output.xm=cosf(result.angle)*500;
   g->bot.output.ym=sinf(result.angle)*500;

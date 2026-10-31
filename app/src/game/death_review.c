@@ -2,6 +2,7 @@
 #include "native_preferences.h"
 #include "../user.h"
 #include "../network/server.h"
+#include "../network/callback.h"
 death_review_state death_review={.last_frame=-1,.frame=-1};
 void death_review_reset(void) {
   death_review=(death_review_state){.last_frame=-1,.frame=-1};
@@ -17,6 +18,7 @@ bool death_review_begin(tenv* env) {
   env->usr->usrs.play_time=game->data.play_etm;
   save_user_settings(&env->usr->usrs);
   env->usr->gdata.restart_req=false;
+  server_note_end("death scene freeze");
   if(env->usr->gdata.connection) env->usr->gdata.connection->is_closing=true;
   return true;
 }

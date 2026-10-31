@@ -62,11 +62,12 @@ float def_orbit_heading(const def_scene* s,def_vec position) {
     (DPI/2+atan2f(error,fmaxf(20,s->orbit_radius*0.5f))));
 }
 static float body_heading(const def_scene* s,def_vec p,float angle,float offset) {
-  float lookahead=fmaxf(s->radius*1.5f,s->speed*(0.18f+s->latency*0.3f));
+  float lookahead=fmaxf(s->radius*1.5f,s->speed*(0.20f+s->latency));
   return body_loop_heading_offset(s->body_path,p,angle,lookahead,offset);
 }
 static def_result evaluate_path(const def_scene* s,float target,int mode,float offset) {
-  def_result r={.angle=def_wrap(target),.clearance=1000,.safe_seconds=DEF_HORIZON,.safe=true};
+  def_result r={.angle=def_wrap(target),.clearance=1000,.safe_seconds=DEF_HORIZON,.safe=true,
+                .following_body=mode==2,.body_offset=mode==2?offset:0};
   def_vec p=s->position; float angle=s->angle;
   const float dt=DEF_HORIZON/DEF_STEPS;
   for(int k=1;k<=DEF_STEPS;k++) {
@@ -108,18 +109,53 @@ def_result def_evaluate(const def_scene* s,float target) {
 def_result def_evaluate_orbit(const def_scene* s) {
   return evaluate_path(s,def_orbit_heading(s,s->position),1,0);
 }
+def_result def_evaluate_body(const def_scene* s,float offset) {
+  if(!s->body_path || s->body_path->count<3) return (def_result){.angle=s->angle};
+  return evaluate_path(s,body_heading(s,s->position,s->angle,offset),2,offset);
+}
+float def_body_outward_offset(const def_scene* s) {
+  if(s->body_offset<=0) return s->body_offset;
+  // Reserve latency, a decision/update margin and time to turn back inward.
+  // Nearby heads may boost or turn toward us even if currently pointing away.
+  float reaction=clamp(s->latency,0,.5f)+.12f+DPI/(2*fmaxf(.1f,s->turn_rate));
+  float fade=fmaxf(s->radius*2,s->speed*.4f),factor=1;
+  for(int i=0;i<s->count;i++) {
+    const def_obstacle* o=&s->obstacles[i];
+    if(!o->head) continue;
+    float gap=length(sub(o->a,s->position))-s->radius-o->radius-8;
+    float closing=s->speed+fmaxf(length(o->velocity),s->speed*1.5f);
+    factor=fminf(factor,clamp((gap-closing*reaction)/fade,0,1));
+  }
+  // Overflow cannot turn an omitted nearby threat into permission to expand.
+  factor=fminf(factor,clamp((s->omitted_clearance-s->speed*reaction)/fade,0,1));
+  return s->body_offset*factor;
+}
 def_result def_choose(const def_scene* s) {
   // Prefer the captured body lap, then the manual-circle fallback, while safe.
   // Threats and the arena boundary are checked by the same collision evaluator.
   if(s->body_path && s->body_path->count>=3) {
-    def_result follow=evaluate_path(s,body_heading(s,s->position,s->angle,s->body_offset),2,s->body_offset);
-    if(follow.safe && (s->body_offset<=0 || follow.clearance>s->radius*2)) return follow;
+    float outward=def_body_outward_offset(s);
+    def_result follow=def_evaluate_body(s,outward);
+    // Hold a safe inside detour until the original track has a body-width
+    // clearance reserve. This avoids switching tracks on every tiny update.
+    if(s->has_previous_body && s->previous_body_offset<fminf(outward,-s->radius*.25f) &&
+       follow.clearance<s->radius*2) {
+      def_result held=def_evaluate_body(s,s->previous_body_offset);
+      if(held.safe) return held;
+    }
+    if(follow.safe && (outward<=0 || follow.clearance>s->radius*2)) return follow;
     // Before leaving the enclosure, try the current spine and its inside edge.
-    def_result spine=evaluate_path(s,body_heading(s,s->position,s->angle,0),2,0);
+    def_result spine=def_evaluate_body(s,0);
     if(spine.safe) return spine;
-    float inward=-s->radius*.5f;
-    def_result inside=evaluate_path(s,body_heading(s,s->position,s->angle,inward),2,inward);
-    if(inside.safe) return inside;
+    // Follow the enclosure on progressively deeper inside tracks before
+    // abandoning it. Every candidate includes latency, threats and the border.
+    // The common safe path returns above, so it pays no extra search cost.
+    const float inward[]={.5f,1,2,3};
+    for(int i=0;i<4;i++) {
+      float offset=-fminf(s->radius*inward[i],s->body_path->length*.04f);
+      def_result inside=def_evaluate_body(s,offset);
+      if(inside.safe) return inside;
+    }
     if(follow.safe) return follow;
   } else if(s->orbit_direction) {
     def_result orbit=def_evaluate_orbit(s);
@@ -127,6 +163,7 @@ def_result def_choose(const def_scene* s) {
   }
   def_result best={0}; float best_score=-FLT_MAX;
   float food_angle=s->has_food?atan2f(s->food.y-s->position.y,s->food.x-s->position.x):s->angle;
+  float return_angle=s->body_path?body_heading(s,s->position,s->angle,0):s->angle;
   int candidates=DEF_CANDIDATES+(s->has_food?1:0)+(s->has_previous?1:0);
   for(int i=0;i<candidates;i++) {
     // Include straight ahead, gentle steering, and both near-U-turns.
@@ -148,6 +185,10 @@ def_result def_choose(const def_scene* s) {
     }
     if(!s->body_path && !s->orbit_direction && s->has_food && r.safe && r.clearance>20) {
       score+=cosf(def_wrap(target-food_angle))*48;
+    }
+    if(s->body_path && r.safe) {
+      float return_turn=def_wrap(target-return_angle);
+      score-=return_turn*return_turn*4; // Prefer a safe route back to our lap.
     }
     if(score>best_score) { best_score=score; best=r; }
   }

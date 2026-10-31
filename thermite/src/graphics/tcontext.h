@@ -51,6 +51,20 @@ typedef struct tcontext {
   uint32_t queue_family;
   VkSurfaceFormatKHR surface_format;
   ivec2 size;
+
+  // Screenshot: set capture_request; the next frame's image is copied on the GPU and, a frame or
+  // two later when that frame has finished (never waiting for it), handed over as capture_pixels
+  // (capture_w x capture_h x 4 bytes, BGRA if capture_bgra else RGBA, alpha undefined; malloc'd,
+  // the caller frees it and clears capture_ready). capture_failed: the image could not be read.
+  bool can_capture;
+  bool capture_request, capture_ready, capture_failed;
+  bool capture_pending, capture_bgra;   // copy recorded, waiting for its frame; pixels are BGRA (caller swaps)
+  int capture_frame;
+  unsigned char* capture_pixels;
+  int capture_w, capture_h;
+  VkBuffer capture_buffer;
+  VmaAllocation capture_alloc;
+  VkDeviceSize capture_size;
 } tcontext;
 
 VkShaderModule tcontext_create_shader(tcontext* context, const char* filename);

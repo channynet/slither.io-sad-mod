@@ -1,6 +1,8 @@
+#include <stdio.h>
 #include <string.h>
 
 #include "../user.h"
+#include "../game/perf_trace.h"
 
 void _create_image_data(renderer* r, tcontext* ctx, ivec2 size) {
   glm_ivec2_copy(size, r->size);
@@ -131,7 +133,13 @@ renderer* renderer_create(tenv* env) {
   // an unused 4096x3548 texture and its mip chain (~74 MiB of texels).
   const unsigned char white[]={255,255,255,255};
   r->bg_tex = create_rgba_texture(ctx,white,1,1);
-  r->tex_atlas = create_mipmap_texture(ctx, "app/res/textures/tex_atlas_8k.png");
+  // The skin atlas at half size (3584x4608): its tiles are 512 px, still larger than a body part
+  // ever is on screen, so the GPU never sampled the full-size level anyway. It is 264 MB less
+  // memory (texture plus upload buffer) and decodes about 4x faster. The full-size file is used
+  // where the half-size one is missing.
+  FILE* half = fopen("app/res/textures/tex_atlas_4k.png", "rb");
+  if (half) fclose(half);
+  r->tex_atlas = create_mipmap_texture(ctx, half ? "app/res/textures/tex_atlas_4k.png" : "app/res/textures/tex_atlas_8k.png");
 
   vkCreateRenderPass(
       ctx->device,
@@ -334,6 +342,23 @@ renderer* renderer_create(tenv* env) {
   r->astr = bp_renderer_create(ctx, 2, r->pipeline_layout, r->render_pass);
   r->cr = spr_renderer_create(ctx, 1, r->pipeline_layout, env->ctx->renderpass);
 
+  // GPU timing for performance.csv (gpu_game_ms). Left off where the queue cannot time.
+  r->gpu_queries = VK_NULL_HANDLE; r->gpu_ns_per_tick = 0; r->gpu_ui_ok = false;
+  r->gpu_query_written = calloc(ctx->fif, sizeof(bool));
+  r->gpu_ui_written = calloc(ctx->fif, sizeof(bool));
+  {
+    VkPhysicalDeviceProperties props; vkGetPhysicalDeviceProperties(ctx->ph_device, &props);
+    uint32_t families = 0; vkGetPhysicalDeviceQueueFamilyProperties(ctx->ph_device, &families, NULL);
+    VkQueueFamilyProperties* fam = calloc(families ? families : 1, sizeof(*fam));
+    vkGetPhysicalDeviceQueueFamilyProperties(ctx->ph_device, &families, fam);
+    bool can = ctx->queue_family < families && fam[ctx->queue_family].timestampValidBits > 0 && props.limits.timestampPeriod > 0;
+    free(fam);
+    if (can && vkCreateQueryPool(ctx->device, &(VkQueryPoolCreateInfo){.sType = VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO,
+          .queryType = VK_QUERY_TYPE_TIMESTAMP, .queryCount = GPU_MARKS * ctx->fif}, NULL, &r->gpu_queries) == VK_SUCCESS)
+      r->gpu_ns_per_tick = props.limits.timestampPeriod;
+    else r->gpu_queries = VK_NULL_HANDLE;
+  }
+
   return r;
 }
 
@@ -346,7 +371,39 @@ void renderer_render(renderer* r, tcontext* ctx, vec4 clear_color) {
   memcpy(r->global_buffer[ctx->current_frame].data, &r->global,
          sizeof(r->global));
 
-  if(r->global.minimap_opacity>0) mm_renderer_prerender(r->mmr, ctx);
+  // This frame slot's previous timestamps are finished (its fence was waited for): record them.
+  int slot = ctx->current_frame;
+  // Timestamps between the passes give each one's GPU time (performance.csv gpu_*_ms columns).
+  if (r->gpu_queries && r->gpu_query_written[slot]) {
+    uint64_t t[GPU_MARKS];
+    if (vkGetQueryPoolResults(ctx->device, r->gpu_queries, GPU_MARKS * slot, GPU_MARKS, sizeof(t), t, sizeof(uint64_t),
+                              VK_QUERY_RESULT_64_BIT) == VK_SUCCESS) {
+      double k = r->gpu_ns_per_tick / 1e6;
+      #define SPAN(a, b) (t[b] >= t[a] ? (t[b] - t[a]) * k : 0)
+      perf_add_duration(PERF_GPU_GAME, SPAN(GPU_START, GPU_END));
+      perf_add_duration(PERF_GPU_BG, SPAN(GPU_START, GPU_BG));
+      perf_add_duration(PERF_GPU_FOOD, SPAN(GPU_BG, GPU_FOOD));
+      perf_add_duration(PERF_GPU_GLOW, SPAN(GPU_FOOD, GPU_GLOW_UNDER) + SPAN(GPU_BODY, GPU_GLOW_OVER));
+      perf_add_duration(PERF_GPU_BODY, SPAN(GPU_GLOW_UNDER, GPU_BODY) + SPAN(GPU_BORDER, GPU_EXTRA));
+      perf_add_duration(PERF_GPU_BORDER, SPAN(GPU_GLOW_OVER, GPU_BORDER));
+      perf_add_duration(PERF_GPU_MINIMAP, SPAN(GPU_EXTRA, GPU_END));
+      if (r->gpu_ui_written[slot]) perf_add_duration(PERF_GPU_UI, SPAN(GPU_UI_START, GPU_UI_END));
+      #undef SPAN
+    }
+    r->gpu_query_written[slot] = false;
+  }
+  r->gpu_ui_written[slot] = false;
+  if (r->gpu_queries) {
+    vkCmdResetQueryPool(fr->cmd, r->gpu_queries, GPU_MARKS * slot, GPU_MARKS);
+    vkCmdWriteTimestamp(fr->cmd, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, r->gpu_queries, GPU_MARKS * slot + GPU_START);
+  }
+  #define MARK(i) if (r->gpu_queries) vkCmdWriteTimestamp(fr->cmd, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, r->gpu_queries, GPU_MARKS * slot + (i))
+
+  if(r->global.minimap_opacity>0) {
+    double minimap_start=perf_now();
+    mm_renderer_prerender(r->mmr, ctx);
+    perf_add(PERF_DRAW_MINIMAP,minimap_start);
+  }
 
   vkCmdBeginRenderPass(
       fr->cmd,
@@ -371,14 +428,32 @@ void renderer_render(renderer* r, tcontext* ctx, vec4 clear_color) {
                           r->pipeline_layout, 0, 1,
                           &r->global_set[ctx->current_frame], 0, NULL);
   if(r->global.bg_opacity>0) bg_renderer_render(r->bgr, ctx);
+  MARK(GPU_BG);
   fd_renderer_render(r->fdr, ctx);
+  MARK(GPU_FOOD);
   bst_renderer_render(r->bstb, ctx);
+  MARK(GPU_GLOW_UNDER);
   bp_renderer_render(r->bpr, ctx);
+  MARK(GPU_BODY);
   bst_renderer_render(r->bsta, ctx);
+  MARK(GPU_GLOW_OVER);
   bd_renderer_render(r->bdr, ctx);
+  MARK(GPU_BORDER);
   bp_renderer_render(r->astr, ctx);
+  MARK(GPU_EXTRA);
   if(r->global.minimap_opacity>0) mm_renderer_render(r->mmr, ctx);
   vkCmdEndRenderPass(ctx->frames[ctx->current_frame].cmd);
+  MARK(GPU_END);
+  if (r->gpu_queries) { r->gpu_query_written[slot] = true; r->gpu_ui_ok = true; }   // this frame's queries are reset
+  #undef MARK
+}
+
+// Around the UI pass (the game image scaled to the window, text and windows): its GPU time.
+void renderer_gpu_ui(renderer* r, tcontext* ctx, bool end) {
+  if (!r->gpu_queries || !r->gpu_ui_ok) return;     // only after this frame's game pass reset the queries
+  vkCmdWriteTimestamp(ctx->frames[ctx->current_frame].cmd, end ? VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT : VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+                      r->gpu_queries, GPU_MARKS * ctx->current_frame + (end ? GPU_UI_END : GPU_UI_START));
+  if (end) { r->gpu_ui_written[ctx->current_frame] = true; r->gpu_ui_ok = false; }
 }
 
 void renderer_render_cursor(renderer* r, tcontext* ctx) {
@@ -396,6 +471,9 @@ void renderer_render_cursor(renderer* r, tcontext* ctx) {
 }
 
 void renderer_destroy(renderer* r, tcontext* ctx) {
+  if (r->gpu_queries) vkDestroyQueryPool(ctx->device, r->gpu_queries, NULL);
+  free(r->gpu_query_written);
+  free(r->gpu_ui_written);
   spr_renderer_destroy(r->cr, ctx);
   bd_renderer_destroy(r->bdr, ctx);
   bp_renderer_destroy(r->astr, ctx);

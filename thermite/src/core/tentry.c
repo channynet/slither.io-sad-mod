@@ -26,15 +26,22 @@ int tentry(int argc, char** argv, size_t usr_size) {
   tinit(&env);
 
   while (env.config.running) {
-    if (env.wnd->size[0] > 0 && env.wnd->size[1] > 0) {
+    // Nothing can be shown while minimized (size 0 on Windows) or, on macOS, while the window
+    // is minimized, hidden or covered: there the system gives out no image to draw into and
+    // waiting for one would stall the game for up to a second per frame.
+    bool drawable = env.wnd->size[0] > 0 && env.wnd->size[1] > 0 && twindow_visible(env.wnd);
+    if (drawable) {
       twindow_poll_input(env.wnd);
     } else {
-      twindow_wait_input(env.wnd);
+      // Minimized: nothing to draw, but sockets and game state must not stall.
+      glfwWaitEventsTimeout(1.0 / 60);
+      twindow_poll_input(env.wnd);
+      if (env.config.running) tbackground(&env);
     }
 
     env.ctx->frame_submitted=false;
     tinput(&env);
-    if (env.config.running && env.ctx->swapchain_ok &&
+    if (env.config.running && env.ctx->swapchain_ok && drawable &&
         env.wnd->size[0] > 0 && env.wnd->size[1] > 0 && !env.wnd->_refresh)
       trender(&env);
 

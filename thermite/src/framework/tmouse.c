@@ -20,7 +20,10 @@ void mouse_pos_callback(GLFWwindow* window, double x, double y) {
 
 void mouse_wheel_callback(GLFWwindow* window, double x, double y) {
   tenv* env = glfwGetWindowUserPointer(window);
-  env->ms->dwheel = (float)y;
+  // Add up everything that arrives within one frame (a trackpad sends many small steps), but at
+  // most 3 notches per frame: macOS accelerates fast wheel turns to steps of 10 or more.
+  float total = env->ms->dwheel + (float)y;
+  env->ms->dwheel = total > 3 ? 3 : total < -3 ? -3 : total;
 }
 
 tmouse* tmouse_create(twindow* window) {

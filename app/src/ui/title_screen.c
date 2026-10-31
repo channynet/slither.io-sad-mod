@@ -1,6 +1,9 @@
+#include "../network/ntl.h"
 #include "title_screen.h"
+#include "menu_animation.h"
 
 #include "../network/server.h"
+#include "../network/callback.h"
 #include "../network/server_history.h"
 #include "../network/server_status.h"
 #include "../user.h"
@@ -57,11 +60,8 @@ static void draw_menu_meme(tenv* env) {
   float height=width*menu_meme.height/menu_meme.width;
   ImVec2 pos={env->ctx->size[0]-24-width,env->ctx->size[1]-24-height},window;
   igGetWindowPos(&window); pos.x+=window.x; pos.y+=window.y;
-  // ImGui time does not reset when Play resets the game's GLFW clock.
-  double elapsed=fmod(igGetTime()*1000,menu_meme.total_ms);
-  int frame=0;
-  while(frame<menu_meme.count-1 && elapsed>=menu_meme.delays[frame])
-    elapsed-=menu_meme.delays[frame++];
+  int frame=menu_animation_frame(glfwGetTimerValue(),glfwGetTimerFrequency(),
+      menu_meme.delays,menu_meme.count);
   ImDrawList_AddImage(igGetWindowDrawList(),
       (ImTextureRef){NULL,(ImTextureID)menu_meme.descriptors[frame]},pos,
       (ImVec2){pos.x+width,pos.y+height},(ImVec2){0,0},(ImVec2){1,1},igGetColorU32_Vec4((ImVec4){1,1,1,1}));
@@ -138,14 +138,26 @@ void ui_title_screen(tenv* env) {
   igSetCursorPosY(ctx->size[1] / 2.0f + style->ItemSpacing.y * 2 +
                   frame_height);
   igSetNextItemWidth(logo_size-frame_height-style->ItemSpacing.x);
-  igInputTextWithHint("##ipv4_input", "IPv4:Port", usrs->ipv4, MAX_IPV4_LEN + 1,
+  igInputTextWithHint("##ipv4_input", "IP:포트 또는 온라인 주소", usrs->ipv4, MAX_IPV4_LEN + 1,
                       ImGuiInputTextFlags_None, NULL, NULL);
   igSameLine(0,-1);
   igSetNextItemWidth(frame_height);
   igSetNextWindowSizeConstraints((ImVec2){480,0},(ImVec2){900,650},NULL,NULL);
   if(igBeginCombo("##recent_servers",NULL,ImGuiComboFlags_NoPreview)) {
-    igTextDisabled("서버  |  인원 (마지막 접속 기준)  |  핑");
+    ntl_team_server team[8]; int team_count=ntl_team_servers(team,8);
+    if(team_count) {
+      igSeparatorText("팀원이 있는 서버 (누르면 바로 접속)");
+      for(int i=0;i<team_count;i++) {
+        char label[260]; snprintf(label,sizeof(label),"%s  |  %d명: %s###team%d",team[i].address,team[i].count,team[i].names,i);
+        if(igSelectable_Bool(label,!strcmp(usrs->ipv4,team[i].address),0,(ImVec2){0})) {
+          ntl_join_server(env,team[i].address);
+        }
+      }
+      igSeparatorText("최근 서버");
+    }
+    igTextDisabled("서버  |  인원 (마지막 접속 기준)  |  핑      저장 %d/%d",recent_servers.count,SERVER_HISTORY_LIMIT);
     igSeparator();
+    int forget=-1;
     for(int i=0;i<recent_servers.count;i++) {
       const char* address=recent_servers.addresses[i];
       server_status_request(address);
@@ -164,9 +176,20 @@ void ui_title_screen(tenv* env) {
       else snprintf(ping,sizeof(ping),"핑 미확인");
       snprintf(label,sizeof(label),"%s  |  %s  |  %s###server",address,population,ping);
       igPushID_Int(i);
+      // A button does not close the list, so several addresses can be removed in a row.
+      if(igSmallButton("X")) forget=i;
+      if(igIsItemHovered(0)) igSetTooltip("이 서버를 목록에서 삭제");
+      igSameLine(0,-1);
       if(igSelectable_Bool(label,!strcmp(usrs->ipv4,address),0,(ImVec2){0})) strcpy(usrs->ipv4,address);
       if(igIsItemHovered(0)) igSetTooltip("핑: 이 주소의 /ptc 응답 3회 중앙값. 게임 중 핑과 차이 날 수 있습니다.\n인원: 마지막 접속 때 서버가 알려준 수. 플레이하면 갱신됩니다.");
       igPopID();
+    }
+    if(forget>=0) {
+      char removed[MAX_IPV4_LEN+1]; strcpy(removed,recent_servers.addresses[forget]);
+      bool current=!strcmp(usrs->ipv4,removed);
+      // The address in the input box is re-saved at the next start, so move it off the removed one.
+      if(server_history_forget(removed) && current)
+        strcpy(usrs->ipv4,recent_servers.count?recent_servers.addresses[0]:"");
     }
     if(!recent_servers.count) igTextDisabled("플레이한 서버가 여기에 저장됩니다.");
     igEndCombo();
@@ -201,6 +224,10 @@ void ui_title_screen(tenv* env) {
   if (igButton("\ue9b6 Quit", (ImVec2){logo_size})) {
     env->config.running = false;
     save_user_settings(usrs);
+  }
+  if(*server_last_error()) {
+    igSetCursorPosX(ctx->size[0]/2.0f-logo_size/2);
+    igTextColored((ImVec4){1,0.6f,0.3f,1},"%s",server_last_error());
   }
   if(server_history_save_failed) {
     igSetCursorPosX(ctx->size[0]/2.0f-logo_size/2);

@@ -620,7 +620,7 @@ void game_data_reset(tenv* env) {
   gdata->data.kd_l_frb = 0;
   gdata->data.kd_r_frb = 0;
   gdata->data.lkstm = 0;
-  gdata->data.gsc = gdata->data.ms_zoom;
+  gdata->data.ms_zoom = gdata->data.gsc = native_start_zoom();   // every game starts at the start zoom
 
   memset(gdata->data.lb.entries, 0,
          NUM_LEADERBOARD_ENTRIES * sizeof(gdata->data.lb.entries[0]));

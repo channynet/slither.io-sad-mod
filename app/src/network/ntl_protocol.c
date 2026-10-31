@@ -1,5 +1,6 @@
 // Independently implemented interoperability adapter; no NTL code is included.
 #include "ntl_protocol.h"
+#include "utf8_text.h"
 #include "../external/mongoose.h"
 #include <math.h>
 #include <stdio.h>
@@ -10,14 +11,70 @@
 unsigned ntl_snake_id(unsigned id, unsigned serial) {
   return ((serial & 63u) << 10) | (id & 1023u);
 }
+bool ntl_target_valid(const char* s) {
+  // NTL TMS identity: skin_id + snake_id + (first color + pattern length).
+  // Optional |1..6 is a ring assignment; keep it when relaying a sighting.
+  if(!s || !*s || strlen(s)>=NTL_TARGET) return false;
+  const unsigned bounds[]={255,65535,65535};
+  for(int field=0;field<3;field++) {
+    if(field==2 && (!*s || *s=='|')) break; // Unknown standard pattern in NTL.
+    if(*s<'0'||*s>'9') return false;
+    unsigned v=0;
+    do { v=v*10+(*s++-'0'); if(v>bounds[field]) return false; } while(*s>='0'&&*s<='9');
+    if(field<2 && *s++!='_') return false;
+  }
+  if(*s=='|') { s++; if(*s<'1'||*s>'6') return false; s++; }
+  return !*s;
+}
+static int hex_digit(char c) {
+  return c>='0'&&c<='9'?c-'0':c>='a'&&c<='f'?c-'a'+10:c>='A'&&c<='F'?c-'A'+10:-1;
+}
+static bool hex4(const char* s,unsigned* value) {
+  *value=0;
+  for(int i=0;i<4;i++) { int h=hex_digit(s[i]); if(h<0) return false; *value=(*value<<4)|(unsigned)h; }
+  return true;
+}
+// Mongoose's bundled unescaper accepts only one-byte \\u00xx values.
+// Decode JSON strings here so Korean escapes never fall back to raw tokens.
+static bool json_text(struct mg_str token,char* out,size_t capacity) {
+  if(token.len<2 || token.buf[0]!='"' || token.buf[token.len-1]!='"' || !capacity) return false;
+  size_t used=0;
+  const char* s=token.buf+1; const char* end=token.buf+token.len-1;
+  while(s<end) {
+    char bytes[4]; const char* piece=s; size_t n;
+    if(*s=='\\') {
+      s++; if(s==end) return false;
+      if(*s=='u') {
+        unsigned cp; s++;
+        if(end-s<4 || !hex4(s,&cp)) return false; s+=4;
+        if(cp>=0xd800 && cp<=0xdbff) {
+          unsigned low;
+          if(end-s<6 || s[0]!='\\' || s[1]!='u' || !hex4(s+2,&low) || low<0xdc00 || low>0xdfff) return false;
+          cp=0x10000+((cp-0xd800)<<10)+(low-0xdc00); s+=6;
+        }
+        if(!cp || !(n=utf8_scalar(cp,bytes))) return false;
+      } else {
+        const char* escaped="\"\\/bfnrt"; const char* decoded="\"\\/\b\f\n\r\t";
+        const char* p=strchr(escaped,*s++); if(!p) return false;
+        bytes[0]=decoded[p-escaped]; n=1;
+      }
+      piece=bytes;
+    } else {
+      if((unsigned char)*s<32 || !(n=utf8_char_bytes(s,(size_t)(end-s)))) return false;
+      s+=n;
+    }
+    if(used+n>=capacity) return false;
+    memcpy(out+used,piece,n); used+=n;
+  }
+  out[used]=0; return true;
+}
 static bool field(struct mg_str row, const char* path, char* dst, size_t cap) {
   struct mg_str token = mg_json_get_tok(row, path);
   if (!token.len) { dst[0] = 0; return true; }
-  char* value = token.buf[0] == '"' ? mg_json_get_str(row, path) : NULL;
-  size_t len = value ? strlen(value) : token.len;
+  if(token.buf[0]=='"') return json_text(token,dst,cap);
+  size_t len = token.len;
   bool ok = len < cap;
-  if (ok) { memcpy(dst, value ? value : token.buf, len); dst[len] = 0; }
-  free(value);
+  if (ok) { memcpy(dst,token.buf,len); dst[len]=0; }
   return ok;
 }
 static double number(struct mg_str row, const char* path) {
@@ -25,6 +82,33 @@ static double number(struct mg_str row, const char* path) {
   if (!field(row, path, value, sizeof(value)) || !value[0]) return NAN;
   char* end; double n = strtod(value, &end);
   return *end || !isfinite(n) || fabs(n) > 1000000000 ? NAN : n;
+}
+static int metric(const char** cursor,int maximum) {
+  const char* s=*cursor; while(*s==' ') s++;
+  if(*s<'0'||*s>'9') return -1;
+  unsigned value=0;
+  while(*s>='0'&&*s<='9') {
+    value=value*10+(unsigned)(*s++-'0');
+    if(value>(unsigned)maximum) return -1;
+  }
+  *cursor=s; return (int)value;
+}
+static void telemetry(struct mg_str row,ntl_member* member) {
+  member->fps=member->ping=-1;
+  char raw[1024],plain[1024];
+  if(!field(row,"$.dt",raw,sizeof(raw))) return;
+  ntl_plain(raw,plain,sizeof(plain));
+  const char* s=plain; while(*s==' ') s++;
+  if(strncmp(s,"FPS:",4)) return;
+  s+=4; int fps=metric(&s,10000);
+  if(fps<0 || (*s && *s!=' ' && *s!='@')) return;
+  member->fps=fps;
+  while(*s==' ') s++; if(*s++!='@') return;
+  int ping=metric(&s,60000); if(ping<0) return;
+  if(*s=='(') { s++; if(metric(&s,60000)<0 || *s++!=')') return; }
+  while(*s==' ') s++;
+  if(strncmp(s,"ms",2) || (s[2] && s[2]!=' ' && s[2]!='@')) return;
+  member->ping=ping;
 }
 int ntl_parse(const char* text, const char* identity, ntl_reply* out) {
   memset(out, 0, sizeof(*out));
@@ -50,6 +134,10 @@ int ntl_parse(const char* text, const char* identity, ntl_reply* out) {
     double sid = number(row,"$.sid"), score = number(row,"$.score");
     m->sid = isfinite(sid) && sid >= 0 && sid <= 65535 ? (int)sid : -1;
     m->score = isfinite(score) && score >= 0 ? (int)score : 0;
+    double tag = number(row,"$.tg");
+    m->tag = isfinite(tag) && tag >= 0 && tag < 1000 ? (int)tag : -1;
+    telemetry(row,m);
+    if(!field(row,"$.tar",m->target,sizeof(m->target)) || !ntl_target_valid(m->target)) m->target[0]=0;
     char sos[16]; field(row,"$.sos",sos,sizeof(sos));
     m->sos = !strcmp(sos,"true") || !strcmp(sos,"1");
     if (!strcmp(m->nick, identity)) out->own_echo = true;
@@ -76,7 +164,19 @@ static bool param(char* out, size_t cap, const char* key, const char* value) {
 bool ntl_build_path(const ntl_request* r, char* out, size_t cap) {
   if (!cap) return false;
   out[0]=0;
-  if (!append(out,cap,"/slither/ntlplay-mt.php?ver=9.68&di=1000&bot=false&sos=false&food=false&tlm=&dt=SlitherNative-0.1")) return false;
+  if (!append(out,cap,"/slither/ntlplay-mt.php?ver=9.68&di=1000&bot=")) return false;
+  if (!append(out,cap,r->playing && r->bot ? "true" : "false") || !append(out,cap,"&sos=") ||
+      !append(out,cap,r->playing && r->sos ? "true" : "false") || !append(out,cap,"&food=false&tlm=")) return false;
+  char details[96]="";
+  if(r->fps>=0 && r->fps<=10000) {
+    if(r->playing && r->ping>=0 && r->ping<=60000) {
+      // NTL's own format, "FPS: 60 @ 42(70) ms": the ping and in brackets the highest of the last 10 s.
+      if(r->ping_peak>=r->ping && r->ping_peak<=60000) snprintf(details,sizeof(details),"FPS: %d @ %d(%d) ms",r->fps,r->ping,r->ping_peak);
+      else snprintf(details,sizeof(details),"FPS: %d @ %d ms",r->fps,r->ping);
+    }
+    else snprintf(details,sizeof(details),"FPS: %d",r->fps);
+  }
+  if(!param(out,cap,"dt",details)) return false;
   if (!param(out,cap,"auth",r->auth) || !param(out,cap,"tid",r->team) || !param(out,cap,"nick",r->nick) ||
       !param(out,cap,"srv",r->playing ? r->server : "_GAME_MENU_") || !param(out,cap,"msg",r->message)) return false;
   if (r->playing && (!isfinite(r->x) || !isfinite(r->y) || r->x < 0 || r->y < 0 || r->x > 1000000 || r->y > 1000000 || r->sid < 0 || r->sid > 65535)) return false;
@@ -87,7 +187,10 @@ bool ntl_build_path(const ntl_request* r, char* out, size_t cap) {
   if (r->playing) {
     snprintf(n,sizeof(n),"%d",r->sid); if (!param(out,cap,"sid",n)) return false;
     snprintf(n,sizeof(n),"%d",r->rank); if (!param(out,cap,"rank",n)) return false;
-    if (!append(out,cap,"&an=false&cs=-1&tg=-1&tar=")) return false;
+    snprintf(n,sizeof(n),"&an=false&cs=-1&tg=%d",r->tag >= 0 && r->tag < 1000 ? r->tag : -1);
+    if (!append(out,cap,n)) return false;
+    if(r->target[0] && !ntl_target_valid(r->target)) return false;
+    if(!param(out,cap,"tar",r->target)) return false;
   }
   return true;
 }
@@ -105,6 +208,7 @@ bool ntl_encode_chat(const char* input, char* out, size_t cap) {
 }
 void ntl_plain(const char* input, char* out, size_t cap) {
   size_t n=0;
+  const char* end=input+strlen(input);
   while (*input && n+1<cap) {
     if (!strncmp(input,"<br>",4)) { out[n++]='\n'; input+=4; continue; }
     if (*input=='<') { while (*input && *input!='>') input++; if (*input) input++; continue; }
@@ -114,7 +218,27 @@ void ntl_plain(const char* input, char* out, size_t cap) {
     for (int i=0;i<6;i++) if (!strncmp(input,entities[i],strlen(entities[i]))) {
       out[n++]=chars[i]; input+=strlen(entities[i]); found=true; break;
     }
-    if (!found) { unsigned char c=*input++; if (c>=32 || c=='\n') out[n++]=c; }
+    if(!found && input[0]=='&' && input[1]=='#') {
+      const char* s=input+2; unsigned base=10,cp=0,digits=0;
+      if(*s=='x'||*s=='X') { base=16; s++; }
+      while(*s && digits<8) {
+        int d=hex_digit(*s); if(d<0 || (unsigned)d>=base) break;
+        cp=cp*base+(unsigned)d; digits++; s++;
+      }
+      char bytes[4]; size_t count=utf8_scalar(cp,bytes);
+      if(digits && *s==';' && cp>=32 && cp!=127 && count) {
+        if(n+count>=cap) break;
+        memcpy(out+n,bytes,count); n+=count; input=s+1; found=true;
+      }
+    }
+    if (!found) {
+      unsigned char c=*input;
+      if(c<32 && c!='\n') { input++; continue; }
+      size_t count=utf8_char_bytes(input,(size_t)(end-input));
+      if(!count) { input++; continue; }
+      if(n+count>=cap) break;
+      memcpy(out+n,input,count); n+=count; input+=count;
+    }
   }
   if (cap) out[n]=0;
 }

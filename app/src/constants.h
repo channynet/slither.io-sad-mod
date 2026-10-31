@@ -4,7 +4,10 @@
 #define CLIENT_VERSION 291
 
 #define MAX_NICKNAME_LEN 24
-#define MAX_IPV4_LEN 19
+// Long enough for a relay name (some-four-words.trycloudflare.com). 48 more than the 19 it used
+// to be: a multiple of 8, so that everything after it in user_settings keeps its layout.
+#define MAX_IPV4_LEN 67
+#define OLD_IPV4_LEN 19
 #define MAX_SKIN_CODE_LEN 256
 #define NUM_COLOR_GROUPS 42
 #define NUM_DEFAULT_SKINS 66
@@ -31,6 +34,8 @@
 
 // game data constants:
 #define PROTOCOL_VERSION 19
+// Oldest server protocol the packet parser handles (see callback.c).
+#define MIN_PROTOCOL_VERSION 14
 #define GD_FLXC 38
 #define GD_EEZ 53
 #define GD_AFC 26

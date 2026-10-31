@@ -28,10 +28,11 @@ static void advance(def_vec head,float body_length) {
     walked+=length;
   }
 }
-static void sync_body(snake* own,int stride) {
+static void sync_body(snake* own,int stride,bool jitter) {
   tdarray_clear(own->pts);
   for(int i=count-1;i>=1;i-=stride) {
-    body_part p={.xx=trail[i].x,.yy=trail[i].y}; tdarray_push(&own->pts,&p);
+    float noise=jitter?1.5f*sinf(i*2.1f):0;
+    body_part p={.xx=trail[i].x+noise,.yy=trail[i].y-noise}; tdarray_push(&own->pts,&p);
   }
 }
 int main(void) {
@@ -42,7 +43,7 @@ int main(void) {
   snake* own=g->data.snakes;
   g->data.snake_id=42; g->data.follow_view=true; g->data.mamu=3.0f/125;
   g->data.flux_grd=g->data.real_flux_grd=10000; g->data.ping=80;
-  for(int stride=1;stride<=4;stride*=4) for(int sign=-1;sign<=1;sign+=2) for(int oval=0;oval<2;oval++) {
+  for(int jitter=0;jitter<=1;jitter++) for(int stride=1;stride<=4;stride*=4) for(int sign=-1;sign<=1;sign+=2) for(int oval=0;oval<2;oval++) {
     sbot_init(&env); own->generation++;
     float rx=oval?220:170,ry=oval?140:170;
     count=300;
@@ -60,12 +61,14 @@ int main(void) {
     // Live body follows every movement, with actual delayed steering. Grow by
     // 15% over 10 seconds; later remove 5% to exercise overlap recovery.
     for(int step=0;step<2000;step++) {
-      sync_body(own,stride);
+      sync_body(own,stride,jitter!=0);
       float growth=1+.15f*fminf(1,fmaxf(0,(step-500)/250.0f));
       if(step>=1400) growth-=.05f;
       g->data.ctm=1000+step*40; g->data.ping=step%400<200?80:160;
       // A transient missing neck/body snapshot must preserve the last route.
-      if(step>=1000 && step<1008) tdarray_clear(own->pts);
+      if(step>=1000 && step<(jitter?1020:1008)) tdarray_clear(own->pts);
+      // Damage only the far tail; the complete near-body lap remains present.
+      if(jitter && step>=1200 && step<1220 && tdarray_length(own->pts)>0) own->pts[0].xx=NAN;
       sbot_go(&env);
       assert(!g->bot.output.accel);
       queue[step%16]=atan2f(g->bot.output.ym,g->bot.output.xm);
@@ -87,16 +90,19 @@ int main(void) {
         }
       }
     }
-    printf("Live %s sign %d stride %d: closed %d/%d, min overlap %.1f, final %.1f, lap %.1f -> %.1f, turns %.1f\n",
-           oval?"oval":"circle",sign,stride,closed,checked,min_overlap,last_overlap,start_length,end_length,total_turn/(2*PI));
+    printf("Live %s sign %d stride %d jitter %d: closed %d/%d, min overlap %.1f, final %.1f, lap %.1f -> %.1f, turns %.1f\n",
+           oval?"oval":"circle",sign,stride,jitter,closed,checked,min_overlap,last_overlap,start_length,end_length,total_turn/(2*PI));
     fflush(stdout);
     assert(closed>checked*.95f && sign*total_turn>50);
-    assert(min_overlap>-25 && last_overlap>20 && last_overlap<240);
+    // Hold the initial loop's overlap instead of expanding until only the
+    // minimum seam reserve is left (the former upper bound of 240).
+    assert(min_overlap>20 && last_overlap>20);
+    assert(fabsf(last_overlap-(initial_body-start_length))<fmaxf(80,initial_body*.08f));
     assert(end_length>start_length*1.10f);
     int before=decisions;
     usr.usrs.hotkeys[HOTKEY_BOT].active=false;
     for(int i=0;i<500;i++) { g->data.ctm+=40; sbot_go(&env); }
     assert(decisions==before);
   }
-  puts("Live enclosure: both directions, circles/ovals, dense/sparse body updates, growth, shrinking length, 80/160ms steering delay, missing body snapshot and zero OFF planning passed");
+  puts("Live enclosure: 16 scenarios; both directions, circles/ovals, dense/sparse updates, growth/shrink, 80/160ms delay, coordinate jitter, 320/800ms missing body, damaged far tail and zero OFF planning passed");
 }

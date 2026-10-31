@@ -1,4 +1,5 @@
 #include "game/loop.h"
+#include "ui/text_input_ime.h"
 #include "ui/skin_editor.h"
 #include "ui/title_screen.h"
 #include "ui/settings.h"
@@ -8,6 +9,10 @@
 #include "game/native_preferences.h"
 #include "game/native_shortcuts.h"
 #include "ui/personal_tag.h"
+#include "ui/ntl_tags_ui.h"
+#include "network/ntl_tag_server.h"
+#include "ui/head_face_assets.h"
+#include "network/link_probe.h"
 #include "game/perf_trace.h"
 #include "game/death_review.h"
 #include "network/server.h"
@@ -16,6 +21,58 @@
 #ifdef _WIN32
 #include <windows.h>
 #include <direct.h>
+#else
+#include <errno.h>
+#include <limits.h>
+#include <signal.h>
+#include <sys/stat.h>
+#include <unistd.h>
+#ifdef __APPLE__
+#include <mach-o/dyld.h>
+#endif
+// Where the game keeps its files outside Windows. Next to the program when the game files are there
+// (a portable folder, a test build); inside SlitherNative.app the bundle stays read-only, so the
+// settings and logs go to ~/Library/Application Support/SlitherNative with a link "app" to the
+// bundle's game files, and every relative path in the client works unchanged.
+static bool make_folders(char* path) {          // mkdir -p
+  for(char* c=path+1;*c;c++) if(*c=='/') { *c=0; mkdir(path,0700); *c='/'; }
+  return mkdir(path,0700)==0 || errno==EEXIST;
+}
+static bool has_game_files(const char* dir) {
+  char probe[PATH_MAX+64]; snprintf(probe,sizeof(probe),"%s/app/res/shaders/bin/bstv.spv",dir);
+  return access(probe,R_OK)==0;
+}
+static void enter_data_folder(void) {
+  signal(SIGPIPE,SIG_IGN);        // a write to a closed connection must not end the game
+  const char* forced=getenv("SLITHER_DATA_DIR");
+  if(forced && *forced && chdir(forced)==0) return;
+  char exe[PATH_MAX]={0},real[PATH_MAX];
+#ifdef __APPLE__
+  uint32_t size=sizeof(exe); if(_NSGetExecutablePath(exe,&size)) return;
+#else
+  ssize_t n=readlink("/proc/self/exe",exe,sizeof(exe)-1); if(n<=0) return; exe[n]=0;
+#endif
+  if(!realpath(exe,real)) return;
+  char* slash=strrchr(real,'/'); if(!slash) return; *slash=0;            // the program's folder
+  if(has_game_files(real)) { chdir(real); return; }
+  char resources[PATH_MAX+32]; snprintf(resources,sizeof(resources),"%s/../Resources",real);
+  char bundle[PATH_MAX]; if(!realpath(resources,bundle) || !has_game_files(bundle)) return;
+  const char* home=getenv("HOME"); if(!home || !*home) { chdir(bundle); return; }
+  char data[PATH_MAX];
+#ifdef __APPLE__
+  snprintf(data,sizeof(data),"%s/Library/Application Support/SlitherNative",home);
+#else
+  snprintf(data,sizeof(data),"%s/.local/share/SlitherNative",home);
+#endif
+  if(!make_folders(data)) { chdir(bundle); return; }
+  if(chdir(data)) { chdir(bundle); return; }
+  char target[PATH_MAX+8]; snprintf(target,sizeof(target),"%s/app",bundle);
+  char now[PATH_MAX]; ssize_t len=readlink("app",now,sizeof(now)-1);
+  if(len<0 || (size_t)len!=strlen(target) || memcmp(now,target,(size_t)len)) {   // first run, or the app moved
+    unlink("app");
+    if(symlink(target,"app")) chdir(bundle);
+  }
+}
 #endif
 
 void tinput(tenv* env) {
@@ -26,6 +83,14 @@ void tinput(tenv* env) {
     env->config.running = false;
     save_user_settings(usrs);
   }
+#ifdef __APPLE__
+  // F11 is "Show Desktop" on a Mac; control+command+F is the system's full-screen key.
+  bool mac_fullscreen_key = tkeyboard_key_pressed(env->kb, GLFW_KEY_F) &&
+      (twindow_key_down(env->wnd, GLFW_KEY_LEFT_SUPER) || twindow_key_down(env->wnd, GLFW_KEY_RIGHT_SUPER)) &&
+      (twindow_key_down(env->wnd, GLFW_KEY_LEFT_CONTROL) || twindow_key_down(env->wnd, GLFW_KEY_RIGHT_CONTROL));
+  if (mac_fullscreen_key) twindow_toggle_fullscreen(env->wnd);
+  env->config.fullscreen = native_prefs.fullscreen = twindow_is_fullscreen(env->wnd);
+#endif
   if (tkeyboard_key_pressed(env->kb, GLFW_KEY_F11)) {
     twindow_toggle_fullscreen(env->wnd);
     native_prefs.fullscreen=env->config.fullscreen;
@@ -43,6 +108,8 @@ void tlaunch(tenv* env) {
     wchar_t* slash = wcsrchr(executable, L'\\');
     if (slash) { *slash = 0; _wchdir(executable); }
   }
+#else
+  enter_data_folder();
 #endif
   tuser_data* usr = env->usr;
   user_settings* usrs = &usr->usrs;
@@ -82,14 +149,20 @@ void tinit(tenv* env) {
   game_data_init(env);
   ntl_init();
   server_status_init();
+  link_probe_init();
   personal_tag_init(env);
+  ntl_tags_init(env);
+  head_face_init(env);
 }
 
 void tdestroy(tenv* env) {
   native_preferences_tick(&env->usr->usrs,true);
   ntl_destroy();
   server_status_destroy();
+  link_probe_destroy();
+  head_face_destroy(env);
   personal_tag_destroy(env);
+  ntl_tags_destroy(env);
   game_data_destroy(env);
   ui_settings_destroy(env);
   ui_skin_editor_destroy(env);
@@ -101,6 +174,8 @@ void tdestroy(tenv* env) {
 }
 
 void trender(tenv* env) {
+  perf_since_mark(PERF_EVENTS);
+  perf_window(glfwGetWindowAttrib(env->wnd->handle,GLFW_FOCUSED));
   server_status_menu(env->usr->gdata.curr_screen==TITLE_SCREEN && env->usr->gdata.conn==DISCONNECTED);
   tuser_data* usr = env->usr;
   tcontext* ctx = env->ctx;
@@ -111,7 +186,7 @@ void trender(tenv* env) {
   double wait_start=perf_now();
   bool frame_ready=tcontext_begin(ctx);
   perf_add(PERF_WAIT,wait_start);
-  if (!frame_ready) return;
+  if (!frame_ready) { perf_mark(); return; }
   double cursor_x, cursor_y;
   glfwGetCursorPos(env->wnd->handle,&cursor_x,&cursor_y);
   env->ms->pos[0]=(float)cursor_x;
@@ -123,6 +198,7 @@ void trender(tenv* env) {
       usr->r->size[1] != GLM_MAX(1,(int)(ctx->size[1]*usr->render_scale)))
     ui_viewport_resize(env);
   personal_tag_prepare(env);
+  ntl_tags_prepare(env);
   imgui_prerender();
   native_shortcuts(env);
   // render begin
@@ -150,7 +226,7 @@ void trender(tenv* env) {
       ui_settings(env);
       break;
   }
-  if(!death_review.frozen) personal_tag_draw(env);
+  if(!death_review.frozen) { ntl_tags_draw(env); personal_tag_draw(env); }
   igEnd();
   // A death packet may arrive inside game_loop; select the held image afterwards.
   ui_viewport(env);
@@ -166,19 +242,27 @@ void trender(tenv* env) {
     igEnd();
   }
   ntl_frame(env);
+  ntl_tag_server_tick(env);
   native_preferences_tick(&usr->usrs,false);
   // render end
+  text_input_ime_draw();
 
   igRender();
   double submit_start=perf_now();
   {
     if(!death_review.frozen) {
+      double game_start=perf_now();
       renderer_render(usr->r, ctx, (vec4){0.086f, 0.109f, 0.133f, 1});
+      perf_add(PERF_DRAW_GAME,game_start);
       if(gdata->curr_screen==PLAYING && gdata->conn==CONNECTED && gdata->data.follow_view && get_snake(gdata,gdata->data.snake_id))
         death_review.last_frame=ctx->current_frame;
     }
     tcontext_clear(ctx, (vec4){0, 0, 0, 1.0f});
+    double ui_start=perf_now();
+    renderer_gpu_ui(usr->r, ctx, false);
     imgui_render(ctx->frames[ctx->current_frame].cmd);
+    renderer_gpu_ui(usr->r, ctx, true);
+    perf_add(PERF_DRAW_UI,ui_start);
     renderer_render_cursor(usr->r, ctx);
     perf_add(PERF_COMMANDS,submit_start);
     tcontext_end(ctx);
@@ -188,12 +272,21 @@ void trender(tenv* env) {
   perf_add(PERF_SUBMIT,submit_start);
   ctx->frame_submitted=true;
   perf_context(gdata->curr_screen==PLAYING && gdata->conn==CONNECTED && !death_review.frozen);
+  link_sample link; link_probe_read(&link);
+  link_probe_low_latency(native_prefs.wifi_low_latency && gdata->curr_screen==PLAYING);
+  perf_link(link.gateway_ms,link.signal,link.scans,link.roams,link.tuned);
   perf_frame(usr->r->bpr->num_instances,usr->r->fdr->num_instances,ctx->present_mode,ctx->image_count);
   renderer_clear_instances(usr->r);
   death_review_finish(env);
 }
 
 void tidle(tenv* env) { ntl_pace(env); }
+void tbackground(tenv* env) {
+  static double last; double now=perf_now();
+  if(last && now-last<1000) perf_minimized(now-last);   // called about every 16 ms while minimized
+  last=now;
+  game_background(env);
+}
 
 void tresize(tenv* env) { ui_viewport_resize(env); }
 

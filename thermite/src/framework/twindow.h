@@ -30,6 +30,8 @@ twindow* twindow_create(tenv* env, trender_func render_func,
 void twindow_poll_input(twindow* window);
 void twindow_wait_input(twindow* window);
 void twindow_toggle_fullscreen(twindow* window);
+bool twindow_is_fullscreen(twindow* window);   // macOS: the system full screen, whatever turned it on
+bool twindow_visible(twindow* window);         // false while minimized, hidden or fully covered (macOS)
 bool twindow_key_down(twindow* window, int key);
 bool twindow_button_down(twindow* window, int button);
 bool twindow_closed(twindow* window);
