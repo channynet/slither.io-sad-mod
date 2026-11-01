@@ -1,4 +1,4 @@
-Slither Native 2.6-ntl0.81 · macOS (Apple Silicon M1~M4 · Intel, Universal)
+Slither Native 2.6-ntl0.82 · macOS (Apple Silicon M1~M4 · Intel, Universal)
 
 설치
 1. ZIP을 풀고 SlitherNative.app을 "응용 프로그램" 폴더로 옮기세요(바탕화면에 둬도 됩니다).

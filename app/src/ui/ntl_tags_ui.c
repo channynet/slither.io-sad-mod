@@ -229,11 +229,12 @@ void ntl_tags_draw(tenv* env) {
     rope_slot* slot = rope_for(s);
     float hx = s->xx + s->fx, hy = s->yy + s->fy, sc = s->sc > 0 ? s->sc : 1;
     float sx = cx + (hx - g->data.view_xx) * gsc, sy = cy + (hy - g->data.view_yy) * gsc;
-    float reach = (60 + (d->w > d->h ? d->w : d->h) * PICTURE_SCALE) * sc * gsc;
+    ntl_tag_look look = ntl_tag_look_for(own);
+    float reach = (60 * look.rope + (d->w > d->h ? d->w : d->h) * PICTURE_SCALE * look.size) * sc * gsc;
     if (sx < -reach || sy < -reach || sx > env->ctx->size[0] + reach || sy > env->ctx->size[1] + reach) { slot->rope.laid = false; continue; }
-    ntl_tag_rope_update(&slot->rope, hx, hy, s->ang, sc, now);
+    ntl_tag_rope_update_len(&slot->rope, hx, hy, s->ang, sc, look.rope, now);
     float alpha = s->alive_amt * (1 - s->dead_amt);
-    alpha = alpha * alpha;
+    alpha = alpha * alpha * look.alpha;
     if (alpha <= .01f) continue;
     float rx[NTL_TAG_ROPE], ry[NTL_TAG_ROPE], turn;
     ntl_tag_rope_pose(&slot->rope, now, rx, ry, &turn);  // (part way between its 60 Hz steps)
@@ -241,13 +242,16 @@ void ntl_tags_draw(tenv* env) {
     for (int k = 0; k < NTL_TAG_ROPE; k++) p[k] = (ImVec2){cx + (rx[k] - g->data.view_xx) * gsc, cy + (ry[k] - g->data.view_yy) * gsc};
     float jb = sc * gsc;
     // the rope: dark outline, then its lighter core (NTL: 5 wide, then 4, 3 and 2 at half strength)
-    rope_path(draw, p); ImDrawList_PathStroke(draw, colour(d->c1, alpha), 0, 5 * jb);
-    for (int wdt = 4; wdt >= 2; wdt--) { rope_path(draw, p); ImDrawList_PathStroke(draw, colour(d->c2, .5f * alpha), 0, wdt * jb); }
+    if (look.width > 0) {
+      float wj = jb * look.width;
+      rope_path(draw, p); ImDrawList_PathStroke(draw, colour(d->c1, alpha), 0, 5 * wj);
+      for (int wdt = 4; wdt >= 2; wdt--) { rope_path(draw, p); ImDrawList_PathStroke(draw, colour(d->c2, .5f * alpha), 0, wdt * wj); }
+    }
     VkDescriptorSet picture = picture_for(tag);
     if (!picture) continue;
     // the picture at the rope's end, turned with it
     ImVec2 e = p[NTL_TAG_ROPE - 1];
-    float k = PICTURE_SCALE * jb, x0 = d->bx * k, y0 = d->by * k, x1 = x0 + d->w * k, y1 = y0 + d->h * k;
+    float k = PICTURE_SCALE * jb * look.size, x0 = d->bx * k, y0 = d->by * k, x1 = x0 + d->w * k, y1 = y0 + d->h * k;
     float c = cosf(turn), sn = sinf(turn);
     #define CORNER(X, Y) (ImVec2){e.x + (X) * c - (Y) * sn, e.y + (X) * sn + (Y) * c}
     ImDrawList_AddImageQuad(draw, (ImTextureRef){NULL, (ImTextureID)picture}, CORNER(x0, y0), CORNER(x1, y0), CORNER(x1, y1), CORNER(x0, y1),
@@ -295,6 +299,28 @@ static void grid(const int* ids, int n) {
     }
     shown++;
   }
+}
+static bool percent(const char* label, float* value, float lo, float hi) {
+  float v = *value * 100;
+  igSliderFloat(label, &v, lo * 100, hi * 100, "%.0f%%", ImGuiSliderFlags_AlwaysClamp);
+  *value = v / 100;
+  return igIsItemDeactivatedAfterEdit();
+}
+void ntl_tags_look_controls(void) {
+  igPushID_Str("ntl-tag-look");
+  ntl_tag_look* l = &ntl_tag_prefs.look;
+  *l = ntl_tag_look_clamp(*l);
+  bool changed = false;
+  changed |= percent("태그 크기", &l->size, .25f, 3);
+  changed |= percent("줄 길이", &l->rope, .2f, 3);
+  changed |= percent("줄 굵기", &l->width, 0, 3);
+  changed |= percent("불투명도", &l->alpha, .1f, 1);
+  if (igCheckbox("다른 사람 NTL 태그에도 적용", &ntl_tag_prefs.look_others)) changed = true;
+  if (igButton("기본값으로", (ImVec2){0})) { *l = NTL_TAG_LOOK_DEFAULT; changed = true; }
+  igSameLine(0, -1);
+  igTextDisabled("내 이미지 태그·기본·NTL 태그 공통 · 자동 저장");
+  if (changed) save();
+  igPopID();
 }
 void ntl_tags_controls(tenv* env) {
   (void)env;

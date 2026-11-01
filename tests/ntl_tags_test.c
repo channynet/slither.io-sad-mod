@@ -58,6 +58,25 @@ int main(int argc, char** argv) {
   ntl_tag_prefs = (ntl_tag_settings){0};
   ntl_tag_settings_load(path);
   assert(ntl_tag_prefs.local_only && ntl_tag_prefs.tag == 590 && ntl_tag_own() == -1 && ntl_tag_own_local() == 590);
+  {                                                    // (a file from before the look: tags as they come)
+    FILE* old = fopen("ntl-tags-old.json", "wb");
+    fprintf(old, "{\"version\":1,\"mode\":1,\"tag\":3,\"show_others\":true,\"local_only\":false,\"auth\":[]}\n"); fclose(old);
+    ntl_tag_settings keep = ntl_tag_prefs;
+    ntl_tag_settings_load("ntl-tags-old.json"); remove("ntl-tags-old.json");
+    assert(ntl_tag_prefs.tag == 3 && ntl_tag_prefs.look.size == 1 && ntl_tag_prefs.look.rope == 1 && ntl_tag_prefs.look.width == 1 && ntl_tag_prefs.look_others);
+    ntl_tag_prefs = keep;
+  }
+  // the shared look: saved, read back, kept in range, mine only when asked
+  ntl_tag_prefs.look = (ntl_tag_look){1.5f, .5f, 0, .8f}; ntl_tag_prefs.look_others = false;
+  assert(ntl_tag_settings_save(path));
+  ntl_tag_prefs = (ntl_tag_settings){0};
+  ntl_tag_settings_load(path);
+  ntl_tag_look own = ntl_tag_look_for(true), other = ntl_tag_look_for(false);
+  assert(fabsf(own.size - 1.5f) < 1e-3f && fabsf(own.rope - .5f) < 1e-3f && own.width == 0 && fabsf(own.alpha - .8f) < 1e-3f);
+  assert(other.size == 1 && other.rope == 1 && other.width == 1 && other.alpha == 1 && !ntl_tag_prefs.look_others);
+  ntl_tag_prefs.look_others = true; assert(ntl_tag_look_for(false).size > 1.4f);
+  ntl_tag_look wild = ntl_tag_look_clamp((ntl_tag_look){99, -1, NAN, 0});
+  assert(wild.size == 3 && fabsf(wild.rope - .2f) < 1e-6f && wild.width == 1 && fabsf(wild.alpha - .1f) < 1e-6f);
   ntl_tag_prefs.tag = 7; assert(ntl_tag_own() == 7 && ntl_tag_own_local() == 7);       // (a free tag: everyone sees it anyway)
   ntl_tag_prefs.tag = 590; ntl_tag_prefs.mode = 0; assert(ntl_tag_own_local() == -1);  // my own image tag instead
   remove(path);
@@ -101,6 +120,13 @@ int main(int argc, char** argv) {
       last_x = ex; last_y = ey;
     }
     assert(worst < 2.5f);                          // (the head moves about 0.9-1.3 a frame)
+  }
+  // a longer rope (the shared look): its end lies twice as far back, the tie point stays put
+  {
+    ntl_tag_rope a = {0}, b = {0}; float hx = 0; double tt = 0;
+    for (int i = 0; i < 400; i++) { tt += 16; hx += 3; ntl_tag_rope_update(&a, hx, 0, 0, 1, tt); ntl_tag_rope_update_len(&b, hx, 0, 0, 1, 2, tt); }
+    float la = a.x[0] - a.x[NTL_TAG_ROPE - 1], lb = b.x[0] - b.x[NTL_TAG_ROPE - 1];
+    assert(a.x[0] == b.x[0] && la > 20 && fabsf(lb / la - 2) < .1f);
   }
   // a long pause: laid out afresh behind the head
   t += 5000; ntl_tag_rope_update(&r, x, y, 0, 1, t);

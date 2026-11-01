@@ -8,7 +8,7 @@
 static ntl_tag_def defs[NTL_TAG_MAX];
 static int public_count;
 static int first_online_custom = 581;   // NTL lists bought tags fetched online below 581, down from 580
-ntl_tag_settings ntl_tag_prefs = {.mode = 0, .tag = -1, .show_others = true};
+ntl_tag_settings ntl_tag_prefs = {.mode = 0, .tag = -1, .show_others = true, .look = {1, 1, 1, 1}, .look_others = true};
 
 static bool parse_colour(const char* s, uint32_t* out) {
   if (s[0] != '#' || strlen(s) != 7) return false;
@@ -89,8 +89,13 @@ int ntl_tag_for_official_skin(int skin) {
 // NTL's rope: each point is pulled 3.33 (x scale) out from the one before it along their line,
 // with a spring (1/12) and damping (0.838) per 60 Hz step, and never further than 4 from it.
 void ntl_tag_rope_update(ntl_tag_rope* r, float hx, float hy, float ang, float scale, double now) {
+  ntl_tag_rope_update_len(r, hx, hy, ang, scale, 1, now);
+}
+void ntl_tag_rope_update_len(ntl_tag_rope* r, float hx, float hy, float ang, float scale, float length, double now) {
   if (!(scale > 0)) scale = 1;
-  float ax = hx - 8 * cosf(ang) * scale, ay = hy - 8 * sinf(ang) * scale;
+  float ax = hx - 8 * cosf(ang) * scale, ay = hy - 8 * sinf(ang) * scale;   // (the tie point stays put)
+  if (!(length > 0)) length = 1;
+  scale *= length;                                    // (the links: longer or shorter)
   const float gap = 4, pull = 3.3332f, spring = .08333f, damp = .838f;
   if (!r->laid || !(now - r->time < 250) || now < r->time) {
     for (int k = 0; k < NTL_TAG_ROPE; k++) {
@@ -184,12 +189,17 @@ void ntl_tag_settings_load(const char* path) {
   FILE* f = fopen(path, "rb");
   if (!f) return;
   char data[8192]; size_t n = fread(data, 1, sizeof data - 1, f); fclose(f); data[n] = 0;
-  ntl_tag_settings p = {.mode = 0, .tag = -1, .show_others = true};
+  ntl_tag_settings p = {.mode = 0, .tag = -1, .show_others = true, .look = {1, 1, 1, 1}, .look_others = true};
   const char* q;
   if ((q = strstr(data, "\"mode\":"))) p.mode = atoi(q + 7) == 1;
   if ((q = strstr(data, "\"tag\":"))) { int t = atoi(q + 6); p.tag = t >= -1 && t < NTL_TAG_MAX ? t : -1; }
   if ((q = strstr(data, "\"show_others\":"))) p.show_others = strncmp(q + 14, "false", 5) != 0;
   if ((q = strstr(data, "\"local_only\":"))) p.local_only = !strncmp(q + 13, "true", 4);
+  if ((q = strstr(data, "\"look\":["))) {
+    ntl_tag_look l;
+    if (sscanf(q + 8, "%f,%f,%f,%f", &l.size, &l.rope, &l.width, &l.alpha) == 4) p.look = ntl_tag_look_clamp(l);
+  }
+  if ((q = strstr(data, "\"look_others\":"))) p.look_others = strncmp(q + 14, "false", 5) != 0;
   if ((q = strstr(data, "\"auth\":["))) {
     q += 8;
     while (p.auth_count < 32 && (q = strchr(q, '['))) {
@@ -206,8 +216,10 @@ bool ntl_tag_settings_save(const char* path) {
   FILE* f = fopen(path, "wb");
   if (!f) return false;
   const ntl_tag_settings* p = &ntl_tag_prefs;
-  fprintf(f, "{\"version\":1,\"mode\":%d,\"tag\":%d,\"show_others\":%s,\"local_only\":%s,\"auth\":[", p->mode, p->tag,
-          p->show_others ? "true" : "false", p->local_only ? "true" : "false");
+  ntl_tag_look l = ntl_tag_look_clamp(p->look);
+  fprintf(f, "{\"version\":1,\"mode\":%d,\"tag\":%d,\"show_others\":%s,\"local_only\":%s,\"look\":[%.3f,%.3f,%.3f,%.3f],\"look_others\":%s,\"auth\":[",
+          p->mode, p->tag, p->show_others ? "true" : "false", p->local_only ? "true" : "false",
+          l.size, l.rope, l.width, l.alpha, p->look_others ? "true" : "false");
   for (int i = 0; i < p->auth_count; i++) fprintf(f, "%s[%d,\"%s\"]", i ? "," : "", p->auth[i].id, p->auth[i].pass_md5);
   fprintf(f, "]}\n");
   return fclose(f) == 0;
@@ -223,6 +235,13 @@ void ntl_tag_auth_set(int id, const char* pass_md5) {
   if (pass_md5 && strlen(pass_md5) == 32 && hex32(pass_md5) && p->auth_count < 32) {
     p->auth[p->auth_count].id = id; memcpy(p->auth[p->auth_count].pass_md5, pass_md5, 33); p->auth_count++;
   }
+}
+static float within(float v, float lo, float hi, float fallback) { return !isfinite(v) ? fallback : v < lo ? lo : v > hi ? hi : v; }
+ntl_tag_look ntl_tag_look_clamp(ntl_tag_look l) {
+  return (ntl_tag_look){within(l.size, .25f, 3, 1), within(l.rope, .2f, 3, 1), within(l.width, 0, 3, 1), within(l.alpha, .1f, 1, 1)};
+}
+ntl_tag_look ntl_tag_look_for(bool own) {
+  return own || ntl_tag_prefs.look_others ? ntl_tag_look_clamp(ntl_tag_prefs.look) : NTL_TAG_LOOK_DEFAULT;
 }
 int ntl_tag_own(void) {
   int t = ntl_tag_prefs.tag;

@@ -263,6 +263,7 @@ static void controls(tenv* env,personal_image* p) {
   igPopID();
 }
 void personal_tag_controls(tenv* env) {
+  if(igCollapsingHeader_TreeNodeFlags("태그 공통 설정",0)) ntl_tags_look_controls();
   if(igCollapsingHeader_TreeNodeFlags("NTL 태그",0)) ntl_tags_controls(env);
   if(igCollapsingHeader_TreeNodeFlags("내 이미지 태그",ImGuiTreeNodeFlags_DefaultOpen)) {
     igTextWrapped("머리에 연결되어 뒤따라 도는 태그입니다. 일반 이미지는 위쪽 중앙을 연결점으로 사용합니다. 내 화면에만 보입니다."); controls(env,&tag);
@@ -282,6 +283,8 @@ void personal_image_editor(tenv* env) {
         fire_skin_controls(); igEndTabItem();
       }
       if(igBeginTabItem("태그",NULL,0)) {
+        igSeparatorText("태그 공통 설정");
+        ntl_tags_look_controls();
         ntl_tags_controls(env);
         igSeparatorText("내 이미지 태그");
         igTextWrapped("머리에 매다는 이미지 태그 · 변경 내용은 스킨 미리보기에 반영되고 자동 저장됩니다.");
@@ -313,11 +316,13 @@ void personal_cosmetic_preview(tenv* env,float x,float y,float scale,float direc
 }
 static void draw_tag(float x,float y,float scale,float direction,float trailing,float swing,float alpha) {
   float points[8],cord[14];
-  tag_attachment_geometry(points,cord,x,y,tag.size,tag.tex->size[0],tag.tex->size[1],
-      scale,direction,trailing+swing*.35f,tag.gap,tag.angle+swing*57.2957795f);
+  ntl_tag_look look=ntl_tag_look_for(true);           // (the shared tag look: size, rope, opacity)
+  alpha*=look.alpha;
+  tag_attachment_geometry(points,cord,x,y,tag.size*look.size,tag.tex->size[0],tag.tex->size[1],
+      scale,direction,trailing+swing*.35f,tag.gap*look.rope,tag.angle+swing*57.2957795f);
   ImDrawList* draw=igGetWindowDrawList();
-  float thickness=fmaxf(1,1.5f*scale);
-  for(int i=0;i<6;i++) {
+  float thickness=fmaxf(1,1.5f*scale)*look.width;
+  for(int i=0;i<6 && look.width>0;i++) {
     ImVec2 a={cord[2*i],cord[2*i+1]},b={cord[2*i+2],cord[2*i+3]};
     ImDrawList_AddLine(draw,a,b,igGetColorU32_Vec4((ImVec4){0,0,0,alpha}),thickness+1);
     ImDrawList_AddLine(draw,a,b,igGetColorU32_Vec4((ImVec4){.6f,.6f,.6f,alpha}),thickness);
