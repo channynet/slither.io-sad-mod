@@ -20,7 +20,7 @@ jobs:
         run: python3 tools/build_unix.py --jobs 3
       - name: Verify architectures and signature
         run: |
-          lipo -verify_arch arm64 x86_64 dist/SlitherNative.app/Contents/MacOS/SlitherNative
+          lipo dist/SlitherNative.app/Contents/MacOS/SlitherNative -verify_arch arm64 x86_64
           codesign --verify --deep --strict dist/SlitherNative.app
           otool -L dist/SlitherNative.app/Contents/MacOS/SlitherNative
       - name: Test windowed and fullscreen startup

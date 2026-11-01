@@ -32,6 +32,9 @@ for fullscreen in (False, True):
                 if frames < 2:
                     log.seek(0)
                     raise RuntimeError(f'No rendering telemetry: {log.read()}')
+                saved = json.loads((data / 'native-settings.json').read_text())
+                if saved['fullscreen'] != fullscreen:
+                    raise RuntimeError(f'Fullscreen state was not applied: {saved["fullscreen"]}')
                 print(f'PASS: fullscreen={fullscreen}, alive after 12 seconds, {frames} frames recorded', flush=True)
             finally:
                 if process.poll() is None:
