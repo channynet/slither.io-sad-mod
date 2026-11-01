@@ -26,7 +26,9 @@ for fullscreen in (False, True):
                 if process.poll() is not None:
                     log.seek(0)
                     try:
-                        debug = subprocess.run(['lldb', '--batch', '-o', 'run', '-o', 'thread backtrace all',
+                        debug = subprocess.run(['lldb', '--batch', '-k', 'thread backtrace all',
+                                                '-o', 'breakpoint set -n __chk_fail_overflow',
+                                                '-o', 'run', '-o', 'thread backtrace all',
                                                 '--', str(bundle / 'MacOS/SlitherNative')],
                                                cwd=data, env=env, capture_output=True, text=True, timeout=45)
                         print(debug.stdout[-16000:] + debug.stderr[-2000:], flush=True)
