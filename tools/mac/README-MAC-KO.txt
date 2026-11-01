@@ -1,4 +1,4 @@
-Slither Native 2.6-ntl0.82 · macOS (Apple Silicon M1~M4 · Intel, Universal)
+Slither Native 2.6-ntl0.82-macfix1 · macOS (Apple Silicon M1~M4 · Intel, Universal)
 
 설치
 1. ZIP을 풀고 SlitherNative.app을 "응용 프로그램" 폴더로 옮기세요(바탕화면에 둬도 됩니다).
@@ -63,3 +63,5 @@ E 누르는 동안: 가장 가까운 적의 몸에 히트박스에 맞춰 붙어
 필요 환경: macOS 11(Big Sur) 이상. 2020년 이후 모든 맥북(M1·M2·M3·M4, 2020 Intel)에서 동작하는 Universal 앱입니다.
 그래픽은 Vulkan을 Metal로 옮겨 주는 MoltenVK(Apache 2.0)를 앱 안에 넣어 사용합니다.
 LICENSE 및 THIRD-PARTY-NOTICES.md와 licenses 폴더를 함께 보관하세요.
+
+이번 수정: 저장된 전체 화면 설정으로 시작할 때 창 정보가 준비되기 전에 호출되던 크기 변경 처리 오류를 수정했습니다. 기존 설정은 그대로 사용할 수 있습니다.

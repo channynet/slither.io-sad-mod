@@ -50,6 +50,8 @@ void twindow_request_refresh(twindow* twindow) {
 
 void window_resize_callback(GLFWwindow* window, int width, int height) {
   tenv* env = glfwGetWindowUserPointer(window);
+  // Cocoa can synchronously resize a window while it is still being created.
+  if (!env || !env->wnd) return;
   env->wnd->size[0] = width;
   env->wnd->size[1] = height;
 
@@ -165,11 +167,20 @@ twindow* twindow_create(tenv* env, trender_func render_func,
   glfwGetFramebufferSize(window->handle, &window->size[0], &window->size[1]);
   glfwSetFramebufferSizeCallback(window->handle, window_resize_callback);
 #ifdef __APPLE__
-  if (env->config.fullscreen) mac_set_fullscreen(window->handle, true);
   mac_disable_app_nap();
 #endif
 
   return window;
+}
+
+void twindow_finish_init(twindow* window) {
+#ifdef __APPLE__
+  // toggleFullScreen: can invoke the framebuffer callback before it returns.
+  // tentry calls this only after env->wnd, env->ctx and tinit are complete.
+  if (window->env->config.fullscreen) mac_set_fullscreen(window->handle, true);
+#else
+  (void)window;
+#endif
 }
 
 static void twindow_refresh(twindow* window) {

@@ -154,6 +154,16 @@ for extra in ['README-MAC-KO.txt', 'LICENSE', 'THIRD-PARTY-NOTICES.md']:
     src = ROOT / extra if (ROOT / extra).exists() else ROOT / 'tools/mac' / extra
     if src.exists(): shutil.copy2(src, stage / extra)
 if (ROOT / 'licenses').is_dir(): shutil.copytree(ROOT / 'licenses', stage / 'licenses')
+for relative in ['glfw/LICENSE.md', 'app/src/cimgui/LICENSE', 'app/src/cimgui/imgui/LICENSE.txt',
+                 'app/src/external/LICENSE.txt', 'thermite/src/external/vma/LICENSE.txt',
+                 'thermite/src/external/stb/LICENSE.txt', 'thermite/include/cglm/LICENSE.txt',
+                 'third_party/moltenvk/LICENSE', 'third_party/vulkan/LICENSE.md',
+                 'third_party/vulkan/LICENSES/Apache-2.0.txt', 'third_party/vulkan/LICENSES/MIT.txt']:
+    source = ROOT / relative
+    if source.exists():
+        destination = stage / 'licenses' / relative
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(source, destination)
 archive = OUT / f'{name}.zip'
 if archive.exists(): archive.unlink()
 subprocess.run(['ditto', '-c', '-k', '--sequesterRsrc', '--keepParent', str(stage), str(archive)], check=True)

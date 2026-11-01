@@ -7,6 +7,7 @@ static twindow window;
 static tcontext context;
 static int gpu_resizes, app_resizes, polls, waits;
 static int framebuffer_width = 1280, framebuffer_height = 720;
+static void* window_user_pointer = &env;
 extern void window_resize_callback(GLFWwindow*, int, int);
 
 // Unused platform entry points must not be reached by this headless test.
@@ -28,7 +29,7 @@ int glfwGetKey(GLFWwindow* w,int k) { assert(0); return 0; }
 int glfwGetMouseButton(GLFWwindow* w,int b) { assert(0); return 0; }
 int glfwWindowShouldClose(GLFWwindow* w) { assert(0); return 0; }
 
-void* glfwGetWindowUserPointer(GLFWwindow* handle) { return &env; }
+void* glfwGetWindowUserPointer(GLFWwindow* handle) { return window_user_pointer; }
 void glfwPollEvents(void) { polls++; }
 void glfwWaitEvents(void) { waits++; }
 void glfwGetFramebufferSize(GLFWwindow* handle, int* w, int* h) {
@@ -42,6 +43,12 @@ static void resize(tenv* e) { app_resizes++; }
 static void render(tenv* e) { assert(!"resize callbacks must never render"); }
 
 int main(void) {
+  // A startup resize may arrive before the environment/window is attached.
+  window_user_pointer = NULL;
+  window_resize_callback(NULL, 1920, 1201);
+  window_user_pointer = &env;
+  window_resize_callback(NULL, 1920, 1201);
+  assert(gpu_resizes == 0 && app_resizes == 0 && !window._refresh);
   env.wnd = &window; env.ctx = &context;
   window.env = &env; window._resize_func = resize; window._render_func = render;
   context.swapchain_ok = true;

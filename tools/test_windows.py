@@ -21,6 +21,7 @@ with tempfile.TemporaryDirectory(prefix='preferences-test-', dir=BUILD) as sandb
     print(result.stdout)
 
 for name, sources, extra in [
+    ('window_startup', ['thermite/src/core/tentry.c'], [*flags]),
     ('gradient_skin', ['app/src/ui/skin_gradient.c','app/src/ui/fire_skin.c'], [*flags,'-DCIMGUI_NO_EXPORT','-ffunction-sections','-fdata-sections','-Wl,--gc-sections']),
     ('target_identity', [], []),
     ('ping_tracker', [], ['-D_WIN32_WINNT=0x0A00','-lws2_32']),
