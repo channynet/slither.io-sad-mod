@@ -25,6 +25,13 @@ for fullscreen in (False, True):
                 time.sleep(12)
                 if process.poll() is not None:
                     log.seek(0)
+                    try:
+                        debug = subprocess.run(['lldb', '--batch', '-o', 'run', '-o', 'thread backtrace all',
+                                                '--', str(bundle / 'MacOS/SlitherNative')],
+                                               cwd=data, env=env, capture_output=True, text=True, timeout=45)
+                        print(debug.stdout[-16000:] + debug.stderr[-2000:], flush=True)
+                    except subprocess.TimeoutExpired:
+                        print('Debugger timed out', flush=True)
                     raise RuntimeError(f'fullscreen={fullscreen}: exit {process.returncode}\n{log.read()}')
                 perf = data / 'performance.csv'
                 rows = list(csv.DictReader(perf.read_text().splitlines())) if perf.exists() else []
