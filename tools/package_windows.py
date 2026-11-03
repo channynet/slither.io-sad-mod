@@ -72,6 +72,7 @@ LICENSE 및 THIRD-PARTY-NOTICES.md와 licenses 폴더를 함께 보관하세요.
 
 def main():
     OUTPUT.mkdir(parents=True, exist_ok=True)
+    build.BUILD.mkdir(parents=True, exist_ok=True)
     # Fresh staging directories prevent files from an earlier personal run leaking in.
     with tempfile.TemporaryDirectory(prefix='clean-package-', dir=build.BUILD) as temp:
         staging = Path(temp).resolve()
