@@ -1,7 +1,7 @@
 #include "tentry.h"
 
 int tentry(int argc, char** argv, size_t usr_size) {
-  tenv env;
+  tenv env = {0};
 
   env.config.argc = argc;
   env.config.argv = argv;
@@ -17,6 +17,10 @@ int tentry(int argc, char** argv, size_t usr_size) {
   tlaunch(&env);
 
   env.wnd = twindow_create(&env, trender, tresize);
+  if (!env.wnd) {
+    free(env.usr);
+    return 1;
+  }
   env.kb = tkeyboard_create(env.wnd);
   env.ms = tmouse_create(env.wnd);
   if ((env.ctx = tcontext_create(env.wnd, env.config.vsync, env.config.fif)) == NULL) {
@@ -24,6 +28,7 @@ int tentry(int argc, char** argv, size_t usr_size) {
     exit(1);
   }
   tinit(&env);
+  twindow_finish_init(env.wnd);
 
   while (env.config.running) {
     // Nothing can be shown while minimized (size 0 on Windows) or, on macOS, while the window

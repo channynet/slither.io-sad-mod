@@ -421,6 +421,7 @@ void got_packet(tenv* env, uint8_t* a, int a_len) {
         usr->r->global.lview[1] = gdata->data.lview_yy;
 
         gdata->data.snake_id = id;
+        gdata->data.spawned_ms = glfwGetTime() * 1000.0;
         gdata->data.dead = false;
         gdata->data.follow_view = true;
 
@@ -1415,8 +1416,24 @@ void got_packet(tenv* env, uint8_t* a, int a_len) {
       m += nl;
     }
   } else if (cmd == 'k') {
-    gdata->data.kills++;
-    duel_kill_confirmed();
+    // [snake id u16][that snake's kills u24]. Some servers send it to everyone for every kill,
+    // and for every snake when one joins: only my own snake's count, and only its rises are kills.
+    // The first one this life is where its count starts (no kill) when it is 0 or comes with the
+    // snake (servers that count from the start of the round send theirs then); later, each rise
+    // is that many kills (at least one). So the kills here start from 0 every life whatever the server counts.
+    if (dlen >= 5) {
+      int id = a[1] << 8 | a[2], count = a[3] << 16 | a[4] << 8 | a[5];
+      if (id == gdata->data.snake_id && count != gdata->data.kills_reported) {
+        int before = gdata->data.kills_reported;
+        bool baseline = before < 0 && (count == 0 || glfwGetTime() * 1000.0 - gdata->data.spawned_ms < 2000);
+        int rise = baseline ? 0 : before < 0 || count < before ? 1 : count - before;   // (a later notice is a kill even if its count went down)
+        gdata->data.kills_reported = count;
+        if (rise > 0) { gdata->data.kills += rise; duel_kill_confirmed(); }
+      }
+    } else {                                           // (no id: as before, one more)
+      gdata->data.kills++;
+      duel_kill_confirmed();
+    }
   } else if (cmd == 'v') {
     server_note_end("game over packet from the server (v=%d)",dlen>0?(int)a[1]:-1);
     if(dlen<1 || a[1]!=2) duel_game_over(gdata);

@@ -155,6 +155,18 @@ void ui_overlay(tenv* env) {
         usr->imgui_data.mono_font_bold[usrs->stats_font_size]->LegacySize);
     igTextColored((ImVec4){1, 1, 1, 0.7}, "%d", gdata->data.score);
     igPopFont();
+    // A battle dome (a small arena: official servers are 21600 across, the dome 3400): this
+    // life's kills next to the length as well.
+    if (gdata->data.grd > 0 && gdata->data.grd < 10000) {
+      igSameLine(0, char_sz.x * 2);
+      igTextColored((ImVec4){1, 1, 1, 0.3}, "\ueaeb");
+      igSameLine(0, -1);
+      igPushFont(
+          usr->imgui_data.mono_font_bold[usrs->stats_font_size],
+          usr->imgui_data.mono_font_bold[usrs->stats_font_size]->LegacySize);
+      igTextColored(gdata->data.kills > 0 ? (ImVec4){1, .82f, .35f, 0.9f} : (ImVec4){1, 1, 1, 0.7f}, "%d", gdata->data.kills);
+      igPopFont();
+    }
 
     igPopFont();
 

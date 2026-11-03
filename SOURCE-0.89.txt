@@ -1,0 +1,20 @@
+Slither Native 2.6-ntl0.89 source (from Claude's working copy)
+
+How this folder was made:
+  1. native-client at commit a68690f (2.6-ntl0.82 + network watch), all tracked files (git archive).
+  2. Every source/test/tool file of 0.89 copied over it (app/src, thermite, glfw, tests, tools, README*, .github).
+     Line endings were kept as each file had them at a68690f.
+  app/res is unchanged from a68690f (ntl-tags, ntl-tags-online and the rest are already there).
+
+What 0.83-0.89 changed (details: README-NATIVE.md, top sections):
+  0.83 tag rope stepped per frame (no shaking), tag sharing between players of this client
+       (network/tag_share.c, http_simple.c, tag_share_proto.c, tools/tag-share-worker),
+       J J hides tags, battle dome kills next to the length, tag pictures made on a thread (ui/picture_worker.c)
+  0.84-0.86 kill notices: only my snake's, counted per life; built-in share relay address
+  0.87 team without a nickname (NoName), renaming reaches the team at once
+  0.88 Codex branch codex/macos-fullscreen-fix merged in (twindow_finish_init, version label, tests,
+       tools/test_mac_startup.py, .github/workflows/build-mac-fix.yml) + skin editor snprintf
+  0.89 separate looks for my tag and other players' tags (look / look_other in ntl-tags.json)
+
+Build (Windows): python tools/prepare_windows.py ; python tools/build_windows.py
+Tests: python tools/test_windows.py  (network_pump_test fails as it did before)

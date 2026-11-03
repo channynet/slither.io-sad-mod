@@ -307,9 +307,15 @@ int ntl_teammate_tag(tenv* env,int sid) {
   }
   return -2;
 }
+// My name on the NTL team server: my id, then my nickname. With no nickname NTL's server leaves
+// me out of the team, so then a stand-in name goes instead (teammates see "NoName").
+static void team_identity(const char* nickname,char* out,size_t cap) {
+  const char* n=nickname; while(*n==' ') n++;
+  snprintf(out,cap,"%s%s",prefix,*n ? nickname : "NoName");
+}
 const char* ntl_own_identity(tenv* env) {
   static char identity[257];
-  snprintf(identity,sizeof(identity),"%s%s",prefix,env->usr->usrs.nickname);
+  team_identity(env->usr->usrs.nickname,identity,sizeof(identity));
   return identity;
 }
 void ntl_lightweight_settings(user_settings* settings) {
@@ -332,6 +338,11 @@ static void update_stats(void) {
     average=sum/sample_count; p99=sorted[(sample_count-1)*99/100]; stats_at=t;
   }
 }
+// A teammate's name as shown: their NTL nick without its 8-letter id ("이름 없음" when they have none).
+static void member_name(const char* nick,char* out,size_t cap) {
+  ntl_plain(strlen(nick)>=8?nick+8:nick,out,cap);
+  if(!out[0]) copy(out,cap,"이름 없음");
+}
 static void read_snapshot(tenv* env) {
   if(!TryEnterCriticalSection(&shared.lock)) return;
   active=shared.enabled;
@@ -341,12 +352,17 @@ static void read_snapshot(tenv* env) {
     copy(status,sizeof(status),shared.status);
   }
   LeaveCriticalSection(&shared.lock);
+  for(int i=0;i<visible.count;) {             // me under the name I had before renaming (until NTL forgets it): not a teammate
+    if(prefix[0] && !strncmp(visible.rows[i].nick,prefix,8) && strcmp(visible.rows[i].nick,own_identity)) {
+      memmove(&visible.rows[i],&visible.rows[i+1],sizeof(visible.rows[0])*(size_t)(visible.count-i-1)); visible.count--;
+    } else i++;
+  }
   for(int i=0;i<visible.count;i++) {
     ntl_member* m=&visible.rows[i]; const char* old="";
     for(int j=0;j<previous.count;j++) if(!strcmp(m->nick,previous.rows[j].nick)) { old=previous.rows[j].message; break; }
     if(strcmp(m->message,old) && m->message[0]) {
       const char* delta=!strncmp(m->message,old,strlen(old)) ? m->message+strlen(old) : m->message;
-      char plain[2048],name[257]; ntl_plain(delta,plain,sizeof(plain)); ntl_plain(m->nick+8,name,sizeof(name)); log_line(name,plain);
+      char plain[2048],name[257]; ntl_plain(delta,plain,sizeof(plain)); member_name(m->nick,name,sizeof(name)); log_line(name,plain);
     }
   }
   team_membership_build(&membership,&visible,own_identity,visible_server);
@@ -363,7 +379,7 @@ static void read_snapshot(tenv* env) {
     bool before=false;
     for(int j=0;j<previous.count;j++) if(!strcmp(m->nick,previous.rows[j].nick)) { before=previous.rows[j].sos; break; }
     if(!before) {
-      char name[257],text[400]; ntl_plain(m->nick+8,name,sizeof(name));
+      char name[257],text[400]; member_name(m->nick,name,sizeof(name));
       bool here=!strcmp(m->server,env->usr->usrs.ipv4);
       snprintf(text,sizeof(text),"SOS · %s%s",name,here ? " (같은 서버)" : m->server[0] ? " (다른 서버)" : "");
       toast_show(text,1,.4f,.35f,5);
@@ -432,11 +448,11 @@ static void choose_profile(int index) {
 static void connect_team(tuser_data* usr) {
   if(!shared.thread) return;
   strip_spaces(auth); strip_spaces(team);
-  if(strlen(auth)<16 || strlen(team)<16 || !usr->usrs.nickname[0]) { copy(status,sizeof(status),"인증키 · 팀 ID · 게임 닉네임이 필요합니다"); return; }
+  if(strlen(auth)<16 || strlen(team)<16) { copy(status,sizeof(status),"인증키 · 팀 ID가 필요합니다"); return; }   // (no nickname needed: see team_identity)
   save_team_keys();
   EnterCriticalSection(&shared.lock);
   copy(shared.request.auth,sizeof(shared.request.auth),auth); copy(shared.request.team,sizeof(shared.request.team),team);
-  snprintf(own_identity,sizeof(own_identity),"%s%s",prefix,usr->usrs.nickname);
+  team_identity(usr->usrs.nickname,own_identity,sizeof(own_identity));
   copy(shared.request.nick,sizeof(shared.request.nick),own_identity);
   shared.enabled=true; shared.generation++; shared.updated=0; memset(&shared.reply,0,sizeof(shared.reply));
   LeaveCriticalSection(&shared.lock);
@@ -528,7 +544,7 @@ static void draw_team_minimap(tenv* env) {
     if((mouse.x-p.x)*(mouse.x-p.x)+(mouse.y-p.y)*(mouse.y-p.y)<81) hovered=member;
   }
   if(hovered) {
-    char name[257]; ntl_plain(hovered->nick+8,name,sizeof(name));
+    char name[257]; member_name(hovered->nick,name,sizeof(name));
     ImFont* font=usr->imgui_data.regular_font[FONT_SIZE_SMALL]; igPushFont(font,font->LegacySize);
     igSetTooltip("%s%s\n점수 %d · %llu초 전%s",name,hovered->sos ? " · SOS" : "",hovered->score,
       (unsigned long long)(age/1000),demo ? " · 시험 위치" : "");
@@ -749,6 +765,7 @@ static void draw_chat(tenv* env) {
 void ntl_frame(tenv* env) {
   tuser_data* usr=env->usr; game_data* game=&usr->gdata;
   update_stats(); capture_mouse=false; chat_typing=false;
+  bool renamed=false;
   if(TryEnterCriticalSection(&shared.lock)) {
     bool changed=revision!=shared.revision;
     ntl_request* r=&shared.request;
@@ -765,6 +782,15 @@ void ntl_frame(tenv* env) {
       r->ping_peak=peak;
     }
     r->sos=sos_on; r->bot=usr->usrs.hotkeys[HOTKEY_BOT].active;
+    {                                                // my nickname changed: teammates see the new one (once it has
+      static char typed[257]; static ULONGLONG since;  //  stayed the same for a second, not every letter typed;
+      char identity[257]; team_identity(usr->usrs.nickname,identity,sizeof(identity));   //  even while a text box has the keyboard)
+      ULONGLONG now=GetTickCount64();
+      if(strcmp(identity,typed)) { copy(typed,sizeof(typed),identity); since=now; }
+      if(shared.enabled && !demo && prefix[0] && strcmp(identity,own_identity) && now-since>=1000) {
+        copy(own_identity,sizeof(own_identity),identity); copy(r->nick,sizeof(r->nick),identity); renamed=true;
+      }
+    }
     if(r->playing) {
       r->x=me->xx; r->y=me->yy; r->sid=me->ntl_id; r->score=game->data.score; r->rank=game->data.rank; r->tag=ntl_tag_own();
       copy(r->server,sizeof(r->server),usr->usrs.ipv4);
@@ -773,6 +799,7 @@ void ntl_frame(tenv* env) {
     else r->target[0]=0;
     LeaveCriticalSection(&shared.lock);
     if(changed) read_snapshot(env);
+    if(renamed) SetEvent(shared.wake);
   }
   if(!native_settings_open) draw_team_minimap(env);
   if(sos_on && game->curr_screen==PLAYING) {      // own SOS: a red badge at the top
@@ -959,7 +986,7 @@ void ntl_frame(tenv* env) {
       igPlotLines_FloatPtr("##frametimes",samples,sample_count,sample_count==600 ? sample_next : 0,"프레임 간격 (ms)",0,70,(ImVec2){-1,60},sizeof(float));
 
       if(igCollapsingHeader_TreeNodeFlags("팀원 목록",0)) for(int i=0;i<visible.count;i++) {
-        ntl_member* m=&visible.rows[i]; char name[257]; ntl_plain(m->nick+8,name,sizeof(name));
+        ntl_member* m=&visible.rows[i]; char name[257]; member_name(m->nick,name,sizeof(name));
         igTextWrapped("%s · %d · %s",name,m->score,m->server);
       }
       capture_mouse|=igIsWindowHovered(ImGuiHoveredFlags_RootAndChildWindows);

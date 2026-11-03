@@ -9,6 +9,7 @@
 #include "ntl_tags_ui.h"
 #include "../game/ntl_tags.h"
 #include <math.h>
+#include <external/stb/stb_image_write.h>
 #ifdef _WIN32
 #include <windows.h>
 #include <commdlg.h>
@@ -145,7 +146,7 @@ void personal_tag_prepare(tenv* env) {
     if(p->descriptor) igImplVulkan_RemoveTexture(p->descriptor);
     if(p->tex) destroy_texture(env->ctx,p->tex);
     p->descriptor=d; p->tex=next;
-    if(!p->library.read_only) snprintf(p->message,sizeof(p->message),"내 화면에만 표시 · 아이템별 자동 저장");
+    if(!p->library.read_only) snprintf(p->message,sizeof(p->message),"내 화면(태그 공유를 켜면 이 클라이언트 사용자에게도) · 아이템별 자동 저장");
   }
 }
 #ifndef _WIN32
@@ -263,10 +264,10 @@ static void controls(tenv* env,personal_image* p) {
   igPopID();
 }
 void personal_tag_controls(tenv* env) {
-  if(igCollapsingHeader_TreeNodeFlags("태그 공통 설정",0)) ntl_tags_look_controls();
+  if(igCollapsingHeader_TreeNodeFlags("태그 크기·줄 (내 태그 / 다른 사람)",0)) ntl_tags_look_controls();
   if(igCollapsingHeader_TreeNodeFlags("NTL 태그",0)) ntl_tags_controls(env);
   if(igCollapsingHeader_TreeNodeFlags("내 이미지 태그",ImGuiTreeNodeFlags_DefaultOpen)) {
-    igTextWrapped("머리에 연결되어 뒤따라 도는 태그입니다. 일반 이미지는 위쪽 중앙을 연결점으로 사용합니다. 내 화면에만 보입니다."); controls(env,&tag);
+    igTextWrapped("머리에 연결되어 뒤따라 도는 태그입니다. 일반 이미지는 위쪽 중앙을 연결점으로 사용합니다. 내 화면과, 태그 공유를 켠 이 클라이언트 사용자에게 보입니다."); controls(env,&tag);
   }
   if(igCollapsingHeader_TreeNodeFlags("내 cosmetic",0)) controls(env,&cosmetic);
 }
@@ -283,7 +284,7 @@ void personal_image_editor(tenv* env) {
         fire_skin_controls(); igEndTabItem();
       }
       if(igBeginTabItem("태그",NULL,0)) {
-        igSeparatorText("태그 공통 설정");
+        igSeparatorText("태그 크기·줄 (내 태그 / 다른 사람)");
         ntl_tags_look_controls();
         ntl_tags_controls(env);
         igSeparatorText("내 이미지 태그");
@@ -314,12 +315,12 @@ void personal_cosmetic_preview(tenv* env,float x,float y,float scale,float direc
     (ImVec2){points[0],points[1]},(ImVec2){points[2],points[3]},(ImVec2){points[4],points[5]},(ImVec2){points[6],points[7]},
     (ImVec2){0,0},(ImVec2){1,0},(ImVec2){1,1},(ImVec2){0,1},igGetColorU32_Vec4((ImVec4){1,1,1,alpha}));
 }
-static void draw_tag(float x,float y,float scale,float direction,float trailing,float swing,float alpha) {
+void personal_tag_draw_image(VkDescriptorSet picture,int tw,int th,float size,float gap,float angle,
+    float x,float y,float scale,float direction,float trailing,float swing,float alpha,ntl_tag_look look) {
   float points[8],cord[14];
-  ntl_tag_look look=ntl_tag_look_for(true);           // (the shared tag look: size, rope, opacity)
-  alpha*=look.alpha;
-  tag_attachment_geometry(points,cord,x,y,tag.size*look.size,tag.tex->size[0],tag.tex->size[1],
-      scale,direction,trailing+swing*.35f,tag.gap*look.rope,tag.angle+swing*57.2957795f);
+  alpha*=look.alpha;                                  // (the shared tag look: size, rope, opacity)
+  tag_attachment_geometry(points,cord,x,y,size*look.size,tw,th,
+      scale,direction,trailing+swing*.35f,gap*look.rope,angle+swing*57.2957795f);
   ImDrawList* draw=igGetWindowDrawList();
   float thickness=fmaxf(1,1.5f*scale)*look.width;
   for(int i=0;i<6 && look.width>0;i++) {
@@ -327,9 +328,70 @@ static void draw_tag(float x,float y,float scale,float direction,float trailing,
     ImDrawList_AddLine(draw,a,b,igGetColorU32_Vec4((ImVec4){0,0,0,alpha}),thickness+1);
     ImDrawList_AddLine(draw,a,b,igGetColorU32_Vec4((ImVec4){.6f,.6f,.6f,alpha}),thickness);
   }
-  ImDrawList_AddImageQuad(draw,(ImTextureRef){NULL,(ImTextureID)tag.descriptor},
+  ImDrawList_AddImageQuad(draw,(ImTextureRef){NULL,(ImTextureID)picture},
     (ImVec2){points[0],points[1]},(ImVec2){points[2],points[3]},(ImVec2){points[4],points[5]},(ImVec2){points[6],points[7]},
     (ImVec2){0,0},(ImVec2){1,0},(ImVec2){1,1},(ImVec2){0,1},igGetColorU32_Vec4((ImVec4){1,1,1,alpha}));
+}
+static void draw_tag(float x,float y,float scale,float direction,float trailing,float swing,float alpha) {
+  personal_tag_draw_image(tag.descriptor,tag.tex->size[0],tag.tex->size[1],tag.size,tag.gap,tag.angle,
+      x,y,scale,direction,trailing,swing,alpha,ntl_tag_look_for(true));
+}
+// ---- sharing my image tag: its picture as a small PNG (at most 192 px across, 120 KB)
+static struct { unsigned char* png; size_t length; char hash[17]; int item; bool tried; } shared={.item=-1};
+typedef struct { unsigned char* data; size_t length, cap; } png_buffer;
+static void png_out(void* context,void* data,int size) {
+  png_buffer* b=context;
+  if(b->length+size>b->cap) {
+    size_t cap=b->cap?b->cap*2:65536; while(cap<b->length+size) cap*=2;
+    unsigned char* grown=realloc(b->data,cap); if(!grown) return;
+    b->data=grown; b->cap=cap;
+  }
+  memcpy(b->data+b->length,data,size); b->length+=size;
+}
+static int imax(int a,int b) { return a>b?a:b; }
+static unsigned char* small_png(const tag_image* src,int most,size_t* length) {
+  float k=fminf(1,(float)most/fmaxf(src->width,src->height));
+  int w=imax(1,(int)roundf(src->width*k)),h=imax(1,(int)roundf(src->height*k));
+  unsigned char* pixels=malloc((size_t)w*h*4); if(!pixels) return NULL;
+  for(int y=0;y<h;y++) for(int x=0;x<w;x++) {          // (box filter over the source pixels each covers)
+    int x0=x*src->width/w,x1=imax(x0+1,(x+1)*src->width/w),y0=y*src->height/h,y1=imax(y0+1,(y+1)*src->height/h);
+    float sum[4]={0},n=0;
+    for(int sy=y0;sy<y1;sy++) for(int sx=x0;sx<x1;sx++) {
+      const unsigned char* p=src->rgba+(sy*src->width+sx)*4; float a=p[3];
+      for(int c=0;c<3;c++) sum[c]+=p[c]*a;
+      sum[3]+=a; n++;
+    }
+    unsigned char* o=pixels+(y*w+x)*4;
+    for(int c=0;c<3;c++) o[c]=sum[3]>0?(unsigned char)fminf(255,roundf(sum[c]/sum[3])):0;
+    o[3]=(unsigned char)roundf(sum[3]/n);
+  }
+  png_buffer b={0};
+  int ok=stbi_write_png_to_func(png_out,&b,w,h,4,pixels,w*4);
+  free(pixels);
+  if(!ok) { free(b.data); return NULL; }
+  *length=b.length; return b.data;
+}
+bool personal_tag_share(share_image* out) {
+  if(!tag.enabled || !tag.tex || tag.library.selected<0 || tag.library.selected>=tag.library.count) return false;
+  if(shared.item!=tag.library.selected) {
+    free(shared.png); shared.png=NULL; shared.length=0; shared.item=tag.library.selected; shared.tried=false;
+  }
+  if(!shared.png && !shared.tried) {
+    shared.tried=true;
+    tag_image src={0};
+    if(load_item(&tag,tag.library.selected,&src)) {
+      for(int most=192;most>=48 && !shared.png;most-=48) {
+        shared.png=small_png(&src,most,&shared.length);
+        if(shared.png && shared.length>120*1024) { free(shared.png); shared.png=NULL; }
+      }
+      tag_image_free(&src);
+      if(shared.png) tag_share_hash(shared.png,shared.length,shared.hash);
+    }
+  }
+  if(!shared.png) return false;
+  *out=(share_image){shared.png,shared.length,"",tag.size,tag.gap,tag.angle,tag.sway};
+  memcpy(out->hash,shared.hash,17);
+  return true;
 }
 void personal_tag_preview(tenv* env,float x,float y,float scale,float direction,float alpha) {
   (void)env;
@@ -346,7 +408,7 @@ void personal_tag_draw(tenv* env) {
   float y=env->ctx->size[1]*0.5f+(me->yy+me->fy-game->data.view_yy)*game->data.gsc;
   float alpha=fminf(1,fmaxf(0,me->alive_amt));
   personal_cosmetic_preview(env,x,y,me->sc*game->data.gsc,me->ehang,alpha);
-  if(!tag.enabled || !tag.tex || ntl_tag_prefs.mode==1) { tag_motion.valid=false; tag_swing.valid=preview_swing.valid=false; return; }   // (an NTL tag chosen instead)
+  if(!tag.enabled || !tag.tex || ntl_tag_prefs.mode==1 || ntl_tags_hidden) { tag_motion.valid=false; tag_swing.valid=preview_swing.valid=false; return; }   // (an NTL tag chosen instead)
   float trailing=tag_follow(&tag_motion,me->ehang,game->data.ctm,me->generation);
   float swing=tag.sway?tag_sway_update(&tag_swing,me->ehang,game->data.ctm,me->generation):0;
   draw_tag(x,y,me->sc*game->data.gsc,me->ehang,trailing,swing,alpha);

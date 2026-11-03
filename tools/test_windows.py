@@ -21,6 +21,7 @@ with tempfile.TemporaryDirectory(prefix='preferences-test-', dir=BUILD) as sandb
     print(result.stdout)
 
 for name, sources, extra in [
+    ('window_startup', ['thermite/src/core/tentry.c'], [*flags]),
     ('gradient_skin', ['app/src/ui/skin_gradient.c','app/src/ui/fire_skin.c'], [*flags,'-DCIMGUI_NO_EXPORT','-ffunction-sections','-fdata-sections','-Wl,--gc-sections']),
     ('target_identity', [], []),
     ('ping_tracker', [], ['-D_WIN32_WINNT=0x0A00','-lws2_32']),
@@ -65,6 +66,8 @@ for name, sources, extra in [
     ('wall_status', [], []),
     ('body_hug', [], []),
     ('ntl_tags', ['app/src/game/ntl_tags.c'], []),
+    ('tag_share', ['app/src/network/tag_share_proto.c','app/src/external/mongoose.c'], ['-lws2_32']),
+    ('picture_worker', ['app/src/ui/picture_worker.c','app/src/ui/tag_image.c','thermite/src/external/stb/stb_image.c'], ['-I',str(ROOT / 'thermite/src')]),
     ('screenshot_png', ['thermite/src/external/stb/stb_image_write.c','thermite/src/external/stb/stb_image.c'], ['-I',str(ROOT / 'thermite/src')]),
 ]:
     executable = BUILD / f'{name}_test.exe'
@@ -74,6 +77,7 @@ for name, sources, extra in [
         args = [str(executable)]
         if name == 'tag_image': args.append(str(ROOT / 'app/res/personal/black-wings.png'))
         if name == 'ntl_tags': args.append(str(ROOT / 'app/res/ntl-tags/tags.txt'))
+        if name == 'picture_worker': args.append(str(ROOT / 'app/res/ntl-tags/t5.png'))
         result = subprocess.run(args,cwd=sandbox,check=True,capture_output=True,text=True,encoding="utf-8",errors="replace")
         print(result.stdout)
 

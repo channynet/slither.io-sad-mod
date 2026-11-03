@@ -11,6 +11,7 @@
 #include "ui/personal_tag.h"
 #include "ui/ntl_tags_ui.h"
 #include "network/ntl_tag_server.h"
+#include "network/tag_share.h"
 #include "ui/head_face_assets.h"
 #include "network/link_probe.h"
 #include "game/perf_trace.h"
@@ -243,6 +244,7 @@ void trender(tenv* env) {
   }
   ntl_frame(env);
   ntl_tag_server_tick(env);
+  tag_share_tick(env);
   native_preferences_tick(&usr->usrs,false);
   // render end
   text_input_ime_draw();

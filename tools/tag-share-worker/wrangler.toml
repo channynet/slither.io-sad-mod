@@ -1,0 +1,17 @@
+# Tag sharing relay for Slither Native (same-client players see each other's tags).
+# Deploy: npx wrangler login   then   npx wrangler deploy
+name = "slither-tag-share"
+main = "src/index.js"
+compatibility_date = "2025-04-01"
+
+[[durable_objects.bindings]]
+name = "ROOMS"
+class_name = "Room"
+
+[[durable_objects.bindings]]
+name = "IMAGES"
+class_name = "Images"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["Room", "Images"]

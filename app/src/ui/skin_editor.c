@@ -352,8 +352,8 @@ void ui_skin_editor(tenv* env) {
         float ncy = igGetCursorPosY();
         float a = 0.8f;
 
-        char label[4] = {0};
-        sprintf(label, "a%d", aid);
+        char label[16] = {0};
+        snprintf(label, sizeof label, "a%d", aid);
         igPushStyleColor_Vec4(ImGuiCol_Text, (ImVec4){1, 0.5f, 0.5f, 1});
         if (!is_no_accessory) {
           igPushStyleVar_Float(ImGuiStyleVar_FrameRounding, scale / 2);

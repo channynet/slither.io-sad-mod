@@ -139,6 +139,8 @@ typedef struct game_data {
     int rank;
     int slither_count;
     int kills;
+    double spawned_ms;                // when my snake appeared (glfwGetTime ms)
+    int kills_reported;               // the server's count in its last kill notice for my snake (-1: none this life)
     int snake_id;
     int kd_l_frb;
     int kd_r_frb;

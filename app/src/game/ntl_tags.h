@@ -47,9 +47,8 @@ void ntl_tag_write_skin_header(uint8_t header[8], int tag, int skin);
 // The tag NTL shows on an official skin when none is chosen (-1: none).
 int ntl_tag_for_official_skin(int skin);
 
-// The rope: point 0 is tied 8 units behind the head; the others trail it (NTL's spring rope,
-// stepped at 60 per second whatever the frame rate). Between steps it is drawn part way from the
-// last step to the next (ntl_tag_rope_pose), so it glides on any frame rate instead of jumping.
+// The rope: point 0 is tied 8 units behind the head; the others trail it (NTL's spring rope, as
+// NTL steps it by default: once per drawn frame, scaled by the frame's time).
 typedef struct {
   float x[NTL_TAG_ROPE], y[NTL_TAG_ROPE], vx[NTL_TAG_ROPE], vy[NTL_TAG_ROPE];
   float px[NTL_TAG_ROPE], py[NTL_TAG_ROPE];   // the step before (for drawing in between)
@@ -60,7 +59,7 @@ typedef struct {
 void ntl_tag_rope_update(ntl_tag_rope* r, float head_x, float head_y, float ang, float scale, double now_ms);
 // The same with its links lengthened (length 1: as NTL; the shared tag look's rope length).
 void ntl_tag_rope_update_len(ntl_tag_rope* r, float head_x, float head_y, float ang, float scale, float length, double now_ms);
-// Where to draw it now (after ntl_tag_rope_update with the same time): points and picture angle.
+// Where to draw it now (after ntl_tag_rope_update): points and picture angle.
 void ntl_tag_rope_pose(const ntl_tag_rope* r, double now_ms, float* x, float* y, float* turn);
 
 // MD5 of a string as 32 lowercase hex digits (how NTL sends tag passwords).
@@ -79,8 +78,10 @@ typedef struct {
   bool local_only;                  // the bought tag chosen is worn without its password: on my screen only
   int auth_count;
   struct { int id; char pass_md5[33]; } auth[32];   // bought tags whose password was accepted
-  ntl_tag_look look;                // the shared look (see ntl_tag_look_for)
-  bool look_others;                 // other players' tags too (not just mine)
+  ntl_tag_look look;                // how my own tag looks (see ntl_tag_look_for)
+  ntl_tag_look look_other;          // how other players' tags look
+  bool share;                       // share tags with players of this client (network/tag_share.h)
+  char share_url[160];              // its relay ("https://....workers.dev"); "" for the built-in one
 } ntl_tag_settings;
 extern ntl_tag_settings ntl_tag_prefs;
 void ntl_tag_settings_load(const char* path);
@@ -93,8 +94,7 @@ int ntl_tag_own(void);
 // The NTL tag drawn on my own snake here: what others see, or a bought tag worn without its
 // password on my screen only (after the warning). -1: none.
 int ntl_tag_own_local(void);
-// The look to draw a tag with (mine, or another player's): the saved one kept in range, or as it
-// comes for others when the look is for mine only.
+// The look to draw a tag with: mine, or other players' (each set on its own), kept in range.
 ntl_tag_look ntl_tag_look_for(bool own);
 ntl_tag_look ntl_tag_look_clamp(ntl_tag_look l);
 

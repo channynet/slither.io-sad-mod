@@ -77,8 +77,7 @@ void ui_title_screen(tenv* env) {
   game_data* gdata = &usr->gdata;
 
   // version
-  char version_str[16] = {0};
-  sprintf(version_str, "v%s", APP_VERSION);
+  static const char version_str[] = "v" APP_VERSION;
   ImVec2 vtxtsz; igCalcTextSize(&vtxtsz, version_str, NULL, false, -1);
   igSetCursorPosX(ctx->size[0] - vtxtsz.x - style->WindowPadding.x);
   igPushFont(usr->imgui_data.regular_font[FONT_SIZE_SMALL],

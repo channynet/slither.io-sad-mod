@@ -50,6 +50,7 @@ void display_hotkeys(tuser_data* usr, float offset, font_size sz) {
   show_hot_key_str(usr,"H H / F8",(vec3){1,1,0.7f},"Team / chat",offset,sz);
   show_hot_key_str(usr,"Enter",(vec3){1,1,0.7f},"Chat",offset,sz);
   show_hot_key_str(usr,"Backspace x2",(vec3){1,1,0.7f},"Target selector",offset,sz);
+  show_hot_key_str(usr,"J J",(vec3){1,1,0.7f},"Hide / show tags",offset,sz);
   show_hot_key_str(usr,"Ctrl+F4",(vec3){1,1,0.7f},"Freeze on death",offset,sz);
   show_hot_key_str(usr,". .",(vec3){1,1,0.7f},"Settings",offset,sz);
   show_hot_key_str(usr,"Ctrl+F5/6/7",(vec3){1,1,0.7f},"FPS / resolution / low FX",offset,sz);
@@ -614,6 +615,7 @@ void game_data_reset(tenv* env) {
   gdata->data.score = 0;
   gdata->data.rank = 0;
   gdata->data.kills = 0;
+  gdata->data.kills_reported = -1;
   gdata->data.slither_count = 0;
   gdata->data.snake_id = -1;
   gdata->data.ping_follow = GOOD_PING;

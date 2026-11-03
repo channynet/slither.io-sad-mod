@@ -3,6 +3,7 @@
 #include "../user.h"
 #include "../network/ntl.h"
 #include "../ui/personal_tag.h"
+#include "../ui/ntl_tags_ui.h"
 #include "death_review.h"
 #include "target_marker.h"
 #include "input.h"
@@ -79,6 +80,7 @@ void native_shortcuts(tenv* env) {
   }
   if(doubled[GLFW_KEY_8]) s->instant_restart=!s->instant_restart;
   if(doubled[GLFW_KEY_MINUS] || doubled[GLFW_KEY_KP_SUBTRACT]) ntl_clear_chat();   // NTL: - -
+  if(doubled[GLFW_KEY_J]) ntl_tags_hidden=!ntl_tags_hidden;                     // J J: tags hidden / shown
   for(int i=0;i<NUM_HOTKEYS;i++) {
     hotkey* hk=&s->hotkeys[i]; if(hk->key<0 || hk->key>GLFW_KEY_LAST) continue;
     if(hk->mode==1) hk->active=twindow_key_down(env->wnd,hk->key);

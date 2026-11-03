@@ -8,7 +8,7 @@
 static ntl_tag_def defs[NTL_TAG_MAX];
 static int public_count;
 static int first_online_custom = 581;   // NTL lists bought tags fetched online below 581, down from 580
-ntl_tag_settings ntl_tag_prefs = {.mode = 0, .tag = -1, .show_others = true, .look = {1, 1, 1, 1}, .look_others = true};
+ntl_tag_settings ntl_tag_prefs = {.mode = 0, .tag = -1, .show_others = true, .look = {1, 1, 1, 1}, .look_other = {1, 1, 1, 1}, .share = true};
 
 static bool parse_colour(const char* s, uint32_t* out) {
   if (s[0] != '#' || strlen(s) != 7) return false;
@@ -86,20 +86,24 @@ int ntl_tag_for_official_skin(int skin) {
   }
 }
 
-// NTL's rope: each point is pulled 3.33 (x scale) out from the one before it along their line,
-// with a spring (1/12) and damping (0.838) per 60 Hz step, and never further than 4 from it.
+// NTL's rope, as NTL draws it by default: stepped once per drawn frame, its pull, spring, damping
+// and speed scaled by the frame's time (6.94 to 16.66 ms: 144 to 60 frames a second), each point
+// pulled out along its line from the one before and never further than 4 (x scale x rope length).
+// (Stepping it at a fixed 60 a second instead left the tie point, which moves with the head every
+// frame, now one step ahead of the rest and now level with it: the first link shook.)
 void ntl_tag_rope_update(ntl_tag_rope* r, float hx, float hy, float ang, float scale, double now) {
   ntl_tag_rope_update_len(r, hx, hy, ang, scale, 1, now);
 }
+#define ROPE_MIN_FRAME 6.94
+#define ROPE_MAX_FRAME 16.66
 void ntl_tag_rope_update_len(ntl_tag_rope* r, float hx, float hy, float ang, float scale, float length, double now) {
   if (!(scale > 0)) scale = 1;
-  float ax = hx - 8 * cosf(ang) * scale, ay = hy - 8 * sinf(ang) * scale;   // (the tie point stays put)
   if (!(length > 0)) length = 1;
-  scale *= length;                                    // (the links: longer or shorter)
-  const float gap = 4, pull = 3.3332f, spring = .08333f, damp = .838f;
+  float ax = hx - 8 * cosf(ang) * scale, ay = hy - 8 * sinf(ang) * scale;   // (the tie point: 8 behind the head)
+  float gap = 4 * length * scale;
   if (!r->laid || !(now - r->time < 250) || now < r->time) {
     for (int k = 0; k < NTL_TAG_ROPE; k++) {
-      r->x[k] = ax - cosf(ang) * k * gap * scale; r->y[k] = ay - sinf(ang) * k * gap * scale;
+      r->x[k] = ax - cosf(ang) * k * gap; r->y[k] = ay - sinf(ang) * k * gap;
       r->vx[k] = r->vy[k] = 0;
     }
     r->turn = r->pturn = ang + 3.14159265f; r->time = now; r->laid = true;
@@ -107,39 +111,35 @@ void ntl_tag_rope_update_len(ntl_tag_rope* r, float hx, float hy, float ang, flo
     return;
   }
   r->x[0] = ax; r->y[0] = ay;
-  int steps = (int)((now - r->time) / 16.667);
-  if (steps > 4) { steps = 4; r->time = now - 4 * 16.667; }
-  for (int s = 0; s < steps; s++) {
-    memcpy(r->px, r->x, sizeof r->x); memcpy(r->py, r->y, sizeof r->y); r->pturn = r->turn;
-    for (int k = 1; k < NTL_TAG_ROPE; k++) {
-      float px = r->x[k - 1], py = r->y[k - 1];
-      float a = atan2f(r->y[k] - py, r->x[k] - px);
-      float tx = px + pull * cosf(a) * scale, ty = py + pull * sinf(a) * scale;
-      r->vx[k] += spring * (tx - r->x[k]); r->vy[k] += spring * (ty - r->y[k]);
-      r->x[k] += r->vx[k]; r->y[k] += r->vy[k];
-      r->vx[k] *= damp; r->vy[k] *= damp;
-      float dx = r->x[k] - px, dy = r->y[k] - py;
-      if (dx * dx + dy * dy > gap * gap * scale * scale) {
-        a = atan2f(dy, dx);
-        r->x[k] = px + gap * cosf(a) * scale; r->y[k] = py + gap * sinf(a) * scale;
-      }
+  double dt = now - r->time;
+  r->time = now;
+  float mb = (float)(dt > ROPE_MAX_FRAME ? ROPE_MAX_FRAME : dt < ROPE_MIN_FRAME ? ROPE_MIN_FRAME : dt);
+  float pull = .2f * mb * length * scale, spring = .005f * mb, damp = .05f * mb, speed = mb / 17;
+  memcpy(r->px, r->x, sizeof r->x); memcpy(r->py, r->y, sizeof r->y); r->pturn = r->turn;
+  for (int k = 1; k < NTL_TAG_ROPE; k++) {
+    float px = r->x[k - 1], py = r->y[k - 1];
+    float a = atan2f(r->y[k] - py, r->x[k] - px);
+    float tx = px + pull * cosf(a), ty = py + pull * sinf(a);
+    r->vx[k] += spring * (tx - r->x[k]); r->vy[k] += spring * (ty - r->y[k]);
+    r->x[k] += speed * r->vx[k]; r->y[k] += speed * r->vy[k];
+    r->vx[k] *= damp; r->vy[k] *= damp;
+    float dx = r->x[k] - px, dy = r->y[k] - py;
+    if (dx * dx + dy * dy > gap * gap) {
+      a = atan2f(dy, dx);
+      r->x[k] = px + gap * cosf(a); r->y[k] = py + gap * sinf(a);
     }
-    // the picture turns towards the rope's end direction (NTL: 0.15 of the way each frame)
-    int e = NTL_TAG_ROPE - 1;
-    float want = atan2f(r->y[e] - r->y[e - 1], r->x[e] - r->x[e - 1]);
-    float d = remainderf(want - r->turn, 6.28318531f);
-    r->turn = remainderf(r->turn + .15f * d, 6.28318531f);
-    r->time += 16.667;
   }
-  if (!isfinite(r->x[NTL_TAG_ROPE - 1]) || !isfinite(r->turn)) r->laid = false;
+  // the picture turns towards the rope's end direction (NTL: 0.15 of the way each frame)
+  int e = NTL_TAG_ROPE - 1;
+  float want = atan2f(r->y[e] - r->y[e - 1], r->x[e] - r->x[e - 1]);
+  float d = remainderf(want - r->turn, 6.28318531f);
+  r->turn = remainderf(r->turn + .15f * d, 6.28318531f);
+  if (!isfinite(r->x[e]) || !isfinite(r->turn)) r->laid = false;
 }
 void ntl_tag_rope_pose(const ntl_tag_rope* r, double now, float* x, float* y, float* turn) {
-  float a = (float)((now - r->time) / 16.667);
-  if (!(a >= 0)) a = 0;
-  if (a > 1) a = 1;
-  x[0] = r->x[0]; y[0] = r->y[0];                     // (the tie point: where the head is now)
-  for (int k = 1; k < NTL_TAG_ROPE; k++) { x[k] = r->px[k] + (r->x[k] - r->px[k]) * a; y[k] = r->py[k] + (r->y[k] - r->py[k]) * a; }
-  *turn = r->pturn + remainderf(r->turn - r->pturn, 6.28318531f) * a;
+  (void)now;                                          // (stepped every frame: drawn as it is)
+  memcpy(x, r->x, sizeof r->x); memcpy(y, r->y, sizeof r->y);
+  *turn = r->turn;
 }
 
 // ---- MD5 (RFC 1321)
@@ -189,7 +189,7 @@ void ntl_tag_settings_load(const char* path) {
   FILE* f = fopen(path, "rb");
   if (!f) return;
   char data[8192]; size_t n = fread(data, 1, sizeof data - 1, f); fclose(f); data[n] = 0;
-  ntl_tag_settings p = {.mode = 0, .tag = -1, .show_others = true, .look = {1, 1, 1, 1}, .look_others = true};
+  ntl_tag_settings p = {.mode = 0, .tag = -1, .show_others = true, .look = {1, 1, 1, 1}, .look_other = {1, 1, 1, 1}, .share = true};
   const char* q;
   if ((q = strstr(data, "\"mode\":"))) p.mode = atoi(q + 7) == 1;
   if ((q = strstr(data, "\"tag\":"))) { int t = atoi(q + 6); p.tag = t >= -1 && t < NTL_TAG_MAX ? t : -1; }
@@ -199,7 +199,17 @@ void ntl_tag_settings_load(const char* path) {
     ntl_tag_look l;
     if (sscanf(q + 8, "%f,%f,%f,%f", &l.size, &l.rope, &l.width, &l.alpha) == 4) p.look = ntl_tag_look_clamp(l);
   }
-  if ((q = strstr(data, "\"look_others\":"))) p.look_others = strncmp(q + 14, "false", 5) != 0;
+  if ((q = strstr(data, "\"look_other\":["))) {     // (others' own look)
+    ntl_tag_look l;
+    if (sscanf(q + 14, "%f,%f,%f,%f", &l.size, &l.rope, &l.width, &l.alpha) == 4) p.look_other = ntl_tag_look_clamp(l);
+  } else if ((q = strstr(data, "\"look_others\":")) && strncmp(q + 14, "false", 5) != 0)
+    p.look_other = p.look;                             // (0.82-0.88: one look, for others too unless turned off)
+  if ((q = strstr(data, "\"share\":"))) p.share = strncmp(q + 8, "false", 5) != 0;
+  if ((q = strstr(data, "\"share_url\":\""))) {
+    q += 13; size_t n = 0;
+    while (q[n] && q[n] != '"' && n + 1 < sizeof p.share_url) n++;
+    if (q[n] == '"') { memcpy(p.share_url, q, n); p.share_url[n] = 0; }
+  }
   if ((q = strstr(data, "\"auth\":["))) {
     q += 8;
     while (p.auth_count < 32 && (q = strchr(q, '['))) {
@@ -216,10 +226,13 @@ bool ntl_tag_settings_save(const char* path) {
   FILE* f = fopen(path, "wb");
   if (!f) return false;
   const ntl_tag_settings* p = &ntl_tag_prefs;
-  ntl_tag_look l = ntl_tag_look_clamp(p->look);
-  fprintf(f, "{\"version\":1,\"mode\":%d,\"tag\":%d,\"show_others\":%s,\"local_only\":%s,\"look\":[%.3f,%.3f,%.3f,%.3f],\"look_others\":%s,\"auth\":[",
+  ntl_tag_look l = ntl_tag_look_clamp(p->look), o = ntl_tag_look_clamp(p->look_other);
+  char url[sizeof p->share_url]; size_t n = 0;              // (kept to plain URL characters)
+  for (const char* c = p->share_url; *c && n + 1 < sizeof url; c++) if ((unsigned char)*c > 32 && *c != '"' && *c != '\\') url[n++] = *c;
+  url[n] = 0;
+  fprintf(f, "{\"version\":1,\"mode\":%d,\"tag\":%d,\"show_others\":%s,\"local_only\":%s,\"look\":[%.3f,%.3f,%.3f,%.3f],\"look_other\":[%.3f,%.3f,%.3f,%.3f],\"share\":%s,\"share_url\":\"%s\",\"auth\":[",
           p->mode, p->tag, p->show_others ? "true" : "false", p->local_only ? "true" : "false",
-          l.size, l.rope, l.width, l.alpha, p->look_others ? "true" : "false");
+          l.size, l.rope, l.width, l.alpha, o.size, o.rope, o.width, o.alpha, p->share ? "true" : "false", url);
   for (int i = 0; i < p->auth_count; i++) fprintf(f, "%s[%d,\"%s\"]", i ? "," : "", p->auth[i].id, p->auth[i].pass_md5);
   fprintf(f, "]}\n");
   return fclose(f) == 0;
@@ -241,7 +254,7 @@ ntl_tag_look ntl_tag_look_clamp(ntl_tag_look l) {
   return (ntl_tag_look){within(l.size, .25f, 3, 1), within(l.rope, .2f, 3, 1), within(l.width, 0, 3, 1), within(l.alpha, .1f, 1, 1)};
 }
 ntl_tag_look ntl_tag_look_for(bool own) {
-  return own || ntl_tag_prefs.look_others ? ntl_tag_look_clamp(ntl_tag_prefs.look) : NTL_TAG_LOOK_DEFAULT;
+  return ntl_tag_look_clamp(own ? ntl_tag_prefs.look : ntl_tag_prefs.look_other);
 }
 int ntl_tag_own(void) {
   int t = ntl_tag_prefs.tag;

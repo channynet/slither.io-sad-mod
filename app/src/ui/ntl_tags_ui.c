@@ -6,6 +6,10 @@
 #include "../network/ntl.h"
 #include "../network/ntl_tag_server.h"
 #include "../network/ntl_tags_online.h"
+#include "picture_worker.h"
+#include "personal_tag.h"
+#include "tag_attachment.h"
+#include "../network/tag_share.h"
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -15,10 +19,10 @@
 #define TEXTURES_KEPT 160            // pictures kept on the GPU (the least recently drawn go first)
 #define PICTURE_SCALE .285f          // NTL: picture units to world units (x snake scale)
 
-typedef struct { texture* tex; VkDescriptorSet descriptor; int used; bool failed; } picture;
+typedef struct { texture* tex; VkDescriptorSet descriptor; int used; bool failed, asked; } picture;
 static picture pictures[NTL_TAG_MAX];
 static int frame, live, wanted[8], wanted_count;
-typedef struct { ntl_tag_rope rope; int id; uint64_t generation; int used; bool taken; } rope_slot;
+typedef struct { ntl_tag_rope rope; tag_attachment follow; tag_sway sway; int id; uint64_t generation; int used; bool taken; } rope_slot;
 static rope_slot ropes[1024];
 // Each snake's own rope, by its id and generation (a dying snake and the new one with its id keep
 // separate ropes, so neither is laid out afresh every frame).
@@ -35,6 +39,14 @@ static rope_slot* rope_for(const snake* s) {
   memset(r, 0, sizeof *r); r->id = s->id; r->generation = s->generation; r->used = frame; r->taken = true;
   return r;
 }
+// Other players' shared image tags (network/tag_share.h): their pictures, by hash.
+#define SHARE_PICTURE_KEY 10000
+#define SHARE_SLOTS 64
+typedef struct { char hash[17]; texture* tex; VkDescriptorSet descriptor; unsigned stamp; int used; bool asked, failed; } share_picture;
+static share_picture shared[SHARE_SLOTS];
+static unsigned share_stamp;
+static void share_picture_ready(tenv* env, picture_result* r);
+static void share_pictures_trim(tenv* env);
 static bool loaded;
 // settings UI
 static int pick = -1;                 // a bought tag picked, waiting for its password
@@ -49,81 +61,6 @@ void ntl_tags_init(tenv* env) {
   ntl_tag_passwords_recheck();
 }
 
-// The picture as NTL draws it: the image 21 px in from the box's corner, on a soft black shadow
-// (canvas shadowBlur 20: three box blurs of the alpha come close).
-static void blur(float* a, int w, int h, int r) {
-  float* tmp = malloc(sizeof(float) * (w > h ? w : h));
-  for (int pass = 0; pass < 3; pass++) {
-    for (int y = 0; y < h; y++) {                         // rows
-      float* row = a + y * w, sum = 0;
-      for (int x = -r; x <= r; x++) sum += x >= 0 && x < w ? row[x] : 0;
-      for (int x = 0; x < w; x++) {
-        tmp[x] = sum / (2 * r + 1);
-        int out = x - r, in = x + r + 1;
-        sum += (in < w ? row[in] : 0) - (out >= 0 ? row[out] : 0);
-      }
-      memcpy(row, tmp, sizeof(float) * w);
-    }
-    for (int x = 0; x < w; x++) {                         // columns
-      float sum = 0;
-      for (int y = -r; y <= r; y++) sum += y >= 0 && y < h ? a[y * w + x] : 0;
-      for (int y = 0; y < h; y++) {
-        tmp[y] = sum / (2 * r + 1);
-        int out = y - r, in = y + r + 1;
-        sum += (in < h ? a[in * w + x] : 0) - (out >= 0 ? a[out * w + x] : 0);
-      }
-      for (int y = 0; y < h; y++) a[y * w + x] = tmp[y];
-    }
-  }
-  free(tmp);
-}
-static unsigned char* build_picture(int id, int* w_out, int* h_out) {
-  const ntl_tag_def* d = ntl_tag_get(id);
-  if (!d) return NULL;
-  char path[96];
-  if (ntl_tag_is_online(id)) snprintf(path, sizeof path, NTL_TAGS_ONLINE_DIR "/t%d.png", id);
-  else snprintf(path, sizeof path, "app/res/ntl-tags/t%d.png", id);
-  tag_image src = {0};
-  FILE* f = fopen(path, "rb");
-  if (!f && ntl_tag_is_online(id)) {   // (not fetched here: the copy shipped with the client)
-    snprintf(path, sizeof path, NTL_TAGS_ONLINE_BUNDLED "/t%d.png", id);
-    f = fopen(path, "rb");
-  }
-  if (!f) return NULL;
-  fseek(f, 0, SEEK_END); long length = ftell(f); rewind(f);
-  unsigned char* bytes = length > 0 && length < 4 * 1024 * 1024 ? malloc(length) : NULL;
-  bool read = bytes && fread(bytes, 1, length, f) == (size_t)length;
-  fclose(f);
-  bool decoded = read && tag_image_decode(bytes, length, &src);
-  free(bytes);
-  if (!decoded) return NULL;
-  int w = d->w, h = d->h;
-  float* shadow = calloc((size_t)w * h, sizeof(float));
-  unsigned char* out = calloc((size_t)w * h, 4);
-  if (!shadow || !out) { free(shadow); free(out); tag_image_free(&src); return NULL; }
-  for (int y = 0; y < src.height; y++) for (int x = 0; x < src.width; x++) {
-    int tx = x + 21, ty = y + 21;
-    if (tx < w && ty < h) shadow[ty * w + tx] = src.rgba[(y * src.width + x) * 4 + 3] / 255.f;
-  }
-  blur(shadow, w, h, 6);
-  for (int y = 0; y < h; y++) for (int x = 0; x < w; x++) {
-    unsigned char* o = out + (y * w + x) * 4;
-    float sa = shadow[y * w + x], r = 0, g = 0, b = 0, a = 0;
-    int sx = x - 21, sy = y - 21;
-    if (sx >= 0 && sy >= 0 && sx < src.width && sy < src.height) {
-      const unsigned char* p = src.rgba + (sy * src.width + sx) * 4;
-      a = p[3] / 255.f; r = p[0] / 255.f; g = p[1] / 255.f; b = p[2] / 255.f;
-    }
-    float oa = a + sa * (1 - a);                          // the picture over its black shadow
-    o[0] = (unsigned char)lroundf(oa > 0 ? 255 * r * a / oa : 0);
-    o[1] = (unsigned char)lroundf(oa > 0 ? 255 * g * a / oa : 0);
-    o[2] = (unsigned char)lroundf(oa > 0 ? 255 * b * a / oa : 0);
-    o[3] = (unsigned char)lroundf(255 * oa);
-  }
-  free(shadow); tag_image_free(&src);
-  *w_out = w; *h_out = h;
-  return out;
-}
 static VkDescriptorSet picture_for(int id) {
   if (id < 0 || id >= NTL_TAG_MAX) return 0;
   picture* p = &pictures[id];
@@ -160,28 +97,51 @@ void ntl_tags_prepare(tenv* env) {
       pictures[oldest].descriptor = 0; pictures[oldest].tex = NULL; live--;
     }
   }
-  // make the pictures asked for last frame (a few at a time)
-  for (int i = 0; i < wanted_count && i < 4; i++) {
-    int id = wanted[i], w, h;
+  share_pictures_trim(env);
+  // pictures asked for last frame: read and made on the picture thread (not here: a big one took
+  // several ms), at most two textures made per frame from what it finished
+  for (int i = 0; i < wanted_count; i++) {
+    int id = wanted[i];
+    const ntl_tag_def* d = ntl_tag_get(id);
     picture* p = &pictures[id];
-    if (p->descriptor || p->failed) continue;
-    unsigned char* pixels = build_picture(id, &w, &h);
-    texture* tex = pixels ? create_rgba_texture(env->ctx, pixels, w, h) : NULL;
-    free(pixels);
+    if (!d || p->descriptor || p->failed || p->asked) continue;
+    picture_job job = {.key = id, .stamp = (unsigned)ntl_tags_revision(), .kind = PICTURE_NTL_BOX, .box_w = d->w, .box_h = d->h};
+    if (ntl_tag_is_online(id)) {
+      snprintf(job.path, sizeof job.path, NTL_TAGS_ONLINE_DIR "/t%d.png", id);
+      snprintf(job.fallback, sizeof job.fallback, NTL_TAGS_ONLINE_BUNDLED "/t%d.png", id);   // (the copy shipped with the client)
+    } else snprintf(job.path, sizeof job.path, "app/res/ntl-tags/t%d.png", id);
+    if (picture_worker_request(&job)) p->asked = true;
+  }
+  wanted_count = 0;
+  picture_result r;
+  for (int made = 0; made < 2 && picture_worker_take(&r);) {
+    if (r.key >= SHARE_PICTURE_KEY) { share_picture_ready(env, &r); made++; continue; }
+    if (r.key < 0 || r.key >= NTL_TAG_MAX) { free(r.rgba); continue; }
+    picture* p = &pictures[r.key];
+    p->asked = false;
+    if (r.stamp != (unsigned)ntl_tags_revision() || p->descriptor) { free(r.rgba); continue; }   // (the catalog changed meanwhile: ask again)
+    texture* tex = r.rgba ? create_rgba_texture(env->ctx, r.rgba, r.w, r.h) : NULL;
+    free(r.rgba); made++;
     VkDescriptorSet d = tex ? igImplVulkan_AddTexture(env->usr->r->linear_sampler, tex->view, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL) : 0;
     if (!d) { if (tex) destroy_texture(env->ctx, tex); p->failed = true; continue; }
     p->tex = tex; p->descriptor = d; live++;
   }
-  wanted_count = 0;
 }
 void ntl_tags_destroy(tenv* env) {
   ntl_tag_server_destroy();
+  tag_share_destroy();
+  picture_worker_stop();
   if (loaded) ntl_tag_settings_save(SETTINGS_PATH);
   vkQueueWaitIdle(env->ctx->queue);
   for (int i = 0; i < NTL_TAG_MAX; i++) {
     if (pictures[i].descriptor) igImplVulkan_RemoveTexture(pictures[i].descriptor);
     if (pictures[i].tex) destroy_texture(env->ctx, pictures[i].tex);
     pictures[i] = (picture){0};
+  }
+  for (int i = 0; i < SHARE_SLOTS; i++) {
+    if (shared[i].descriptor) igImplVulkan_RemoveTexture(shared[i].descriptor);
+    if (shared[i].tex) destroy_texture(env->ctx, shared[i].tex);
+    shared[i] = (share_picture){0};
   }
   live = 0;
 }
@@ -212,9 +172,67 @@ static void rope_path(ImDrawList* draw, const ImVec2* p) {
     ImDrawList_PathBezierQuadraticCurveTo(draw, p[k], (ImVec2){(p[k].x + p[k - 1].x) * .5f, (p[k].y + p[k - 1].y) * .5f}, 6);
   ImDrawList_PathLineTo(draw, p[0]);
 }
+bool ntl_tags_hidden;
+// ---- shared image tags
+static share_picture* share_picture_for(const char* hash) {
+  share_picture* p = NULL;
+  for (int i = 0; i < SHARE_SLOTS; i++) if (!strcmp(shared[i].hash, hash)) { p = &shared[i]; break; }
+  if (!p) {
+    for (int i = 0; i < SHARE_SLOTS && !p; i++) if (!shared[i].hash[0]) p = &shared[i];
+    if (!p) return NULL;                              // (all taken: prepare lets old ones go)
+    *p = (share_picture){0}; memcpy(p->hash, hash, 17); p->stamp = ++share_stamp;
+  }
+  p->used = frame;
+  if (p->descriptor || p->failed || p->asked) return p;
+  picture_job job = {.key = SHARE_PICTURE_KEY + (int)(p - shared), .stamp = p->stamp, .kind = PICTURE_PLAIN};
+  if (tag_share_image_path(hash, job.path, sizeof job.path) && picture_worker_request(&job)) p->asked = true;
+  return p;
+}
+static void share_picture_ready(tenv* env, picture_result* r) {
+  int i = r->key - SHARE_PICTURE_KEY;
+  share_picture* p = i >= 0 && i < SHARE_SLOTS ? &shared[i] : NULL;
+  if (!p || p->stamp != r->stamp || p->descriptor) { free(r->rgba); return; }
+  p->asked = false;
+  texture* tex = r->rgba ? create_rgba_texture(env->ctx, r->rgba, r->w, r->h) : NULL;
+  free(r->rgba);
+  VkDescriptorSet d = tex ? igImplVulkan_AddTexture(env->usr->r->linear_sampler, tex->view, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL) : 0;
+  if (!d) { if (tex) destroy_texture(env->ctx, tex); p->failed = true; return; }
+  p->tex = tex; p->descriptor = d;
+}
+static void share_pictures_trim(tenv* env) {          // (slots not drawn for a while, when most are taken)
+  int taken = 0;
+  for (int i = 0; i < SHARE_SLOTS; i++) if (shared[i].hash[0]) taken++;
+  if (taken < SHARE_SLOTS - 8) return;
+  bool waited = false;
+  for (int i = 0; i < SHARE_SLOTS; i++) {
+    share_picture* p = &shared[i];
+    if (!p->hash[0] || p->used > frame - 600 || p->asked) continue;
+    if (p->descriptor) {
+      if (!waited) { vkQueueWaitIdle(env->ctx->queue); waited = true; }
+      igImplVulkan_RemoveTexture(p->descriptor); destroy_texture(env->ctx, p->tex);
+    }
+    *p = (share_picture){0};
+  }
+}
+static void draw_shared_image(tenv* env, snake* s, const share_entry* e, double now) {
+  game_data* g = &env->usr->gdata;
+  share_picture* p = share_picture_for(e->hash);
+  if (!p || !p->descriptor) return;
+  rope_slot* slot = rope_for(s);
+  float gsc = g->data.gsc;
+  float x = env->ctx->size[0] * .5f + (s->xx + s->fx - g->data.view_xx) * gsc;
+  float y = env->ctx->size[1] * .5f + (s->yy + s->fy - g->data.view_yy) * gsc;
+  float reach = (e->size + e->gap + 30) * (s->sc > 0 ? s->sc : 1) * gsc * 3;
+  if (x < -reach || y < -reach || x > env->ctx->size[0] + reach || y > env->ctx->size[1] + reach) { slot->follow.valid = slot->sway.valid = false; return; }
+  float trailing = tag_follow(&slot->follow, s->ehang, now, s->generation);
+  float swing = e->sway ? tag_sway_update(&slot->sway, s->ehang, now, s->generation) : 0;
+  float alpha = s->alive_amt * (1 - s->dead_amt);
+  personal_tag_draw_image(p->descriptor, p->tex->size[0], p->tex->size[1], e->size, e->gap, e->angle,
+                          x, y, (s->sc > 0 ? s->sc : 1) * gsc, s->ehang, trailing, swing, alpha * alpha, ntl_tag_look_for(false));
+}
 void ntl_tags_draw(tenv* env) {
   game_data* g = &env->usr->gdata;
-  if (!loaded || g->curr_screen != PLAYING || g->conn != CONNECTED || !g->data.follow_view) return;
+  if (!loaded || ntl_tags_hidden || g->curr_screen != PLAYING || g->conn != CONNECTED || !g->data.follow_view) return;
   ImDrawList* draw = igGetWindowDrawList();
   float cx = env->ctx->size[0] * .5f, cy = env->ctx->size[1] * .5f, gsc = g->data.gsc;
   double now = glfwGetTime() * 1000;
@@ -223,7 +241,10 @@ void ntl_tags_draw(tenv* env) {
     snake* s = g->data.snakes + i;
     if (s->id < 0 || s->alive_amt <= 0) continue;
     bool own = s->id == g->data.snake_id;
-    int tag = tag_of(env, s, own);
+    share_entry se;                                    // a player of this client: the tag it shares wins
+    bool shared_tag = !own && ntl_tag_prefs.show_others && tag_share_lookup(s->id, &se);
+    if (shared_tag && se.kind == SHARE_IMAGE) { draw_shared_image(env, s, &se, now); continue; }
+    int tag = shared_tag && se.kind == SHARE_NTL ? se.ntl : tag_of(env, s, own);
     const ntl_tag_def* d = ntl_tag_get(tag);
     if (!d) continue;
     rope_slot* slot = rope_for(s);
@@ -278,7 +299,7 @@ static bool thumbnail(int id, bool selected) {
       clicked = igButton(text, (ImVec2){size.x + 6, size.y + 6});
     }
   } else clicked = igButton(label, (ImVec2){size.x + 6, size.y + 6});
-  if (igIsItemHovered(0)) igSetTooltip("NTL 태그 %d%s", id, ntl_tag_needs_password(id) ? (ntl_tag_auth_for(id) ? " · 비밀번호 확인됨" : " · 비밀번호 없으면 내 화면에만") : " · 무료");
+  if (igIsItemHovered(0)) igSetTooltip("NTL 태그 %d%s", id, ntl_tag_needs_password(id) ? (ntl_tag_auth_for(id) ? " · 비밀번호 확인됨" : " · 비밀번호 없으면 내 화면·이 클라이언트 사용자에게만") : " · 무료");
   return clicked;
 }
 static void grid(const int* ids, int n) {
@@ -306,19 +327,27 @@ static bool percent(const char* label, float* value, float lo, float hi) {
   *value = v / 100;
   return igIsItemDeactivatedAfterEdit();
 }
-void ntl_tags_look_controls(void) {
-  igPushID_Str("ntl-tag-look");
-  ntl_tag_look* l = &ntl_tag_prefs.look;
+static bool look_sliders(const char* id, ntl_tag_look* l) {
+  igPushID_Str(id);
   *l = ntl_tag_look_clamp(*l);
   bool changed = false;
   changed |= percent("태그 크기", &l->size, .25f, 3);
   changed |= percent("줄 길이", &l->rope, .2f, 3);
   changed |= percent("줄 굵기", &l->width, 0, 3);
   changed |= percent("불투명도", &l->alpha, .1f, 1);
-  if (igCheckbox("다른 사람 NTL 태그에도 적용", &ntl_tag_prefs.look_others)) changed = true;
-  if (igButton("기본값으로", (ImVec2){0})) { *l = NTL_TAG_LOOK_DEFAULT; changed = true; }
-  igSameLine(0, -1);
-  igTextDisabled("내 이미지 태그·기본·NTL 태그 공통 · 자동 저장");
+  if (igSmallButton("기본값으로")) { *l = NTL_TAG_LOOK_DEFAULT; changed = true; }
+  igPopID();
+  return changed;
+}
+void ntl_tags_look_controls(void) {
+  igPushID_Str("ntl-tag-look");
+  bool changed = false;
+  igTextUnformatted("내 태그 (내 이미지 태그·NTL 태그)", NULL);
+  changed |= look_sliders("mine", &ntl_tag_prefs.look);
+  igSpacing();
+  igTextUnformatted("다른 사람 태그 (NTL·공유 태그)", NULL);
+  changed |= look_sliders("others", &ntl_tag_prefs.look_other);
+  igTextDisabled("따로 저장됩니다 · 내 화면에서만 바뀜");
   if (changed) save();
   igPopID();
 }
@@ -328,12 +357,19 @@ void ntl_tags_controls(tenv* env) {
   igPushID_Str("ntl-tags");
   igSeparatorText("머리 태그 고르기");
   int mode = ntl_tag_prefs.mode;
-  if (igRadioButton_IntPtr("내 이미지 태그 (내 화면에만)", &mode, 0)) { ntl_tag_prefs.mode = 0; save(); }
+  if (igRadioButton_IntPtr("내 이미지 태그", &mode, 0)) { ntl_tag_prefs.mode = 0; save(); }
   igSameLine(0, 12);
   if (igRadioButton_IntPtr("NTL 태그 (다른 사람에게도)", &mode, 1)) { ntl_tag_prefs.mode = 1; save(); }
   if (igCheckbox("다른 사람의 NTL 태그 보기", &ntl_tag_prefs.show_others)) save();
   igTextDisabled("NTL 태그 서버: %s", ntl_tag_server_status());
   igTextDisabled("NTL 온라인 태그: %s", ntl_tags_online_status());
+  // players of this client: each other's tags through the relay (tools/tag-share-worker)
+  if (igCheckbox("이 클라이언트 사용자끼리 태그 공유", &ntl_tag_prefs.share)) save();
+  if (igIsItemHovered(0)) igSetTooltip("내 이미지 태그와 비밀번호 없이 쓰는 태그를 이 클라이언트를 쓰는 다른 사람도 보고,\n그 사람들의 것도 내 화면에 보입니다. 게임 서버 주소·지렁이 번호·태그만 보냅니다(닉네임 없음).");
+  igSetNextItemWidth(260);
+  igInputTextWithHint("태그 공유 서버", "비우면 기본 공유 서버", ntl_tag_prefs.share_url, sizeof ntl_tag_prefs.share_url, 0, NULL, NULL);
+  if (igIsItemDeactivatedAfterEdit()) save();
+  igTextDisabled("태그 공유: %s", tag_share_status());
   // a password check's answer
   char answer[256];
   int result = ntl_tag_password_result(answer, sizeof answer);
@@ -345,7 +381,7 @@ void ntl_tags_controls(tenv* env) {
   if (ntl_tag_prefs.mode == 1) {
     int own = ntl_tag_own(), local = ntl_tag_own_local();
     if (own >= 0) igText("착용 중: NTL 태그 %d", own);
-    else if (local >= 0) igTextColored((ImVec4){1, .75f, .3f, 1}, "착용 중: NTL 태그 %d (비밀번호 없음 · 내 화면에만)", local);
+    else if (local >= 0) igTextColored((ImVec4){1, .75f, .3f, 1}, "착용 중: NTL 태그 %d (비밀번호 없음 · 내 화면·이 클라이언트 사용자에게만)", local);
     else igText("착용 중: 없음");
     igSameLine(0, 12);
     if (igSmallButton("태그 없음")) { ntl_tag_prefs.tag = -1; ntl_tag_prefs.local_only = false; pick = -1; save(); snprintf(message, sizeof message, "태그를 뺐습니다"); }
@@ -364,12 +400,12 @@ void ntl_tags_controls(tenv* env) {
     // Without the password: warned first, then worn on this screen only (never sent to anyone).
     if (igBeginPopupModal("비밀번호 없이 쓰기", NULL, ImGuiWindowFlags_AlwaysAutoResize)) {
       igTextColored((ImVec4){1, .75f, .3f, 1}, "주의: 태그 %d의 비밀번호가 없습니다.", pick);
-      igTextUnformatted("비밀번호 없이 쓰면 이 태그는 내 화면에만 보입니다.", NULL);
-      igTextUnformatted("다른 사람(NTL 사용자, 팀원 포함)에게는 보내지 않으며, 그들에게는 태그 없이 보입니다.", NULL);
+      igTextUnformatted("비밀번호 없이 쓰면 이 태그는 내 화면과, 태그 공유를 켠 이 클라이언트 사용자에게만 보입니다.", NULL);
+      igTextUnformatted("NTL 사용자(팀원 포함)에게는 보내지 않으며, 그들에게는 태그 없이 보입니다.", NULL);
       igTextUnformatted("나중에 비밀번호를 확인하면 그때부터 다른 사람에게도 보입니다.", NULL);
       if (igButton("내 화면에만 쓰기", (ImVec2){0, 0}) && pick >= 0) {
         ntl_tag_prefs.tag = pick; ntl_tag_prefs.local_only = true; save();
-        snprintf(message, sizeof message, "태그 %d를 비밀번호 없이 착용 · 내 화면에만 보입니다", pick);
+        snprintf(message, sizeof message, "태그 %d를 비밀번호 없이 착용 · 내 화면과 이 클라이언트 사용자에게만 보입니다", pick);
         pick = -1; igCloseCurrentPopup();
       }
       igSameLine(0, 8);
@@ -386,7 +422,7 @@ void ntl_tags_controls(tenv* env) {
       igBeginChild_Str("##free", (ImVec2){0, 220}, ImGuiChildFlags_Borders, 0); grid(free_ids, nf); igEndChild();
     }
     if (igCollapsingHeader_TreeNodeFlags("비밀번호 태그 (NTL에서 받은 태그)", 0)) {
-      igTextWrapped("비밀번호가 있으면 다른 사람에게도 보입니다(비밀번호는 저장하지 않고 NTL과 같은 방식의 해시만 저장). 비밀번호가 없으면 경고를 확인한 뒤 내 화면에만 보이게 쓸 수 있습니다.");
+      igTextWrapped("비밀번호가 있으면 다른 사람에게도 보입니다(비밀번호는 저장하지 않고 NTL과 같은 방식의 해시만 저장). 비밀번호가 없으면 경고를 확인한 뒤 내 화면(과 태그 공유를 켠 이 클라이언트 사용자)에만 보이게 쓸 수 있습니다.");
       igBeginChild_Str("##bought", (ImVec2){0, 220}, ImGuiChildFlags_Borders, 0); grid(bought_ids, nb); igEndChild();
     }
   } else if (message[0]) igTextWrapped("%s", message);
