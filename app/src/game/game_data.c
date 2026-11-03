@@ -47,6 +47,7 @@ void display_hotkeys(tuser_data* usr, float offset, font_size sz) {
   show_hot_key(usr, GLFW_KEY_N, (vec3){0.7f, 1, 0.7f}, "Zoom out", offset,
                sz);
   show_hot_key_str(usr, "\ueaed", (vec3){0.7f, 1, 0.7f}, "Boost", 0, sz);
+  show_hot_key_str(usr, "Q (hold)", (vec3){1, .5f, .4f}, "Missile: mouse aim + boost", offset, sz);
   show_hot_key_str(usr,"H H / F8",(vec3){1,1,0.7f},"Team / chat",offset,sz);
   show_hot_key_str(usr,"Enter",(vec3){1,1,0.7f},"Chat",offset,sz);
   show_hot_key_str(usr,"Backspace x2",(vec3){1,1,0.7f},"Target selector",offset,sz);

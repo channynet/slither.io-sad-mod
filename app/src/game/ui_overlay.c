@@ -51,6 +51,14 @@ void ui_overlay(tenv* env) {
             (ImVec2){hx2+cosf(safe_wall_angle)*len,hy2+sinf(safe_wall_angle)*len},
             igColorConvertFloat4ToU32((ImVec4){1,.55f,.1f,.75f*a}),3);
       }
+      if (missile_steering && !me->dead && gdata->data.follow_view) {
+        float hx2=mww2+(hx-gdata->data.view_xx)*gdata->data.gsc, hy2=mhh2+(hy-gdata->data.view_yy)*gdata->data.gsc;
+        float length=90+40*gdata->data.gsc;
+        ImVec2 aim={hx2+cosf(missile_angle)*length,hy2+sinf(missile_angle)*length};
+        ImU32 color=igColorConvertFloat4ToU32((ImVec4){1,.3f,.25f,.9f*a});
+        ImDrawList_AddLine(igGetWindowDrawList(),(ImVec2){hx2,hy2},aim,color,3);
+        ImDrawList_AddCircle(igGetWindowDrawList(),aim,6,color,16,2);
+      }
       if (body_hug_steering) {           // body hug: a line to the point it is steering for
         float hx2=mww2+(hx-gdata->data.view_xx)*gdata->data.gsc, hy2=mhh2+(hy-gdata->data.view_yy)*gdata->data.gsc;
         float tx2=mww2+(body_hug_tx-gdata->data.view_xx)*gdata->data.gsc, ty2=mhh2+(body_hug_ty-gdata->data.view_yy)*gdata->data.gsc;

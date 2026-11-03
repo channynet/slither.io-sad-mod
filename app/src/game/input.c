@@ -12,12 +12,34 @@
 #include <GLFW/glfw3.h>
 #include "native_preferences.h"
 #include "perf_trace.h"
+#include "death_review.h"
 
 bool safe_wall_steering;
 float safe_wall_angle;
 bool body_hug_active, body_hug_steering;
 int native_coil;
 float body_hug_tx, body_hug_ty;
+bool missile_steering;
+float missile_angle;
+
+static bool missile_requested(tenv* env) {
+  // A cancelled hold cannot restart when chat/focus/death/target selection ends.
+  static bool blocked;
+  if (!twindow_key_down(env->wnd, GLFW_KEY_Q)) { blocked=false; return false; }
+  game_data* g=&env->usr->gdata;
+  snake* me=g->data.follow_view ? get_snake(g,g->data.snake_id) : NULL;
+  bool allowed=g->curr_screen==PLAYING && g->conn==CONNECTED && g->connection &&
+      !g->closed && !g->connection->is_closing && me && !me->dead && !death_review.frozen &&
+      !igGetIO_Nil()->WantTextInput && !ntl_mouse_captured() && !target_marker_captured() &&
+      glfwGetWindowAttrib(env->wnd->handle,GLFW_FOCUSED) &&
+      !twindow_key_down(env->wnd,GLFW_KEY_LEFT_CONTROL) && !twindow_key_down(env->wnd,GLFW_KEY_RIGHT_CONTROL) &&
+      !twindow_key_down(env->wnd,GLFW_KEY_LEFT_ALT) && !twindow_key_down(env->wnd,GLFW_KEY_RIGHT_ALT) &&
+      !twindow_key_down(env->wnd,GLFW_KEY_LEFT_SUPER) && !twindow_key_down(env->wnd,GLFW_KEY_RIGHT_SUPER);
+  // Honour an existing user binding instead of firing two actions with Q.
+  for(int i=0;i<NUM_HOTKEYS;i++) if(env->usr->usrs.hotkeys[i].key==GLFW_KEY_Q) allowed=false;
+  if(!allowed) blocked=true;
+  return allowed && !blocked;
+}
 
 // Body hug (E): the enemy nearest when E goes down (within 900, not a teammate) is the one for
 // as long as E is held: never another body, however near, until that one dies or leaves the
@@ -121,7 +143,7 @@ void input(tenv* env) {
     int snakes_len = tdarray_length(gdata->data.snakes);
     snake* me = gdata->data.snakes + (snakes_len - 1);
 
-    if (!usrs->hotkeys[HOTKEY_BOT].active) {
+    if (!usrs->hotkeys[HOTKEY_BOT].active && !missile_steering) {
       if (twindow_key_down(env->wnd, GLFW_KEY_LEFT))
         gdata->data.kd_l_frb += gdata->data.vfrb;
       if (twindow_key_down(env->wnd, GLFW_KEY_RIGHT))
@@ -196,6 +218,8 @@ void input_network(tenv* env) {
   game_data* gdata=&usr->gdata;
   user_settings* usrs=&usr->usrs;
   tcontext* ctx=env->ctx;
+  bool missile_was_steering=missile_steering;
+  missile_steering=missile_requested(env);
   struct mg_connection* connection=gdata->connection;
   if(gdata->conn!=CONNECTED || !connection || connection->is_closing || gdata->closed) return;
   float now=(float)(glfwGetTime()*1000.0);
@@ -207,7 +231,7 @@ void input_network(tenv* env) {
   }
   // Chat captures typing/clicks, but the cursor still steers the snake.
   // Other UI and focus loss continue to suspend manual steering.
-  bool bot_active=usrs->hotkeys[HOTKEY_BOT].active;
+  bool bot_active=usrs->hotkeys[HOTKEY_BOT].active && !missile_steering;
   bool ui_capture=igGetIO_Nil()->WantTextInput || ntl_mouse_captured();
   // E (body hug) does not use the mouse, so the pointer resting on a panel (chat, team list,
   // settings) does not stop it; typing and an unfocused window still do.
@@ -239,10 +263,10 @@ void input_network(tenv* env) {
   glfwGetCursorPos(env->wnd->handle,&mouse_x,&mouse_y);
   env->ms->pos[0]=(float)mouse_x; env->ms->pos[1]=(float)mouse_y;
   int xm=(int)mouse_x-ctx->size[0]/2,ym=(int)mouse_y-ctx->size[1]/2;
-  if(usrs->hotkeys[HOTKEY_BOT].active) { xm=gdata->bot.output.xm; ym=gdata->bot.output.ym; }
+  if(bot_active) { xm=gdata->bot.output.xm; ym=gdata->bot.output.ym; }
   // F1/F2 (as NTL's Coil Left/Right): point 135 degrees round to that side of the heading, so
   // the snake keeps turning as hard as it can (the mouse and the bot are ignored meanwhile).
-  if(native_coil) {
+  if(native_coil && !missile_steering) {
     double a=me->ang+native_coil*.75*PI2/2;
     xm=(int)lround(300*cos(a)); ym=(int)lround(300*sin(a));
   }
@@ -273,13 +297,13 @@ void input_network(tenv* env) {
   static double hug_prev_t, hug_period_ms=STEER_INTERVAL_MS;
   bool hug_steer=false; double hug_want=0;
   // The player's boost (mouse button or keys; not with the pointer over a panel).
-  bool boost_keys=!ui_capture && (twindow_button_down(env->wnd, GLFW_MOUSE_BUTTON_LEFT) ||
+  bool boost_keys=missile_steering || (!ui_capture && (twindow_button_down(env->wnd, GLFW_MOUSE_BUTTON_LEFT) ||
                                   twindow_key_down(env->wnd, GLFW_KEY_SPACE) ||
                                   twindow_key_down(env->wnd, GLFW_KEY_UP) ||
                                   twindow_key_down(env->wnd, GLFW_KEY_LEFT_SHIFT) ||
-                                  twindow_key_down(env->wnd, GLFW_KEY_RIGHT_SHIFT));
+                                  twindow_key_down(env->wnd, GLFW_KEY_RIGHT_SHIFT)));
   static bool hug_slow;
-  if(body_hug_active && !bot_active) {
+  if(body_hug_active && !bot_active && !missile_steering) {
     hug_output o; hug_state ost; int id;
     if(hug_worker_take(&o,&ost,&id) && hug_job_target[id&15]==hug_target_id && hug_target_id>=0 && isfinite(o.angle)) {
       hug_st=ost; hug_last_steer=true; hug_last_want=o.angle; hug_fresh=true; hug_last_tier=o.tier; hug_last_gap=o.edge_gap; hug_slow=o.slow;
@@ -388,7 +412,8 @@ void input_network(tenv* env) {
   if(gdata->data.grd>0)
     perf_safe_wall(native_prefs.safe_wall,safe_steer,
                    (float)(wall-hypot(me->xx+me->fx-gdata->data.grd,me->yy+me->fy-gdata->data.grd)));
-    gdata->data.wmd = usrs->hotkeys[HOTKEY_BOT].active ? gdata->bot.output.accel : boost_keys;
+    missile_angle=safe_steer ? (float)safe_want : (xm*xm+ym*ym>256 ? atan2f(ym,xm) : me->wang);
+    gdata->data.wmd = bot_active ? gdata->bot.output.accel : boost_keys;
     // E: the hug plans with the boost held and lets go of it when boosting on leaves no way out
     // (the turning circle more than doubles), or would only run out ahead of the hugged head.
     if (hug_steer && gdata->data.wmd && hug_slow) {
@@ -397,7 +422,8 @@ void input_network(tenv* env) {
     }
 
     if (gdata->data.md != gdata->data.wmd &&
-        ((!bot_active && ui_capture) || input_due(now,gdata->data.last_accel_mtm,BOOST_INTERVAL_MS))) {
+        ((missile_was_steering && !missile_steering && !gdata->data.wmd) ||
+         (!bot_active && ui_capture) || input_due(now,gdata->data.last_accel_mtm,BOOST_INTERVAL_MS))) {
       gdata->data.md = gdata->data.wmd;
       gdata->data.last_accel_mtm = now;
       mg_ws_send(connection, (uint8_t[]){gdata->data.md ? 253 : 254}, 1,
