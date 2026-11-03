@@ -93,7 +93,7 @@ void server_poll(tenv* env) {
 
 void server_service(tenv* env) {
   game_data* game=&env->usr->gdata;
-  if(game->curr_screen!=PLAYING || !env->config.running) return;
+  if(game->curr_screen!=PLAYING || !env->config.running) { missile_reset(); return; }
   input_network(env);
   server_poll(env);
 }

@@ -15,7 +15,8 @@ extern bool body_hug_active, body_hug_steering;
 extern int native_coil;
 extern float body_hug_tx, body_hug_ty;
 
-// Hold Q to steer with the mouse and boost, temporarily overriding bot/coil/hug.
+// Press G to toggle mouse steering + boost, temporarily overriding bot/coil/hug.
+void missile_reset(void);
 extern bool missile_steering;
 extern float missile_angle;
 extern const char* missile_status;

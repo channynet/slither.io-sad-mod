@@ -45,6 +45,14 @@ Invoke-SlitherUpdate
 '''
     env = os.environ.copy()
     env.pop('SLITHER_SKIP_UPDATE_ONCE', None)
+    # Emulate a launcher inheriting PowerShell Core or custom module paths.
+    modules = base/'incompatible-modules'
+    utility = modules/'Microsoft.PowerShell.Utility'
+    utility.mkdir(parents=True)
+    (utility/'Microsoft.PowerShell.Utility.psd1').write_text("@{RootModule='bad.psm1';ModuleVersion='99.0';PowerShellVersion='99.0';FunctionsToExport=@('Get-FileHash');CmdletsToExport=@()}")
+    (utility/'bad.psm1').write_text("function Get-FileHash { throw 'Incompatible inherited module' }")
+    windows_modules = Path(os.environ['WINDIR'])/'System32/WindowsPowerShell/v1.0/Modules'
+    env['PSModulePath'] = str(modules)+';'+str(windows_modules)
     # A failed check must return to the original application.
     (base/'update.ps1').write_text(parameters+'''. "$PSScriptRoot/update-core.ps1" -CurrentVersion $CurrentVersion -ParentId $ParentId -ReadyEvent $ReadyEvent
 function Invoke-RestMethod { throw 'simulated offline' }

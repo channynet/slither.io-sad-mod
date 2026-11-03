@@ -1,6 +1,9 @@
 param([string]$CurrentVersion, [int]$ParentId, [string]$ReadyEvent, [switch]$CheckOnly)
 $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
+# A Windows PowerShell child may inherit PowerShell Core's incompatible module path.
+# Resolve built-in cmdlets from this interpreter before any inherited modules.
+$env:PSModulePath = "$PSHOME\Modules;$env:PSModulePath"
 $Repository = 'channynet/slither.io-sad-mod'
 
 function Get-VersionNumber([string]$Value) {
