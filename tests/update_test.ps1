@@ -13,6 +13,8 @@ try {
         [pscustomobject]@{name='SlitherNative-2.6-ntl0.91-Windows-x64.zip';size=100;digest=('sha256:'+('a'*64));browser_download_url='https://github.com/channynet/slither.io-sad-mod/releases/download/v2.6-ntl0.91/SlitherNative-2.6-ntl0.91-Windows-x64.zip'})}
     Assert ($null -ne (Get-UpdateAsset $release '2.6-ntl0.90')) 'Missing update'
     Assert ($null -eq (Get-UpdateAsset $release '2.6-ntl0.91')) 'Equal version update'
+    Assert ($null -ne (Get-UpdateAsset $release '2.6-ntl0.91' -Repair)) 'Missing component repair rejected'
+    Assert ($null -eq (Get-UpdateAsset $release '2.6-ntl0.100' -Repair)) 'Repair must not downgrade'
     Assert ($null -eq (Get-UpdateAsset $release '2.6-ntl0.100')) 'Downgrade'
     $release.prerelease=$true
     Assert ($null -eq (Get-UpdateAsset $release '2.6-ntl0.90')) 'Preview release accepted'

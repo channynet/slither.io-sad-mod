@@ -10,6 +10,7 @@
 #include "server_address.h"
 #include "server_status.h"
 #include "../game/input.h"
+#include "../game/snake_missile.h"
 #include "../game/perf_trace.h"
 #include "../game/duel_board.h"
 
@@ -93,7 +94,7 @@ void server_poll(tenv* env) {
 
 void server_service(tenv* env) {
   game_data* game=&env->usr->gdata;
-  if(game->curr_screen!=PLAYING || !env->config.running) { missile_reset(); return; }
+  if(game->curr_screen!=PLAYING || !env->config.running) { snake_missile_reset(); return; }
   input_network(env);
   server_poll(env);
 }

@@ -1,5 +1,6 @@
 #include "ui_overlay.h"
 #include "input.h"
+#include "snake_missile.h"
 #include "perf_trace.h"
 
 #include "../user.h"
@@ -17,10 +18,19 @@ void ui_overlay(tenv* env) {
   game_data* gdata = &usr->gdata;
   user_settings* usrs = &usr->usrs;
 
-      if (missile_status) {
+  if(snake_missile_active && gdata->data.gsc>0) {
+    ImVec2 target={ctx->size[0]/2.0f+(snake_missile_x-gdata->data.view_xx)*gdata->data.gsc,
+                  ctx->size[1]/2.0f+(snake_missile_y-gdata->data.view_yy)*gdata->data.gsc};
+    ImDrawList* draw=igGetForegroundDrawList_ViewportPtr(NULL);
+    ImDrawList_AddCircle(draw,target,12,0xff5555ff,24,2);
+    ImDrawList_AddLine(draw,(ImVec2){target.x-18,target.y},(ImVec2){target.x+18,target.y},0xff5555ff,2);
+    ImDrawList_AddLine(draw,(ImVec2){target.x,target.y-18},(ImVec2){target.x,target.y+18},0xff5555ff,2);
+  }
+
+      if (snake_missile_status[0]) {
         ImFont* font=usr->imgui_data.regular_font[FONT_SIZE_SMALL];
         ImDrawList_AddText_FontPtr(igGetForegroundDrawList_ViewportPtr(NULL),font,font->LegacySize,
-            (ImVec2){24,env->ctx->size[1]-60},0xffffffff,missile_status,NULL,0,NULL);
+            (ImVec2){24,env->ctx->size[1]-60},0xffffffff,snake_missile_status,NULL,0,NULL);
       }
 
   float mww2 = ctx->size[0] / 2.0f;
@@ -56,14 +66,6 @@ void ui_overlay(tenv* env) {
         ImDrawList_AddLine(igGetWindowDrawList(),(ImVec2){hx2,hy2},
             (ImVec2){hx2+cosf(safe_wall_angle)*len,hy2+sinf(safe_wall_angle)*len},
             igColorConvertFloat4ToU32((ImVec4){1,.55f,.1f,.75f*a}),3);
-      }
-      if (missile_steering && !me->dead && gdata->data.follow_view) {
-        float hx2=mww2+(hx-gdata->data.view_xx)*gdata->data.gsc, hy2=mhh2+(hy-gdata->data.view_yy)*gdata->data.gsc;
-        float length=90+40*gdata->data.gsc;
-        ImVec2 aim={hx2+cosf(missile_angle)*length,hy2+sinf(missile_angle)*length};
-        ImU32 color=igColorConvertFloat4ToU32((ImVec4){1,.3f,.25f,.9f*a});
-        ImDrawList_AddLine(igGetWindowDrawList(),(ImVec2){hx2,hy2},aim,color,3);
-        ImDrawList_AddCircle(igGetWindowDrawList(),aim,6,color,16,2);
       }
       if (body_hug_steering) {           // body hug: a line to the point it is steering for
         float hx2=mww2+(hx-gdata->data.view_xx)*gdata->data.gsc, hy2=mhh2+(hy-gdata->data.view_yy)*gdata->data.gsc;

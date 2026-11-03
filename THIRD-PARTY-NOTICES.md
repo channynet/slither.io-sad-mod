@@ -16,6 +16,15 @@ The source tree includes these components and their original license texts:
 | stb | thermite/src/external/stb/LICENSE.txt |
 | cglm | thermite/include/cglm/LICENSE.txt |
 | Bundled fonts | app/res/fonts/LICENSE.txt |
+| Snake Missile (MIT, copyright 2023 shitposts) | third_party/snake-missile/LICENSE |
+
+The Snake Missile worker includes source from https://github.com/ShimadaNanaki/snake-missile,
+revision `ee8027215f7860f1b2fe606dfacb68b1bf65cf04`. Native adaptations add process control,
+live targets, current protocol compatibility, bounded connections and cancellation.
+The original MIT notice is retained. The new native protocol adapter follows this
+repository's GPL license. Corresponding Go source and pinned module versions are
+included in the source snapshot. Runtime bundles contain the Go and module license
+texts under `licenses/snake-missile` (inside app resources on macOS).
 
 Mongoose identifies its terms as GPL-2.0-only or commercial. These are retained as found in upstream; this local build does not change or resolve upstream licensing terms. Distribution bundles include the corresponding source snapshot and retained license texts.
 

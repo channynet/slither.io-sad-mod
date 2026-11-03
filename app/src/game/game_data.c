@@ -6,6 +6,7 @@
 #include "death_review.h"
 #include "target_marker.h"
 #include "input.h"
+#include "snake_missile.h"
 
 void show_hot_key(tuser_data* usr, int hotkey, vec3 color, const char* info,
                   float offset, font_size sz) {
@@ -48,7 +49,7 @@ void display_hotkeys(tuser_data* usr, float offset, font_size sz) {
   show_hot_key(usr, GLFW_KEY_N, (vec3){0.7f, 1, 0.7f}, "Zoom out", offset,
                sz);
   show_hot_key_str(usr, "\ueaed", (vec3){0.7f, 1, 0.7f}, "Boost", 0, sz);
-  show_hot_key_str(usr, "G", (vec3){1, .5f, .4f}, "Missile on/off: mouse aim + boost", offset, sz);
+  show_hot_key_str(usr, "G", (vec3){1, .5f, .4f}, "Snake Missile bots on/off: mouse target", offset, sz);
   show_hot_key_str(usr,"H H / F8",(vec3){1,1,0.7f},"Team / chat",offset,sz);
   show_hot_key_str(usr,"Enter",(vec3){1,1,0.7f},"Chat",offset,sz);
   show_hot_key_str(usr,"Backspace x2",(vec3){1,1,0.7f},"Target selector",offset,sz);
@@ -582,7 +583,7 @@ void game_data_init(tenv* env) {
 }
 
 void game_data_reset(tenv* env) {
-  missile_reset();
+  snake_missile_reset();
   death_review_reset();
   target_marker_reset();
   tuser_data* usr = env->usr;

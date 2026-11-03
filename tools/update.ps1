@@ -1,4 +1,4 @@
-param([string]$CurrentVersion, [int]$ParentId, [string]$ReadyEvent, [switch]$CheckOnly)
+param([string]$CurrentVersion, [int]$ParentId, [string]$ReadyEvent, [switch]$CheckOnly, [switch]$Repair)
 $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
 # A Windows PowerShell child may inherit PowerShell Core's incompatible module path.
@@ -10,9 +10,10 @@ function Get-VersionNumber([string]$Value) {
     if ($Value -notmatch '^v?(\d+)\.(\d+)-ntl(\d+)\.(\d+)$') { throw 'Unsupported version' }
     return [version]("{0}.{1}.{2}.{3}" -f $Matches[1],$Matches[2],$Matches[3],$Matches[4])
 }
-function Get-UpdateAsset($Release, [string]$InstalledVersion) {
+function Get-UpdateAsset($Release, [string]$InstalledVersion, [switch]$Repair) {
     if ($Release.draft -or $Release.prerelease) { return $null }
-    if ((Get-VersionNumber $Release.tag_name) -le (Get-VersionNumber $InstalledVersion)) { return $null }
+    $comparison = (Get-VersionNumber $Release.tag_name).CompareTo((Get-VersionNumber $InstalledVersion))
+    if ($comparison -lt 0 -or ($comparison -eq 0 -and !$Repair)) { return $null }
     $version = $Release.tag_name -replace '^v',''
     $name = "SlitherNative-$version-Windows-x64.zip"
     $assets = @($Release.assets | Where-Object { $_.name -ceq $name })
@@ -40,6 +41,7 @@ function Get-SafePath([string]$Root, [string]$Relative) {
     return $path
 }
 function Test-RuntimePath([string]$Path) {
+    if ($Path -ceq 'app/res/snake-missile/worker.exe') { return $true }
     return $Path -cmatch '^(SlitherNative\.exe|update\.ps1|LICENSE|THIRD-PARTY-NOTICES\.md|README-KO\.txt|licenses/[a-zA-Z0-9_./-]+|app/res/(fonts|textures|shaders/bin|personal/library|menu|ntl-tags|ntl-tags-online|faces)/[a-zA-Z0-9_.-]+)$'
 }
 function Expand-VerifiedPackage([string]$Archive, [string]$Digest, [string]$Stage, [string]$Version) {
@@ -122,7 +124,7 @@ function Invoke-SlitherUpdate {
         $journal = Get-SafePath $root '.update/transaction.json'
         if (!(Test-Path -LiteralPath $journal)) {
             $release = Invoke-RestMethod -Uri "https://api.github.com/repos/$Repository/releases/latest" -Headers @{'User-Agent'='SlitherNative-Updater';Accept='application/vnd.github+json'} -TimeoutSec 8
-            $asset = Get-UpdateAsset $release $CurrentVersion
+            $asset = Get-UpdateAsset $release $CurrentVersion -Repair:$Repair
             if ($CheckOnly) {
                 [pscustomobject]@{installed=$CurrentVersion;latest=$release.tag_name;updateAvailable=($null -ne $asset)} | ConvertTo-Json -Compress
                 return

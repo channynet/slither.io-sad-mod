@@ -9,6 +9,7 @@ import subprocess
 ROOT = Path(__file__).resolve().parents[1]
 TOOLS = ROOT / '.tools'
 ASSETS = [
+    ('go.zip', 'https://go.dev/dl/go1.27.3.windows-amd64.zip', 'f26081f438319757f8a1b46d7d0b2c5ec7583d4038e485e0aa725cfde7885fff', TOOLS / 'go-sdk'),
     ('llvm-mingw.zip', 'https://github.com/mstorsjo/llvm-mingw/releases/download/20260922/llvm-mingw-20260922-ucrt-x86_64.zip', 'e3ad77d117a4bea19a7a3b333341824d79a5a371004a10e25b8504e7b3047666', TOOLS / 'llvm'),
     ('slang.zip', 'https://github.com/shader-slang/slang/releases/download/v2026.19/slang-2026.19-windows-x86_64.zip', 'fc922f214b5d115f663932e59e80e0f6b6cc6fae140979cf307da6459b6f8f33', TOOLS / 'slang'),
 ]

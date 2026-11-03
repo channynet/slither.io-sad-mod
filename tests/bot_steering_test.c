@@ -6,7 +6,7 @@
 #include <stdio.h>
 #include <math.h>
 native_preferences native_prefs;
-bool native_settings_open;
+void snake_missile_input(tenv* env) { (void)env; }
 death_review_state death_review;
 static tuser_data usr;
 static snake me={.id=7};
@@ -104,63 +104,9 @@ int main(void) {
   // Off: out of the map stays out of the map.
   native_prefs.safe_wall=false; me.xx=3400+3300; me.yy=3400; usr.gdata.data.view_xx=me.xx; usr.gdata.data.view_yy=me.yy;
   reset_packet(); input_network(&env); assert(steering==1 && last_angle==19 && !safe_wall_steering);
-  // G toggles the real outbound route. Key repeat and release never toggle again.
-  usr.gdata.curr_screen=PLAYING; held=false;g_held=false;input_network(&env);
-  usr.usrs.hotkeys[HOTKEY_BOT].active=true;native_coil=1;body_hug_active=true;
-  g_held=true;mouse_x=500;mouse_y=0;usr.gdata.data.md=false;usr.gdata.data.last_accel_mtm=0;
-  reset_packet();input_network(&env);
-  assert(missile_steering && steering==1 && last_angle==0 && boost==1 && !body_hug_steering);
-  mouse_x=0;mouse_y=500;reset_packet();input_network(&env);
-  assert(missile_steering && last_angle==63 && fabsf(missile_angle-PI2/4)<.001f);
-  g_held=false;mouse_x=-500;mouse_y=0;reset_packet();input_network(&env);
-  assert(missile_steering && last_angle==126); // stays on after releasing G
-  native_coil=0;body_hug_active=false;
-  g_held=true;reset_packet();input_network(&env);
-  assert(!missile_steering && last_angle==63); // second press restores the bot
-  g_held=false;input_network(&env);usr.usrs.hotkeys[HOTKEY_BOT].active=false;
-  usr.gdata.data.md=false;g_held=true;usr.gdata.data.last_accel_mtm=0;reset_packet();input_network(&env);
-  assert(missile_steering && boost==1);
-  g_held=false;input_network(&env);assert(missile_steering);
-  g_held=true;usr.gdata.data.last_accel_mtm=1000;reset_packet();input_network(&env);
-  assert(!missile_steering && stop_boost==1); // second press stops boost immediately
-  input_network(&env);assert(!missile_steering); // held/repeated key does not restart
-  g_held=false;input_network(&env);
-
-  captured=true;g_held=true;usr.gdata.data.last_accel_mtm=0;reset_packet();input_network(&env);
-  assert(missile_steering && boost==1 && steering==1); // keyboard works over panels
-  g_held=false;input_network(&env);assert(missile_steering);captured=false;
-
-  // Safety guards cancel even after G is released. Clearing them never restarts.
-  for(int guard=0;guard<10;guard++) {
-    missile_reset();g_held=false;input_network(&env);usr.gdata.data.md=false;
-    g_held=true;usr.gdata.data.last_accel_mtm=0;reset_packet();input_network(&env);
-    assert(missile_steering && boost==1);
-    if(guard%2) { g_held=false;input_network(&env);assert(missile_steering); }
-    io.WantTextInput=guard==0;chat_typing=guard==0;focused=guard!=1;captured=guard==2;native_settings_open=guard==2;
-    target_captured=guard==3;death_review.frozen=guard==4;me.dead=guard==5;
-    connection.is_closing=guard==6;
-    if(guard==7) usr.usrs.hotkeys[HOTKEY_ASSIST].key=GLFW_KEY_G;
-    if(guard==8) usr.gdata.curr_screen=TITLE_SCREEN;
-    if(guard==9) usr.gdata.conn=DISCONNECTED;
-    reset_packet();input_network(&env);assert(!missile_steering && boost==0);
-    io.WantTextInput=false;chat_typing=false;focused=true;captured=false;target_captured=false;
-    death_review.frozen=false;me.dead=false;connection.is_closing=false;native_settings_open=false;
-    usr.usrs.hotkeys[HOTKEY_ASSIST].key=GLFW_KEY_R;
-    usr.gdata.curr_screen=PLAYING;usr.gdata.conn=CONNECTED;
-    reset_packet();input_network(&env);assert(!missile_steering && boost==0);
-    g_held=false;input_network(&env);
-  }
-  g_held=true;input_network(&env);assert(missile_steering);
-  missile_reset();input_network(&env);assert(!missile_steering); // held G cannot carry across a reset
-  g_held=false;input_network(&env);
-  // The optional wall protection still overrides a missile near the boundary.
-  g_held=true;native_prefs.safe_wall=true;me.xx=3400+3300;me.yy=3400;me.ang=.15f;me.wang=.15f;
-  usr.gdata.data.view_xx=me.xx;usr.gdata.data.view_yy=me.yy;
-  mouse_x=500;mouse_y=250;usr.gdata.data.last_accel_mtm=0;
-  reset_packet();input_network(&env);
-  assert(missile_steering && safe_wall_steering && last_angle>=40 && last_angle<=63);
-  assert(fabsf(missile_angle-safe_wall_angle)<.001f);
-  connection.is_closing=true;reset_packet();input_network(&env);assert(steering==0 && !missile_steering);
-  puts("Missile: G toggle, release persistence, repeat suppression, live aim, immediate stop, mode priority, safety cancellation, no restart, reset and wall protection passed");
+  // G runs the separate Snake Missile worker; it must not boost our own snake.
+  usr.gdata.curr_screen=PLAYING;usr.usrs.hotkeys[HOTKEY_BOT].active=false;
+  g_held=true;held=false;usr.gdata.data.md=false;usr.gdata.data.last_accel_mtm=0;
+  reset_packet();input_network(&env);assert(boost==0 && steering==1);
   puts("Steering: chat follows moving mouse, no typing/click boost, immediate boost release, normal input resumes; bot, focus, other UI, cadence and socket guards passed");
 }
