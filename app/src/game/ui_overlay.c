@@ -17,6 +17,12 @@ void ui_overlay(tenv* env) {
   game_data* gdata = &usr->gdata;
   user_settings* usrs = &usr->usrs;
 
+      if (missile_status) {
+        ImFont* font=usr->imgui_data.regular_font[FONT_SIZE_SMALL];
+        ImDrawList_AddText_FontPtr(igGetForegroundDrawList_ViewportPtr(NULL),font,font->LegacySize,
+            (ImVec2){24,env->ctx->size[1]-60},0xffffffff,missile_status,NULL,0,NULL);
+      }
+
   float mww2 = ctx->size[0] / 2.0f;
   float mhh2 = ctx->size[1] / 2.0f;
 

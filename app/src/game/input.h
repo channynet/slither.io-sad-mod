@@ -18,6 +18,7 @@ extern float body_hug_tx, body_hug_ty;
 // Hold Q to steer with the mouse and boost, temporarily overriding bot/coil/hug.
 extern bool missile_steering;
 extern float missile_angle;
+extern const char* missile_status;
 
 void body_hug_log(int kind,const char* fmt,...);   // E diagnostics (hug-log.txt)
 #endif

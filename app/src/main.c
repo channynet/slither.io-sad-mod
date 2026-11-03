@@ -1,4 +1,5 @@
 #include "game/loop.h"
+#include "platform/auto_update.h"
 #include "ui/text_input_ime.h"
 #include "ui/skin_editor.h"
 #include "ui/title_screen.h"
@@ -102,6 +103,7 @@ void tinput(tenv* env) {
 }
 
 void tlaunch(tenv* env) {
+  auto_update_startup();
 #ifdef _WIN32
   wchar_t executable[32768];
   DWORD length = GetModuleFileNameW(NULL, executable, 32768);

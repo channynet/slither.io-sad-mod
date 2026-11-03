@@ -6,6 +6,7 @@
 #include <stdio.h>
 #include <math.h>
 native_preferences native_prefs;
+bool native_settings_open;
 death_review_state death_review;
 static tuser_data usr;
 static snake me={.id=7};
@@ -121,6 +122,11 @@ int main(void) {
   q_held=false;usr.gdata.data.last_accel_mtm=1000;reset_packet();input_network(&env);
   assert(!missile_steering && stop_boost==1);  // key release does not wait 50 ms
 
+  // A keyboard hold must work while the mouse rests over a non-editing panel.
+  captured=true;q_held=true;usr.gdata.data.last_accel_mtm=0;reset_packet();input_network(&env);
+  assert(missile_steering && boost==1 && steering==1);
+  q_held=false;input_network(&env);captured=false;
+
   // Chat, focus, other UI, target selection, death and disconnect cancel a hold.
   // Holding Q while the guard clears cannot silently restart the missile.
   for(int guard=0;guard<8;guard++) {
@@ -128,13 +134,13 @@ int main(void) {
     usr.gdata.data.md=false;  // fresh live state after the preceding death/disconnect case
     q_held=true;usr.gdata.data.last_accel_mtm=0;reset_packet();input_network(&env);
     assert(missile_steering && boost==1);
-    io.WantTextInput=guard==0;chat_typing=guard==0;focused=guard!=1;captured=guard==2;
+    io.WantTextInput=guard==0;chat_typing=guard==0;focused=guard!=1;captured=guard==2;native_settings_open=guard==2;
     target_captured=guard==3;death_review.frozen=guard==4;me.dead=guard==5;
     connection.is_closing=guard==6;
     if(guard==7) usr.usrs.hotkeys[HOTKEY_ASSIST].key=GLFW_KEY_Q;
     reset_packet();input_network(&env);assert(!missile_steering && boost==0);
     io.WantTextInput=false;chat_typing=false;focused=true;captured=false;target_captured=false;
-    death_review.frozen=false;me.dead=false;connection.is_closing=false;
+    death_review.frozen=false;me.dead=false;connection.is_closing=false;native_settings_open=false;
     usr.usrs.hotkeys[HOTKEY_ASSIST].key=GLFW_KEY_R;
     reset_packet();input_network(&env);assert(!missile_steering && boost==0);
     q_held=false;input_network(&env);

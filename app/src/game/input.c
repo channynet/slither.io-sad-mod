@@ -11,6 +11,7 @@
 #include <stdio.h>
 #include <GLFW/glfw3.h>
 #include "native_preferences.h"
+#include "native_shortcuts.h"
 #include "perf_trace.h"
 #include "death_review.h"
 
@@ -21,24 +22,31 @@ int native_coil;
 float body_hug_tx, body_hug_ty;
 bool missile_steering;
 float missile_angle;
+const char* missile_status;
 
 static bool missile_requested(tenv* env) {
-  // A cancelled hold cannot restart when chat/focus/death/target selection ends.
   static bool blocked;
+  missile_status=NULL;
   if (!twindow_key_down(env->wnd, GLFW_KEY_Q)) { blocked=false; return false; }
   game_data* g=&env->usr->gdata;
   snake* me=g->data.follow_view ? get_snake(g,g->data.snake_id) : NULL;
-  bool allowed=g->curr_screen==PLAYING && g->conn==CONNECTED && g->connection &&
-      !g->closed && !g->connection->is_closing && me && !me->dead && !death_review.frozen &&
-      !igGetIO_Nil()->WantTextInput && !ntl_mouse_captured() && !target_marker_captured() &&
-      glfwGetWindowAttrib(env->wnd->handle,GLFW_FOCUSED) &&
-      !twindow_key_down(env->wnd,GLFW_KEY_LEFT_CONTROL) && !twindow_key_down(env->wnd,GLFW_KEY_RIGHT_CONTROL) &&
-      !twindow_key_down(env->wnd,GLFW_KEY_LEFT_ALT) && !twindow_key_down(env->wnd,GLFW_KEY_RIGHT_ALT) &&
-      !twindow_key_down(env->wnd,GLFW_KEY_LEFT_SUPER) && !twindow_key_down(env->wnd,GLFW_KEY_RIGHT_SUPER);
-  // Honour an existing user binding instead of firing two actions with Q.
-  for(int i=0;i<NUM_HOTKEYS;i++) if(env->usr->usrs.hotkeys[i].key==GLFW_KEY_Q) allowed=false;
-  if(!allowed) blocked=true;
-  return allowed && !blocked;
+  if(g->curr_screen!=PLAYING || g->conn!=CONNECTED || !g->connection || g->closed ||
+      g->connection->is_closing || !me || me->dead || death_review.frozen)
+    missile_status="Q 돌진: 플레이 중에 사용할 수 있습니다";
+  else if(igGetIO_Nil()->WantTextInput) missile_status="Q 돌진: 채팅 입력을 끝내세요";
+  else if(native_settings_open) missile_status="Q 돌진: 설정 창을 닫으세요";
+  else if(target_marker_captured()) missile_status="Q 돌진: 대상 선택을 끝내세요";
+  else if(!glfwGetWindowAttrib(env->wnd->handle,GLFW_FOCUSED)) missile_status="Q 돌진: 게임 창을 선택하세요";
+  else if(twindow_key_down(env->wnd,GLFW_KEY_LEFT_CONTROL) || twindow_key_down(env->wnd,GLFW_KEY_RIGHT_CONTROL) ||
+      twindow_key_down(env->wnd,GLFW_KEY_LEFT_ALT) || twindow_key_down(env->wnd,GLFW_KEY_RIGHT_ALT) ||
+      twindow_key_down(env->wnd,GLFW_KEY_LEFT_SUPER) || twindow_key_down(env->wnd,GLFW_KEY_RIGHT_SUPER))
+    missile_status="Q 돌진: Ctrl, Alt, Windows 키를 놓으세요";
+  for(int i=0;i<NUM_HOTKEYS;i++) if(env->usr->usrs.hotkeys[i].key==GLFW_KEY_Q)
+    missile_status="Q 돌진: 설정에서 다른 기능의 Q 단축키를 바꾸세요";
+  if(missile_status) { blocked=true; return false; }
+  if(blocked) { missile_status="Q 돌진: Q를 놓았다가 다시 누르세요"; return false; }
+  missile_status="Q 돌진 중: 마우스로 방향 지정 / Q를 놓으면 해제";
+  return true;
 }
 
 // Body hug (E): the enemy nearest when E goes down (within 900, not a teammate) is the one for
@@ -239,7 +247,7 @@ void input_network(tenv* env) {
   bool coil_on=native_coil!=0;           // F1/F2 turning on: no mouse needed either
   if(body_hug_active && bot_active) body_hug_log(4,"E held but the bot (T) is on: the hug is off");
   if(body_hug_active && !glfwGetWindowAttrib(env->wnd->handle,GLFW_FOCUSED)) body_hug_log(5,"E held but the window is not focused");
-  if(!bot_active && ((ui_capture && !ntl_chat_typing() && !hug_held && !coil_on) ||
+  if(!bot_active && ((ui_capture && !ntl_chat_typing() && !hug_held && !coil_on && !missile_steering) ||
       !glfwGetWindowAttrib(env->wnd->handle,GLFW_FOCUSED))) {
     if(gdata->data.md) {
       gdata->data.md=gdata->data.wmd=false;

@@ -82,6 +82,7 @@ def main():
         package = staging / NAME
         package.mkdir()
         shutil.copy2(build.DIST / 'SlitherNative.exe', package / 'SlitherNative.exe')
+        shutil.copy2(build.DIST / 'update.ps1', package / 'update.ps1')
         tracked = set(filter(None, subprocess.check_output(['git', 'ls-files', '-z'], cwd=ROOT).decode().split('\0')))
         patterns = ['fonts/*.ttf', 'fonts/*.txt', 'textures/*.png',
                     'shaders/bin/*.spv', 'personal/library/*.png', 'menu/cat-knock-*.png',

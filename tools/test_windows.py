@@ -89,3 +89,4 @@ for name, sources, extra in [
             print(result.stdout)
 
 subprocess.run([sys.executable, str(ROOT / 'tools/test_korean_input.py')], check=True)
+subprocess.run([sys.executable, str(ROOT / 'tools/test_auto_update.py')], check=True)
