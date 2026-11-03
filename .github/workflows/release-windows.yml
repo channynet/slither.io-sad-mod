@@ -20,10 +20,10 @@ jobs:
         run: python tools/prepare_windows.py
       - name: Validate update transactions
         run: powershell -NoProfile -ExecutionPolicy Bypass -File tests/update_test.ps1
-      - name: Run native tests
-        run: python tools/test_windows.py
       - name: Build clean Windows package
         run: python tools/package_windows.py
+      - name: Run native tests
+        run: python tools/test_windows.py
       - uses: actions/upload-artifact@v4
         with:
           name: SlitherNative-Windows
