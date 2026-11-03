@@ -1,12 +1,14 @@
 #include "../app/src/game/snake_missile.h"
 #include "../app/src/platform/missile_worker.h"
 #include "../app/src/game/death_review.h"
+#include "../app/src/game/native_preferences.h"
 #include "../app/src/user.h"
 #include <assert.h>
 #include <math.h>
 #include <stdio.h>
 #include <string.h>
 bool native_settings_open;
+native_preferences native_prefs={.missile_count=100};
 death_review_state death_review;
 static ImGuiIO io;
 static snake me={.id=7};
@@ -22,7 +24,7 @@ double glfwGetTime(void){return now;}
 ImGuiIO* igGetIO_Nil(void){return &io;}
 snake* get_snake(game_data* g,int id){(void)g;return id==7?&me:NULL;}
 bool target_marker_captured(void){return target_captured;}
-bool missile_worker_start(const char* server,float x,float y){assert(!strcmp(server,"127.0.0.1:4444"));starts++;target_x=x;target_y=y;worker.running=true;worker.active=worker.total=2;return true;}
+bool missile_worker_start(const char* server,float x,float y,int count){assert(!strcmp(server,"127.0.0.1:4444"));assert(count==native_prefs.missile_count);starts++;target_x=x;target_y=y;worker.running=true;worker.active=worker.total=count;return true;}
 void missile_worker_stop(void){if(worker.running)stops++;worker.running=false;}
 void missile_worker_target(float x,float y){targets++;target_x=x;target_y=y;}
 missile_worker_state missile_worker_poll(void){return worker;}
@@ -32,13 +34,14 @@ int main(void){
   usr.gdata.data.follow_view=true;usr.gdata.data.snake_id=7;usr.gdata.data.gsc=2;usr.gdata.data.view_xx=1000;usr.gdata.data.view_yy=1000;
   strcpy(usr.usrs.ipv4,"127.0.0.1:4444");snake_missile_reset();snake_missile_input(&env);
   key=true;snake_missile_input(&env);assert(starts==1&&snake_missile_active&&target_x==1100&&target_y==1000);
-  snake_missile_input(&env);assert(starts==1);
+  snake_missile_input(&env);assert(starts==1&&worker.total==100);
+  native_prefs.missile_count=1;snake_missile_input(&env);assert(starts==1&&worker.total==100);
   key=false;mouse_x=400;mouse_y=500;now+=.2;snake_missile_input(&env);
   assert(snake_missile_active&&target_x==1000&&target_y==1100&&targets>0);
   assert(!usr.gdata.data.md&&!usr.gdata.data.wmd); // G cannot accelerate the player.
   key=true;snake_missile_input(&env);assert(!snake_missile_active&&stops==1);
   for(int guard=0;guard<8;guard++){
-    key=false;snake_missile_input(&env);key=true;snake_missile_input(&env);assert(snake_missile_active);
+    key=false;snake_missile_input(&env);key=true;snake_missile_input(&env);assert(snake_missile_active&&worker.total==1);
     key=false;snake_missile_input(&env);io.WantTextInput=guard==0;native_settings_open=guard==1;focused=guard!=2;
     target_captured=guard==3;me.dead=guard==4;conn.is_closing=guard==5;death_review.frozen=guard==6;
     if(guard==7)usr.usrs.hotkeys[0].key=GLFW_KEY_G;

@@ -51,7 +51,8 @@ void missile_worker_stop(void) {
 #endif
   state.running=false;state.active=0;pending_size=0;
 }
-bool missile_worker_start(const char* server,float x,float y) {
+bool missile_worker_start(const char* server,float x,float y,int count) {
+  if(count<1 || count>100) return false;
   missile_worker_stop();memset(&state,0,sizeof(state));
 #ifdef _WIN32
   SECURITY_ATTRIBUTES sa={sizeof(sa),NULL,TRUE};
@@ -90,9 +91,9 @@ bool missile_worker_start(const char* server,float x,float y) {
   fcntl(writer,F_SETFL,fcntl(writer,F_GETFL)|O_NONBLOCK);
   fcntl(reader,F_SETFD,FD_CLOEXEC);fcntl(writer,F_SETFD,FD_CLOEXEC);
 #endif
-  state.running=true;strcpy(state.state,"connecting");
+  state.running=true;state.total=count;strcpy(state.state,"connecting");
   char command[512];
-  size_t n=mg_snprintf(command,sizeof(command),"{\"command\":\"start\",\"server\":%m,\"x\":%.2f,\"y\":%.2f}\n",mg_print_esc,0,server,x,y);
+  size_t n=mg_snprintf(command,sizeof(command),"{\"command\":\"start\",\"server\":%m,\"x\":%.2f,\"y\":%.2f,\"count\":%d}\n",mg_print_esc,0,server,x,y,count);
   if(n>=sizeof(command) || !send_line(command,n)) {missile_worker_stop();return false;}
   return true;
 #ifdef _WIN32

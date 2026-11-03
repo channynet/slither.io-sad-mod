@@ -16,6 +16,7 @@ import (
 type command struct {
 	Command string `json:"command"`
 	Server  string `json:"server"`
+	Count   *int   `json:"count,omitempty"`
 	X, Y    float64
 }
 type status struct {
@@ -69,6 +70,13 @@ func main() {
 			continue
 		}
 		properties.ServerAddress = address
+		if message.Count != nil {
+			if *message.Count < 1 || *message.Count > 100 {
+				write(status{State: "bot_count"})
+				return
+			}
+			properties.TotalBots = *message.Count
+		}
 		engine, err = application.NewNativeEngine(&properties)
 		if err != nil {
 			write(status{State: err.Error()})

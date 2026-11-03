@@ -13,6 +13,7 @@ typedef struct {
   bool path_retry;
   bool bot_smart;      // NTL "Smart bot": grow first, then circle. Off: circle at once.
   int bot_length;      // NTL "bot length": the length at which growing turns into circling
+  int missile_count;   // Total Snake Missile connections, 1..100 (not per proxy).
   bool gradient_enabled;
   int gradient_count;
   float gradient_colors[4][3];

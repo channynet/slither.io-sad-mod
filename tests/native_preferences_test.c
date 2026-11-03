@@ -17,6 +17,7 @@ int main(void) {
   assert(!native_double_tap(&tap,'0',2450));
   native_preferences p,q;
   assert(!native_preferences_load("missing.json",&p));
+  assert(p.missile_count==2); p.missile_count=100;
   assert(p.frame_cap==0 && p.render_scale==1 && p.team_panel && !p.fullscreen);
   assert(p.team_status); p.team_status=false;
   assert(p.snake_outline && p.head_point && p.death_freeze);
@@ -39,6 +40,7 @@ int main(void) {
   p.frame_cap=2; p.render_scale=0; p.team_panel=false; p.fullscreen=true;
   assert(native_preferences_save("roundtrip.json",&p));
   assert(native_preferences_load("roundtrip.json",&q));
+  assert(q.missile_count==100);
   assert(q.frame_cap==2 && q.render_scale==0 && !q.team_panel && q.fullscreen);
   assert(!q.team_status);
   assert(!q.snake_outline && !q.head_point && !q.death_freeze);
@@ -54,6 +56,13 @@ int main(void) {
   FILE* legacy=fopen("legacy.json","wb");
   fputs("{\"version\":2,\"frame_cap\":1,\"render_scale\":2,\"team_panel\":false,\"fullscreen\":true}",legacy); fclose(legacy);
   assert(native_preferences_load("legacy.json",&q));
+  assert(q.missile_count==2);
+  for(int count=-1;count<=101;count++) {
+    FILE* counts=fopen("counts.json","wb");
+    fprintf(counts,"{\"version\":2,\"frame_cap\":0,\"render_scale\":1,\"team_panel\":true,\"fullscreen\":false,\"missile_count\":%d}",count);fclose(counts);
+    native_preferences check;assert(native_preferences_load("counts.json",&check));
+    assert(check.missile_count==(count>=1&&count<=100?count:2));
+  }
   assert(q.team_status);
   assert(q.snake_outline && q.head_point && q.death_freeze && q.fullscreen && !q.team_panel && q.frame_cap==1 && q.render_scale==2);
   assert(q.uniform_names && q.name_color[0]==.85f && q.team_name_color[0]==1);

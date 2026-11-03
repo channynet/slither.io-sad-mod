@@ -34,6 +34,7 @@ func (t *NativeTarget) Point() (int, int) { t.RLock(); defer t.RUnlock(); return
 type NativeEngine struct {
 	manager *MissileManager
 	proxies []string
+	total   int
 	Target  NativeTarget
 }
 
@@ -42,17 +43,29 @@ func NewNativeEngine(properties *ProgramProperties) (*NativeEngine, error) {
 	if err != nil {
 		return nil, errors.New("proxy_file")
 	}
-	if properties.BotsPerProxy < 1 || properties.BotsPerProxy > 64 || len(proxies) < 1 || len(proxies)*properties.BotsPerProxy > 64 {
+	total := properties.TotalBots
+	if total == 0 && properties.BotsPerProxy >= 1 && properties.BotsPerProxy <= 100 && len(proxies) <= 100 {
+		total = len(proxies) * properties.BotsPerProxy
+	}
+	if len(proxies) < 1 || total < 1 || total > 100 {
 		return nil, errors.New("bot_count")
 	}
 	m := &MissileManager{Properties: properties, Logger: zap.NewNop(), ListenerFunctions: make(map[int]ListenerFunc)}
 	m.InitializeListeners()
-	return &NativeEngine{manager: m, proxies: proxies}, nil
+	return &NativeEngine{manager: m, proxies: proxies, total: total}, nil
 }
-func (e *NativeEngine) Count() int { return len(e.proxies) * e.manager.Properties.BotsPerProxy }
+func (e *NativeEngine) Count() int { return e.total }
 func (e *NativeEngine) Run(ctx context.Context, report func(int, string)) {
 	var workers sync.WaitGroup
 	for index := 0; index < e.Count(); index++ {
+		if index > 0 {
+			select {
+			case <-ctx.Done():
+				workers.Wait()
+				return
+			case <-time.After(50 * time.Millisecond):
+			}
+		}
 		workers.Add(1)
 		go func(index int) { defer workers.Done(); e.runWorm(ctx, index, report) }(index)
 	}
@@ -67,9 +80,9 @@ func (e *NativeEngine) runWorm(ctx context.Context, index int, report func(int, 
 			report(index, "connection_failed")
 		} else {
 			report(index, "connected")
-			e.serve(ctx, worm, index, report)
+			state := e.serve(ctx, worm, index, report)
 			_ = worm.Connection.Close()
-			report(index, "respawning")
+			report(index, state)
 		}
 		select {
 		case <-ctx.Done():
@@ -88,7 +101,7 @@ type receivedPacket struct {
 	err  error
 }
 
-func (e *NativeEngine) serve(ctx context.Context, worm *Earthworm, index int, report func(int, string)) {
+func (e *NativeEngine) serve(ctx context.Context, worm *Earthworm, index int, report func(int, string)) string {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	incoming := make(chan receivedPacket, 8)
@@ -118,10 +131,13 @@ func (e *NativeEngine) serve(ctx context.Context, worm *Earthworm, index int, re
 	for worm.IsConnected && !worm.IsDead {
 		select {
 		case <-ctx.Done():
-			return
+			return "stopped"
 		case packet := <-incoming:
 			if packet.err != nil {
-				return
+				if !initialized {
+					return "handshake_rejected"
+				}
+				return "connection_closed"
 			}
 			if packet.kind != websocket.BinaryMessage {
 				continue
@@ -133,8 +149,7 @@ func (e *NativeEngine) serve(ctx context.Context, worm *Earthworm, index int, re
 			}
 		case <-tick.C:
 			if !initialized && time.Since(connectedAt) > 20*time.Second {
-				report(index, "handshake_timeout")
-				return
+				return "handshake_timeout"
 			}
 			if initialized {
 				x, y := e.Target.Point()
@@ -146,6 +161,7 @@ func (e *NativeEngine) serve(ctx context.Context, worm *Earthworm, index int, re
 			}
 		}
 	}
+	return "respawning"
 }
 func validNativePacket(data []byte) bool {
 	if len(data) < 3 {

@@ -17,13 +17,14 @@ import (
 )
 
 type testServer struct {
-	server *httptest.Server
-	live   atomic.Int32
-	ids    atomic.Int32
-	angles chan byte
+	server      *httptest.Server
+	live        atomic.Int32
+	ids         atomic.Int32
+	angles      chan byte
+	east, south atomic.Int32
 }
 
-func newTestServer(t *testing.T, modern bool) *testServer {
+func newTestServer(t *testing.T, modern bool, versions ...byte) *testServer {
 	t.Helper()
 	s := &testServer{angles: make(chan byte, 512)}
 	s.server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -99,6 +100,9 @@ func newTestServer(t *testing.T, modern bool) *testServer {
 			init := make([]byte, 25)
 			init[0] = 'a'
 			init[23] = 14
+			if len(versions) > 0 {
+				init[23] = versions[0]
+			}
 			init[24] = 42
 			body := append([]byte{0, byte(len(init))}, init...)
 			body = append(body, 0, byte(len(snake)-2))
@@ -108,6 +112,7 @@ func newTestServer(t *testing.T, modern bool) *testServer {
 			write([]byte{0, 0, 'a'})
 			write(snake)
 		}
+		east, south := false, false
 		for {
 			p := read()
 			if len(p) == 0 {
@@ -120,6 +125,14 @@ func newTestServer(t *testing.T, modern bool) *testServer {
 					write([]byte{0, 0, 'p'})
 				}
 			} else if len(p) == 1 && p[0] <= 250 {
+				if p[0] == 0 && !east {
+					east = true
+					s.east.Add(1)
+				}
+				if p[0] == 63 && !south {
+					south = true
+					s.south.Add(1)
+				}
 				select {
 				case s.angles <- p[0]:
 				default:
@@ -199,7 +212,7 @@ func TestMalformedPackets(t *testing.T) {
 	if _, err := NewNativeEngine(&ProgramProperties{BotsPerProxy: 0}); err == nil {
 		t.Fatal("zero bots accepted")
 	}
-	if _, err := NewNativeEngine(&ProgramProperties{BotsPerProxy: 65}); err == nil {
+	if _, err := NewNativeEngine(&ProgramProperties{BotsPerProxy: 101}); err == nil {
 		t.Fatal("unbounded bots accepted")
 	}
 	p := nativeProtocol{modern: true, version: 31, step: 42}
@@ -237,7 +250,7 @@ func TestNativeProcessBridge(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	s := newTestServer(t, true)
+	s := newTestServer(t, true, 31)
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, bridge, strings.TrimPrefix(s.server.URL, "http://"))
@@ -248,4 +261,91 @@ func TestNativeProcessBridge(t *testing.T) {
 	waitFor(t, func() bool { return s.live.Load() == 0 })
 	waitAngle(t, s, 0)
 	waitAngle(t, s, 63)
+	if s.east.Load() != 100 || s.south.Load() != 100 {
+		t.Fatalf("not all 100 bots steered: east=%d south=%d", s.east.Load(), s.south.Load())
+	}
+}
+
+func TestTotalCountAndHundredConnections(t *testing.T) {
+	proxies := filepath.Join(t.TempDir(), "proxies.txt")
+	if err := os.WriteFile(proxies, []byte("one:8080\ntwo:8080\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	e, err := NewNativeEngine(&ProgramProperties{TotalBots: 100, BotsPerProxy: 2, ProxyListPath: proxies})
+	if err != nil || e.Count() != 100 {
+		t.Fatal("UI count must be total, not multiplied by proxies", err)
+	}
+	s := newTestServer(t, true)
+	e, err = NewNativeEngine(&ProgramProperties{TotalBots: 100, ServerAddress: strings.TrimPrefix(s.server.URL, "http://")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	e.Target.Set(2000, 1000)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	done := make(chan struct{})
+	var active atomic.Int32
+	go func() {
+		defer close(done)
+		e.Run(ctx, func(_ int, state string) {
+			if state == "active" {
+				active.Add(1)
+			}
+		})
+	}()
+	deadline := time.Now().Add(15 * time.Second)
+	for active.Load() < 100 && time.Now().Before(deadline) {
+		time.Sleep(20 * time.Millisecond)
+	}
+	if active.Load() != 100 {
+		t.Fatalf("only %d of 100 bots spawned", active.Load())
+	}
+	waitFor(t, func() bool { return s.east.Load() == 100 })
+	e.Target.Set(1000, 2000)
+	waitFor(t, func() bool { return s.south.Load() == 100 })
+	cancel()
+	select {
+	case <-done:
+	case <-time.After(3 * time.Second):
+		t.Fatal("100 connections did not stop")
+	}
+	waitFor(t, func() bool { return s.live.Load() == 0 })
+}
+
+func TestServerRejectsSpawn(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		up := websocket.Upgrader{CheckOrigin: func(*http.Request) bool { return true }}
+		c, err := up.Upgrade(w, r, nil)
+		if err != nil {
+			return
+		}
+		defer c.Close()
+		_, _, _ = c.ReadMessage() // reject after HELLO, before any own-snake packet
+	}))
+	defer server.Close()
+	e, err := NewNativeEngine(&ProgramProperties{TotalBots: 1, ServerAddress: strings.TrimPrefix(server.URL, "http://")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	states := make(chan string, 16)
+	done := make(chan struct{})
+	go func() { defer close(done); e.Run(ctx, func(_ int, s string) { states <- s }) }()
+	timeout := time.After(5 * time.Second)
+	for {
+		select {
+		case s := <-states:
+			if s == "active" || s == "respawning" {
+				t.Fatalf("rejection hidden by %s", s)
+			}
+			if s == "handshake_rejected" {
+				cancel()
+				<-done
+				return
+			}
+		case <-timeout:
+			t.Fatal("rejection not reported")
+		}
+	}
 }
