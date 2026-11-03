@@ -29,7 +29,7 @@ jobs:
         run: python3 tools/build_unix.py --jobs 3
       - name: Test missile engine
         working-directory: third_party/snake-missile
-        run: go test -count=1 -timeout=60s ./application ./utilities
+        run: go test -count=1 -timeout=60s ./application ./utilities ./cmd/native-worker
       - name: Verify architectures and signature
         run: |
           lipo dist/SlitherNative.app/Contents/MacOS/SlitherNative -verify_arch arm64 x86_64

@@ -25,6 +25,29 @@ type status struct {
 	Total  int    `json:"total"`
 }
 
+// Keep a pending failure visible while other worms connect successfully.
+func summarize(states []string) status {
+	s := status{State: "connecting", Total: len(states)}
+	counts := map[string]int{}
+	for _, state := range states {
+		counts[state]++
+		if state == "active" {
+			s.Active++
+		}
+	}
+	if s.Active == s.Total {
+		s.State = "active"
+		return s
+	}
+	for _, state := range []string{"handshake_rejected", "handshake_timeout", "connection_failed", "connection_closed"} {
+		if counts[state] > 0 {
+			s.State = state
+			return s
+		}
+	}
+	return s
+}
+
 func main() {
 	var output sync.Mutex
 	write := func(s status) { output.Lock(); defer output.Unlock(); _ = json.NewEncoder(os.Stdout).Encode(s) }
@@ -95,13 +118,7 @@ func main() {
 				stateLock.Lock()
 				defer stateLock.Unlock()
 				states[index] = state
-				n := 0
-				for _, s := range states {
-					if s == "active" {
-						n++
-					}
-				}
-				write(status{State: state, Active: n, Total: len(states)})
+				write(summarize(states))
 			})
 		}()
 	}

@@ -13,4 +13,4 @@ run([BIN/'x86_64-w64-mingw32-clang.exe','-std=gnu11','-O1','-static',
      ROOT/'app/src/external/mongoose.c','-lws2_32','-o',bridge])
 env=os.environ.copy()
 env.update(SLITHER_MISSILE_BRIDGE_TEST=str(bridge),SLITHER_MISSILE_WORKER_TEST=str(worker),GOTOOLCHAIN='local')
-subprocess.run([go_tool(),'test','-count=1','-timeout=60s','-v','./application','./utilities'],cwd=SOURCE,env=env,check=True)
+subprocess.run([go_tool(),'test','-count=1','-timeout=240s','-v','./application','./utilities','./cmd/native-worker'],cwd=SOURCE,env=env,check=True)

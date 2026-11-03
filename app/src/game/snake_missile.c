@@ -61,10 +61,11 @@ void snake_missile_input(tenv* env) {
   if(snake_missile_active) {
     double now=glfwGetTime();
     if(now-last_target>=.1) {missile_worker_target(snake_missile_x,snake_missile_y);last_target=now;}
-    const char* note=!strcmp(worker.state,"connection_failed")?"접속 실패: 서버 제한·주소·프록시 확인":
-      !strcmp(worker.state,"handshake_rejected")?"생성 응답 전에 연결이 종료됐습니다":
-      !strcmp(worker.state,"connection_closed")?"연결이 종료되어 다시 접속합니다":
-      !strcmp(worker.state,"handshake_timeout")?"서버 응답 지연":worker.active?"마우스로 목표 지정 / G로 종료":"연결 중 / G로 종료";
+    const char* note=!strcmp(worker.state,"connection_failed")?"접속 실패 · 추가 접속 대기 중 / G로 종료":
+      !strcmp(worker.state,"handshake_rejected")?"생성 전 연결 종료 · 추가 접속 대기 중 / G로 종료":
+      !strcmp(worker.state,"connection_closed")?"연결 종료 · 추가 접속 대기 중 / G로 종료":
+      !strcmp(worker.state,"handshake_timeout")?"서버 응답 지연 · 추가 접속 대기 중 / G로 종료":
+      worker.active==worker.total?"마우스로 목표 지정 / G로 종료":"초당 1마리씩 연결 중 / G로 종료";
     snprintf(snake_missile_status,sizeof(snake_missile_status),"미사일 지렁이 %d/%d · %s",worker.active,worker.total,note);
   }
 }

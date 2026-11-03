@@ -251,7 +251,7 @@ func TestNativeProcessBridge(t *testing.T) {
 		t.Fatal(err)
 	}
 	s := newTestServer(t, true, 31)
-	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 150*time.Second)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, bridge, strings.TrimPrefix(s.server.URL, "http://"))
 	cmd.Dir = root
@@ -280,6 +280,7 @@ func TestTotalCountAndHundredConnections(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	e.connectGap = time.Millisecond // scale coverage; native process test uses the real one-second pace
 	e.Target.Set(2000, 1000)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()

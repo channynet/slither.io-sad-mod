@@ -32,10 +32,13 @@ func (t *NativeTarget) Set(x, y float64) bool {
 func (t *NativeTarget) Point() (int, int) { t.RLock(); defer t.RUnlock(); return t.X, t.Y }
 
 type NativeEngine struct {
-	manager *MissileManager
-	proxies []string
-	total   int
-	Target  NativeTarget
+	manager                *MissileManager
+	proxies                []string
+	total                  int
+	Target                 NativeTarget
+	gate                   sync.Mutex
+	nextConnect            time.Time
+	connectGap, retryPause time.Duration
 }
 
 func NewNativeEngine(properties *ProgramProperties) (*NativeEngine, error) {
@@ -52,20 +55,40 @@ func NewNativeEngine(properties *ProgramProperties) (*NativeEngine, error) {
 	}
 	m := &MissileManager{Properties: properties, Logger: zap.NewNop(), ListenerFunctions: make(map[int]ListenerFunc)}
 	m.InitializeListeners()
-	return &NativeEngine{manager: m, proxies: proxies, total: total}, nil
+	return &NativeEngine{manager: m, proxies: proxies, total: total, connectGap: time.Second, retryPause: 30 * time.Second}, nil
 }
 func (e *NativeEngine) Count() int { return e.total }
+func (e *NativeEngine) waitConnect(ctx context.Context) bool {
+	for ctx.Err() == nil {
+		e.gate.Lock()
+		wait := time.Until(e.nextConnect)
+		if wait <= 0 {
+			e.nextConnect = time.Now().Add(e.connectGap)
+			e.gate.Unlock()
+			return true
+		}
+		e.gate.Unlock()
+		timer := time.NewTimer(wait)
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			return false
+		case <-timer.C:
+		}
+	}
+	return false
+}
+func (e *NativeEngine) coolDown() {
+	e.gate.Lock()
+	defer e.gate.Unlock()
+	until := time.Now().Add(e.retryPause)
+	if until.After(e.nextConnect) {
+		e.nextConnect = until
+	}
+}
 func (e *NativeEngine) Run(ctx context.Context, report func(int, string)) {
 	var workers sync.WaitGroup
 	for index := 0; index < e.Count(); index++ {
-		if index > 0 {
-			select {
-			case <-ctx.Done():
-				workers.Wait()
-				return
-			case <-time.After(50 * time.Millisecond):
-			}
-		}
 		workers.Add(1)
 		go func(index int) { defer workers.Done(); e.runWorm(ctx, index, report) }(index)
 	}
@@ -74,14 +97,21 @@ func (e *NativeEngine) Run(ctx context.Context, report func(int, string)) {
 func (e *NativeEngine) runWorm(ctx context.Context, index int, report func(int, string)) {
 	delay := time.Second
 	for ctx.Err() == nil {
+		if !e.waitConnect(ctx) {
+			return
+		}
 		worm := NewEarthworm(e.manager, e.proxies[index%len(e.proxies)])
 		report(index, "connecting")
 		if err := worm.ConnectToServerContext(ctx, e.manager.Properties.ServerAddress); err != nil {
+			e.coolDown()
 			report(index, "connection_failed")
 		} else {
 			report(index, "connected")
 			state := e.serve(ctx, worm, index, report)
 			_ = worm.Connection.Close()
+			if state == "handshake_rejected" || state == "handshake_timeout" || state == "connection_closed" {
+				e.coolDown()
+			}
 			report(index, state)
 		}
 		select {
