@@ -1,10 +1,15 @@
-name: macOS fullscreen fix
+name: macOS build and startup tests
 on:
   push:
-    branches: [codex/macos-fullscreen-fix]
+    branches: [main]
+  pull_request:
+    branches: [main]
   workflow_dispatch:
 permissions:
   contents: read
+concurrency:
+  group: macos-${{ github.ref }}
+  cancel-in-progress: true
 jobs:
   mac:
     runs-on: macos-15
@@ -26,9 +31,9 @@ jobs:
       - name: Test windowed and fullscreen startup
         run: python3 tools/test_mac_startup.py
       - name: Include corresponding source
-        run: git archive --format=zip --output=dist/SlitherNative-macfix1-source.zip HEAD
+        run: git archive --format=zip --output=dist/SlitherNative-source.zip HEAD
       - uses: actions/upload-artifact@v4
         with:
-          name: SlitherNative-macfix1
+          name: SlitherNative-macOS
           path: dist/*.zip
           retention-days: 30

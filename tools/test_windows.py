@@ -71,8 +71,9 @@ for name, sources, extra in [
     ('screenshot_png', ['thermite/src/external/stb/stb_image_write.c','thermite/src/external/stb/stb_image.c'], ['-I',str(ROOT / 'thermite/src')]),
 ]:
     executable = BUILD / f'{name}_test.exe'
-    run([BIN / 'x86_64-w64-mingw32-clang.exe','-std=gnu11','-O1','-static',
-         ROOT / f'tests/{name}_test.c',*[ROOT / s for s in sources],*extra,'-o',executable])
+    compile_command=[BIN / 'x86_64-w64-mingw32-clang.exe','-std=gnu11','-O1','-static',
+         ROOT / f'tests/{name}_test.c',*[ROOT / s for s in sources],*extra,'-o',executable]
+    run(compile_command)
     with tempfile.TemporaryDirectory(prefix=f'{name}-test-',dir=BUILD) as sandbox:
         args = [str(executable)]
         if name == 'tag_image': args.append(str(ROOT / 'app/res/personal/black-wings.png'))
@@ -80,5 +81,11 @@ for name, sources, extra in [
         if name == 'picture_worker': args.append(str(ROOT / 'app/res/ntl-tags/t5.png'))
         result = subprocess.run(args,cwd=sandbox,check=True,capture_output=True,text=True,encoding="utf-8",errors="replace")
         print(result.stdout)
+        if name == 'network_pump':
+            # Exercise the supported unknown-telemetry path on every Windows run.
+            fallback = BUILD / 'network_pump_no_tcp_info_test.exe'
+            run([*compile_command[:-2], '-DNTDDI_VERSION=0', '-o', fallback])
+            result = subprocess.run([str(fallback)],cwd=sandbox,check=True,capture_output=True,text=True,encoding='utf-8',errors='replace')
+            print(result.stdout)
 
 subprocess.run([sys.executable, str(ROOT / 'tools/test_korean_input.py')], check=True)
