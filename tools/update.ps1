@@ -1,4 +1,4 @@
-param([string]$CurrentVersion, [int]$ParentId, [string]$ReadyEvent, [switch]$CheckOnly, [switch]$Repair)
+param([string]$CurrentVersion, [int]$ParentId, [string]$ReadyEvent, [switch]$CheckOnly, [switch]$Repair, [switch]$SkipCheck)
 $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
 # A Windows PowerShell child may inherit PowerShell Core's incompatible module path.
@@ -41,8 +41,19 @@ function Get-SafePath([string]$Root, [string]$Relative) {
     return $path
 }
 function Test-RuntimePath([string]$Path) {
-    if ($Path -ceq 'app/res/snake-missile/worker.exe') { return $true }
     return $Path -cmatch '^(SlitherNative\.exe|update\.ps1|LICENSE|THIRD-PARTY-NOTICES\.md|README-KO\.txt|licenses/[a-zA-Z0-9_./-]+|app/res/(fonts|textures|shaders/bin|personal/library|menu|ntl-tags|ntl-tags-online|faces)/[a-zA-Z0-9_.-]+)$'
+}
+function Test-RetiredPath([string]$Path) {
+    return $Path -ceq 'app/res/snake-missile/worker.exe'
+}
+function Move-RetiredComponents([string]$Root) {
+    # Preserve the obsolete engine for recovery; never touch user configuration.
+    $relative = 'app/res/snake-missile/worker.exe'
+    $source = Get-SafePath $Root $relative
+    if (!(Test-Path -LiteralPath $source -PathType Leaf)) { return }
+    $target = Get-SafePath $Root ('.update/retired/'+$relative)
+    [IO.Directory]::CreateDirectory([IO.Path]::GetDirectoryName($target)) | Out-Null
+    Move-Item -LiteralPath $source -Destination $target -Force
 }
 function Expand-VerifiedPackage([string]$Archive, [string]$Digest, [string]$Stage, [string]$Version) {
     if ((Get-FileHash -LiteralPath $Archive -Algorithm SHA256).Hash -ine $Digest) { throw 'Package hash mismatch' }
@@ -74,7 +85,7 @@ function Restore-Update([string]$Root) {
     if (!(Test-Path -LiteralPath $journal)) { return }
     $items = ConvertFrom-Json -InputObject (Get-Content -Raw -LiteralPath $journal)
     foreach ($item in $items) {
-        if (!(Test-RuntimePath $item.path)) { throw 'Invalid recovery path' }
+        if (!(Test-RuntimePath $item.path) -and !(Test-RetiredPath $item.path)) { throw 'Invalid recovery path' }
         $dest = Get-SafePath $Root $item.path
         if ($item.existed) {
             $backup = Get-SafePath $Root ('.update/backup/'+$item.path)
@@ -123,6 +134,8 @@ function Invoke-SlitherUpdate {
         [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
         $journal = Get-SafePath $root '.update/transaction.json'
         if (!(Test-Path -LiteralPath $journal)) {
+            if (!$CheckOnly) { Move-RetiredComponents $root }
+            if ($SkipCheck -and !$CheckOnly) { return }
             $release = Invoke-RestMethod -Uri "https://api.github.com/repos/$Repository/releases/latest" -Headers @{'User-Agent'='SlitherNative-Updater';Accept='application/vnd.github+json'} -TimeoutSec 8
             $asset = Get-UpdateAsset $release $CurrentVersion -Repair:$Repair
             if ($CheckOnly) {

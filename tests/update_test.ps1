@@ -24,6 +24,7 @@ try {
     Reject { Get-SafePath $temp '../outside' }
     Reject { Get-SafePath $temp 'C:/outside' }
     Reject { Get-SafePath $temp 'file:alternate' }
+    Assert (!(Test-RuntimePath 'app/res/snake-missile/worker.exe')) 'Retired engine accepted for installation'
 
     Add-Type -AssemblyName System.IO.Compression
     Add-Type -AssemblyName System.IO.Compression.FileSystem
@@ -63,6 +64,23 @@ try {
     Restore-Update $root
     Assert ((Get-Content -Raw -LiteralPath (Join-Path $root 'SlitherNative.exe')) -eq 'new SlitherNative.exe') 'Crash recovery failed'
     Assert (!(Test-Path -LiteralPath (Join-Path $root 'README-KO.txt'))) 'Added file not rolled back'
+
+    # Old in-flight transactions can still restore the removed engine, after
+    # which startup moves it out of the runtime tree without losing its bytes.
+    $oldWorker='app/res/snake-missile/worker.exe'
+    $workerBackup=Get-SafePath $root ('.update/backup/'+$oldWorker)
+    $workerPath=Get-SafePath $root $oldWorker
+    [IO.Directory]::CreateDirectory([IO.Path]::GetDirectoryName($workerBackup)) | Out-Null
+    [IO.Directory]::CreateDirectory([IO.Path]::GetDirectoryName($workerPath)) | Out-Null
+    [IO.File]::WriteAllText($workerBackup,'old engine')
+    [IO.File]::WriteAllText($workerPath,'partial engine')
+    [IO.File]::WriteAllText((Join-Path $root '.update/transaction.json'),(ConvertTo-Json -InputObject @([pscustomobject]@{path=$oldWorker;existed=$true})))
+    Restore-Update $root
+    Move-RetiredComponents $root
+    Move-RetiredComponents $root
+    Assert (!(Test-Path -LiteralPath $workerPath)) 'Retired engine remains active'
+    Assert ((Get-Content -Raw -LiteralPath (Get-SafePath $root ('.update/retired/'+$oldWorker))) -eq 'old engine') 'Retired engine backup lost'
+    Assert ((Get-Content -Raw -LiteralPath (Join-Path $root 'user.dat')) -eq 'my settings') 'Retirement changed user data'
 
     # Archive traversal is rejected even if the archive digest is valid.
     $bad=Join-Path $temp 'bad.zip';$zip=[IO.Compression.ZipFile]::Open($bad,[IO.Compression.ZipArchiveMode]::Create)

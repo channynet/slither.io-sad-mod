@@ -4,7 +4,6 @@ import sys
 import tempfile
 BUILD.mkdir(parents=True, exist_ok=True)
 subprocess.run([sys.executable, str(ROOT / 'tools/test_auto_update.py')], check=True)
-subprocess.run([sys.executable, str(ROOT / 'tools/test_missile.py')], check=True)
 test = BUILD / 'ntl_protocol_test.exe'
 run([BIN / 'x86_64-w64-mingw32-clang.exe', '-std=gnu11', '-O1', '-static',
      ROOT / 'tests/ntl_protocol_test.c', ROOT / 'app/src/network/ntl_protocol.c',
@@ -29,7 +28,6 @@ for name, sources, extra in [
     ('ping_tracker', [], ['-D_WIN32_WINNT=0x0A00','-lws2_32']),
     ('team_status', ['app/src/network/ntl_protocol.c','app/src/external/mongoose.c'], ['-lws2_32']),
     ('bot_steering', ['app/src/game/input.c','app/src/game/body_hug_worker.c'], [*flags,'-DCIMGUI_NO_EXPORT','-ffunction-sections','-fdata-sections','-Wl,--gc-sections']),
-    ('snake_missile', ['app/src/game/snake_missile.c'], [*flags,'-DCIMGUI_NO_EXPORT']),
     ('sbot_integration', ['app/src/game/sbot.c','app/src/game/defensive_planner.c','app/src/game/body_loop.c','thermite/src/util/tdarray.c'], [*flags,'-DCIMGUI_NO_EXPORT']),
     ('sbot_live_loop', ['app/src/game/sbot.c','app/src/game/defensive_planner.c','app/src/game/body_loop.c','thermite/src/util/tdarray.c'], [*flags,'-DCIMGUI_NO_EXPORT']),
     ('sbot_size_hold', ['app/src/game/sbot.c','app/src/game/defensive_planner.c','app/src/game/body_loop.c','thermite/src/util/tdarray.c'], [*flags,'-DCIMGUI_NO_EXPORT']),

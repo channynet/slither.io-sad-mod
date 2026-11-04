@@ -6,7 +6,6 @@
 #include <stdio.h>
 #include <math.h>
 native_preferences native_prefs;
-void snake_missile_input(tenv* env) { (void)env; }
 death_review_state death_review;
 static tuser_data usr;
 static snake me={.id=7};
@@ -104,7 +103,7 @@ int main(void) {
   // Off: out of the map stays out of the map.
   native_prefs.safe_wall=false; me.xx=3400+3300; me.yy=3400; usr.gdata.data.view_xx=me.xx; usr.gdata.data.view_yy=me.yy;
   reset_packet(); input_network(&env); assert(steering==1 && last_angle==19 && !safe_wall_steering);
-  // G runs the separate Snake Missile worker; it must not boost our own snake.
+  // G has no built-in action and must not boost our own snake.
   usr.gdata.curr_screen=PLAYING;usr.usrs.hotkeys[HOTKEY_BOT].active=false;
   g_held=true;held=false;usr.gdata.data.md=false;usr.gdata.data.last_accel_mtm=0;
   reset_packet();input_network(&env);assert(boost==0 && steering==1);

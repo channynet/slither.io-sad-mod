@@ -17,10 +17,6 @@ void auto_update_startup(void) {
   // Renamed development/test executables must not update the installed app.
   if(_wcsicmp(slash+1,L"SlitherNative.exe")) return;
   *slash=0;
-  wchar_t worker[32768];
-  if(swprintf(worker,32768,L"%ls\\app\\res\\snake-missile\\worker.exe",exe)<0) return;
-  bool repair=GetFileAttributesW(worker)==INVALID_FILE_ATTRIBUTES;
-  if(skip_once && !repair) return;
   if(swprintf(script,32768,L"%ls\\update.ps1",exe)<0 || GetFileAttributesW(script)==INVALID_FILE_ATTRIBUTES) return;
   n=GetSystemDirectoryW(shell,MAX_PATH);
   if(!n || n+50>=MAX_PATH) return;
@@ -28,7 +24,7 @@ void auto_update_startup(void) {
   swprintf(event_name,128,L"Local\\SlitherUpdate-%lu-%llu",GetCurrentProcessId(),GetTickCount64());
   HANDLE ready=CreateEventW(NULL,TRUE,FALSE,event_name); if(!ready) return;
   wchar_t version[64]; MultiByteToWideChar(CP_UTF8,0,APP_VERSION,-1,version,64);
-  int count=swprintf(command,32768,L"\"%ls\" -NoProfile -NonInteractive -ExecutionPolicy Bypass -WindowStyle Hidden -File \"%ls\" -CurrentVersion \"%ls\" -ParentId %lu -ReadyEvent \"%ls\" %ls",shell,script,version,GetCurrentProcessId(),event_name,repair?L"-Repair":L"");
+  int count=swprintf(command,32768,L"\"%ls\" -NoProfile -NonInteractive -ExecutionPolicy Bypass -WindowStyle Hidden -File \"%ls\" -CurrentVersion \"%ls\" -ParentId %lu -ReadyEvent \"%ls\" %ls",shell,script,version,GetCurrentProcessId(),event_name,skip_once?L"-SkipCheck":L"");
   STARTUPINFOW si={.cb=sizeof(si),.dwFlags=STARTF_USESHOWWINDOW,.wShowWindow=SW_HIDE};
   PROCESS_INFORMATION pi={0};
   if(count>0 && CreateProcessW(shell,command,NULL,NULL,FALSE,CREATE_NO_WINDOW,NULL,exe,&si,&pi)) {

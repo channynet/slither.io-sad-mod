@@ -16,10 +16,6 @@ jobs:
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
-        with:
-          go-version: '1.27.3'
-          cache-dependency-path: third_party/snake-missile/go.sum
       - name: Check startup ordering
         run: |
           mkdir -p build/tests
@@ -27,13 +23,9 @@ jobs:
           build/tests/window_startup
       - name: Build Universal application
         run: python3 tools/build_unix.py --jobs 3
-      - name: Test missile engine
-        working-directory: third_party/snake-missile
-        run: go test -count=1 -timeout=60s ./application ./utilities ./cmd/native-worker
       - name: Verify architectures and signature
         run: |
           lipo dist/SlitherNative.app/Contents/MacOS/SlitherNative -verify_arch arm64 x86_64
-          lipo dist/SlitherNative.app/Contents/Resources/app/res/snake-missile/worker -verify_arch arm64 x86_64
           codesign --verify --deep --strict dist/SlitherNative.app
           otool -L dist/SlitherNative.app/Contents/MacOS/SlitherNative
       - name: Test windowed and fullscreen startup

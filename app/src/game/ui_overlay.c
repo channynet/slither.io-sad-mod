@@ -1,6 +1,5 @@
 #include "ui_overlay.h"
 #include "input.h"
-#include "snake_missile.h"
 #include "perf_trace.h"
 
 #include "../user.h"
@@ -17,21 +16,6 @@ void ui_overlay(tenv* env) {
   tcontext* ctx = env->ctx;
   game_data* gdata = &usr->gdata;
   user_settings* usrs = &usr->usrs;
-
-  if(snake_missile_active && gdata->data.gsc>0) {
-    ImVec2 target={ctx->size[0]/2.0f+(snake_missile_x-gdata->data.view_xx)*gdata->data.gsc,
-                  ctx->size[1]/2.0f+(snake_missile_y-gdata->data.view_yy)*gdata->data.gsc};
-    ImDrawList* draw=igGetForegroundDrawList_ViewportPtr(NULL);
-    ImDrawList_AddCircle(draw,target,12,0xff5555ff,24,2);
-    ImDrawList_AddLine(draw,(ImVec2){target.x-18,target.y},(ImVec2){target.x+18,target.y},0xff5555ff,2);
-    ImDrawList_AddLine(draw,(ImVec2){target.x,target.y-18},(ImVec2){target.x,target.y+18},0xff5555ff,2);
-  }
-
-      if (snake_missile_status[0]) {
-        ImFont* font=usr->imgui_data.regular_font[FONT_SIZE_SMALL];
-        ImDrawList_AddText_FontPtr(igGetForegroundDrawList_ViewportPtr(NULL),font,font->LegacySize,
-            (ImVec2){24,env->ctx->size[1]-60},0xffffffff,snake_missile_status,NULL,0,NULL);
-      }
 
   float mww2 = ctx->size[0] / 2.0f;
   float mhh2 = ctx->size[1] / 2.0f;

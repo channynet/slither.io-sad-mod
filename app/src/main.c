@@ -1,5 +1,4 @@
 #include "game/loop.h"
-#include "game/snake_missile.h"
 #include "platform/auto_update.h"
 #include "ui/text_input_ime.h"
 #include "ui/skin_editor.h"
@@ -160,7 +159,6 @@ void tinit(tenv* env) {
 }
 
 void tdestroy(tenv* env) {
-  snake_missile_reset();
   native_preferences_tick(&env->usr->usrs,true);
   ntl_destroy();
   server_status_destroy();

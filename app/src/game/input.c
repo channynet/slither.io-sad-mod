@@ -11,7 +11,6 @@
 #include <stdio.h>
 #include <GLFW/glfw3.h>
 #include "native_preferences.h"
-#include "snake_missile.h"
 #include "perf_trace.h"
 #include "death_review.h"
 
@@ -197,7 +196,6 @@ void input_network(tenv* env) {
   game_data* gdata=&usr->gdata;
   user_settings* usrs=&usr->usrs;
   tcontext* ctx=env->ctx;
-  snake_missile_input(env);
   struct mg_connection* connection=gdata->connection;
   if(gdata->conn!=CONNECTED || !connection || connection->is_closing || gdata->closed) return;
   float now=(float)(glfwGetTime()*1000.0);

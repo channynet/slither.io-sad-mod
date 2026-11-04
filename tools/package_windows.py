@@ -24,12 +24,6 @@ README = f'''Slither Native {VERSION} · Windows x64
    NTL처럼 이름을 붙여 여러 팀키를 저장하고 "저장된 팀키" 목록에서 골라 연결합니다(연결 중에도 바꾸기 가능).
 
 주요 조작: 마우스 이동, Space 가속, 휠 확대/축소, F11 전체 화면.
-F8 팀 창의 설정 > Snake Missile: 전체 미사일 수를 1~100마리로 설정합니다. 앱이 수를 저장합니다.
-G 한 번: 설정한 수의 Snake Missile 지렁이 생성. 마우스: 미사일의 목표 위치 지정. G 다시 한 번: 미사일 종료.
-앱은 초당 1회씩 접속합니다. 접속 실패나 연결 종료가 발생하면 앱은 추가 접속을 30초간 대기합니다.
-서버가 추가 접속을 제한하면 실제 생성 수가 설정 수보다 적을 수 있습니다.
-서버가 생성 위치를 정하므로 지렁이가 화면에 나타날 때까지 시간이 걸릴 수 있습니다. 화면 아래에서 생성 수를 확인합니다.
-app/res/snake-missile/worker.exe는 앱이 자동 실행하는 내부 엔진입니다. 사용자는 SlitherNative.exe만 실행합니다.
 앱을 실행하면 최신 정식 버전을 확인합니다. 새 버전이 있으면 자동으로 설치한 뒤 앱을 실행합니다.
 H 두 번 또는 F8: 팀 채팅. T 두 번: BOT. V 두 번: 화면 정보.
 오른쪽 아래 고양이 애니메이션은 메뉴에서만 표시됩니다.
@@ -90,9 +84,6 @@ def main():
         package.mkdir()
         shutil.copy2(build.DIST / 'SlitherNative.exe', package / 'SlitherNative.exe')
         shutil.copy2(build.DIST / 'update.ps1', package / 'update.ps1')
-        worker = package / 'app/res/snake-missile/worker.exe'
-        worker.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(build.DIST / 'app/res/snake-missile/worker.exe', worker)
         tracked = set(filter(None, subprocess.check_output(['git', 'ls-files', '-z'], cwd=ROOT).decode().split('\0')))
         patterns = ['fonts/*.ttf', 'fonts/*.txt', 'textures/*.png',
                     'shaders/bin/*.spv', 'personal/library/*.png', 'menu/cat-knock-*.png',

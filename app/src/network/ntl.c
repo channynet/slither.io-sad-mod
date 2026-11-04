@@ -957,11 +957,6 @@ void ntl_frame(tenv* env) {
       igSetNextItemWidth(200);
       igSliderFloat("다른 지렁이 불투명도",&native_prefs.others_opacity,.15f,1,"%.2f",ImGuiSliderFlags_AlwaysClamp);
       igSetItemTooltip("1.00이면 그대로, 낮추면 다른 지렁이 몸이 반투명해져 뒤의 먹이와 몸이 보입니다.");
-      igSeparatorText("Snake Missile (G 한 번으로 켜고 끔)");
-      igSetNextItemWidth(220);
-      igSliderInt("미사일 지렁이 수",&native_prefs.missile_count,1,100,"%d 마리",ImGuiSliderFlags_AlwaysClamp);
-      igSetItemTooltip("같은 서버에 접속시킬 전체 미사일 수입니다. Ctrl+클릭으로 숫자를 직접 입력할 수 있습니다.\n앱이 수를 저장하고 다음 G 실행부터 적용합니다.");
-      igTextWrapped("실제 생성 수는 서버의 추가 접속 허용 범위에 따라 달라집니다. 화면 아래에서 생성 수를 확인하세요.");
       igSeparatorText("봇 (T 두 번으로 켜고 끔)");
       igCheckbox("스마트 봇 · B 두 번",&native_prefs.bot_smart);
       igSetItemTooltip("켜면 NTL처럼 먹이를 먹으며 자라다가, 아래 길이가 되면 몸을 말아 자기 몸을 따라 돕니다.\n끄면 길이와 상관없이 바로 자기 몸을 따라 돕니다.");
