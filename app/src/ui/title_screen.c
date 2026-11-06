@@ -1,5 +1,6 @@
 #include "../network/ntl.h"
 #include "title_screen.h"
+#include "server_browser.h"
 #include "menu_animation.h"
 
 #include "../network/server.h"
@@ -87,6 +88,9 @@ void ui_title_screen(tenv* env) {
 
   igPushFont(usr->imgui_data.regular_font[usrs->ui_font_size],
              usr->imgui_data.regular_font[usrs->ui_font_size]->LegacySize);
+
+  igSetCursorPos((ImVec2){24,24});
+  ui_server_browser(env);
 
   usr->r->global.bg_opacity = 0;
   usr->r->global.bd_opacity = 0;

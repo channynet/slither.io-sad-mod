@@ -20,11 +20,12 @@ static int append(reply_buffer* b, const void* bytes, size_t n) {
 #ifdef _WIN32
 #include <windows.h>
 #include <winhttp.h>
-int http_request(const char* method, const char* url, const char* content_type, const void* body, size_t body_len,
+int http_request_referer(const char* method, const char* url, const char* referer, const char* content_type, const void* body, size_t body_len,
                  unsigned char** out, size_t* out_len, size_t max_out, int timeout_ms) {
   if (out) *out = NULL;
   if (out_len) *out_len = 0;
-  wchar_t wurl[1024], wmethod[16], host[256], path[1024], headers[160] = L"";
+  wchar_t wurl[1024], wmethod[16], host[256], path[1024], headers[160] = L"", wreferer[1024];
+  if (referer && !MultiByteToWideChar(CP_UTF8, 0, referer, -1, wreferer, 1024)) return 0;
   if (!MultiByteToWideChar(CP_UTF8, 0, url, -1, wurl, 1024) || !MultiByteToWideChar(CP_UTF8, 0, method, -1, wmethod, 16)) return 0;
   URL_COMPONENTS parts = {sizeof parts};
   parts.lpszHostName = host; parts.dwHostNameLength = 256;
@@ -36,7 +37,7 @@ int http_request(const char* method, const char* url, const char* content_type, 
   int status = 0;
   HINTERNET session = WinHttpOpen(L"SlitherNative/1.0", WINHTTP_ACCESS_TYPE_AUTOMATIC_PROXY, WINHTTP_NO_PROXY_NAME, WINHTTP_NO_PROXY_BYPASS, 0);
   HINTERNET connection = session ? WinHttpConnect(session, host, parts.nPort, 0) : NULL;
-  HINTERNET request = connection ? WinHttpOpenRequest(connection, wmethod, path, NULL, WINHTTP_NO_REFERER, WINHTTP_DEFAULT_ACCEPT_TYPES,
+  HINTERNET request = connection ? WinHttpOpenRequest(connection, wmethod, path, NULL, referer ? wreferer : WINHTTP_NO_REFERER, WINHTTP_DEFAULT_ACCEPT_TYPES,
                                                       parts.nScheme == INTERNET_SCHEME_HTTPS ? WINHTTP_FLAG_SECURE : 0) : NULL;
   if (session) WinHttpSetTimeouts(session, timeout_ms, timeout_ms, timeout_ms, timeout_ms);
   if (request && WinHttpSendRequest(request, headers[0] ? headers : WINHTTP_NO_ADDITIONAL_HEADERS, headers[0] ? (DWORD)-1L : 0,
@@ -67,7 +68,7 @@ static size_t on_data(char* data, size_t size, size_t n, void* user) {
   reply_buffer* b = user;
   return append(b, data, size * n) ? size * n : 0;
 }
-int http_request(const char* method, const char* url, const char* content_type, const void* body, size_t body_len,
+int http_request_referer(const char* method, const char* url, const char* referer, const char* content_type, const void* body, size_t body_len,
                  unsigned char** out, size_t* out_len, size_t max_out, int timeout_ms) {
   if (out) *out = NULL;
   if (out_len) *out_len = 0;
@@ -83,6 +84,7 @@ int http_request(const char* method, const char* url, const char* content_type, 
   curl_easy_setopt(curl, CURLOPT_TIMEOUT_MS, (long)timeout_ms);
   curl_easy_setopt(curl, CURLOPT_NOSIGNAL, 1L);
   curl_easy_setopt(curl, CURLOPT_USERAGENT, "SlitherNative/1.0");
+  if (referer) curl_easy_setopt(curl, CURLOPT_REFERER, referer);
   if (headers) curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
   if (body) { curl_easy_setopt(curl, CURLOPT_POSTFIELDS, body); curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE, (long)body_len); }
   curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, on_data);
@@ -100,3 +102,8 @@ int http_request(const char* method, const char* url, const char* content_type, 
   return status;
 }
 #endif
+
+int http_request(const char* method, const char* url, const char* content_type, const void* body, size_t body_len,
+                 unsigned char** out, size_t* out_len, size_t max_out, int timeout_ms) {
+  return http_request_referer(method, url, NULL, content_type, body, body_len, out, out_len, max_out, timeout_ms);
+}

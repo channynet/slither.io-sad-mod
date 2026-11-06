@@ -43,6 +43,7 @@ for name, sources, extra in [
     ('head_point_geometry', [], []),
     ('input_timing', [], []),
     ('server_status', ['app/src/network/server_status.c','app/src/network/server_history.c','app/src/network/server_address.c','app/src/external/mongoose.c'], ['-lws2_32']),
+    ('server_catalog', ['app/src/external/mongoose.c'], ['-lws2_32']),
     ('user_settings_file', ['app/src/game/user_settings.c','app/src/game/native_preferences.c','app/src/external/mongoose.c'], [*flags,'-lws2_32']),
     ('server_address', ['app/src/network/server_address.c','app/src/external/mongoose.c'], ['-lws2_32']),
     ('server_history', ['app/src/network/server_history.c'], []),
