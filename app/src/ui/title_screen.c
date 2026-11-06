@@ -89,9 +89,6 @@ void ui_title_screen(tenv* env) {
   igPushFont(usr->imgui_data.regular_font[usrs->ui_font_size],
              usr->imgui_data.regular_font[usrs->ui_font_size]->LegacySize);
 
-  igSetCursorPos((ImVec2){24,24});
-  ui_server_browser(env);
-
   usr->r->global.bg_opacity = 0;
   usr->r->global.bd_opacity = 0;
   usr->r->global.minimap_opacity = 0;
@@ -203,6 +200,11 @@ void ui_title_screen(tenv* env) {
   igSetCursorPosX(ctx->size[0] / 2.0f - logo_size / 2);
   igSetCursorPosY(ctx->size[1] / 2.0f + style->ItemSpacing.y * 3 +
                   frame_height * 2);
+  ui_server_browser(env,logo_size);
+
+  igSetCursorPosX(ctx->size[0] / 2.0f - logo_size / 2);
+  igSetCursorPosY(ctx->size[1] / 2.0f + style->ItemSpacing.y * 4 +
+                  frame_height * 3);
 
   if (igButton("\uea1c Play", (ImVec2){logo_size})) {
     usr->gdata.conn = CONNECTING;
@@ -211,8 +213,8 @@ void ui_title_screen(tenv* env) {
     server_connect(env);
   }
   igSetCursorPosX(ctx->size[0] / 2.0f - logo_size / 2);
-  igSetCursorPosY(ctx->size[1] / 2.0f + style->ItemSpacing.y * 4 +
-                  frame_height * 3);
+  igSetCursorPosY(ctx->size[1] / 2.0f + style->ItemSpacing.y * 5 +
+                  frame_height * 4);
   if (igButton("\ue90c Skin editor",
                (ImVec2){logo_size / 2 - style->ItemSpacing.x / 2}))
     usr->gdata.curr_screen = SKIN_EDITOR;
@@ -222,8 +224,8 @@ void ui_title_screen(tenv* env) {
     usr->gdata.curr_screen = SETTINGS;
   }
   igSetCursorPosX(ctx->size[0] / 2.0f - logo_size / 2);
-  igSetCursorPosY(ctx->size[1] / 2.0f + style->ItemSpacing.y * 5 +
-                  frame_height * 4);
+  igSetCursorPosY(ctx->size[1] / 2.0f + style->ItemSpacing.y * 6 +
+                  frame_height * 5);
   if (igButton("\ue9b6 Quit", (ImVec2){logo_size})) {
     env->config.running = false;
     save_user_settings(usrs);

@@ -34,11 +34,11 @@ static void age_text(int64_t stamp,char* out,size_t cap) {
   else if(age<3600) snprintf(out,cap,"%lld분 전%s",(long long)(age/60),age>300?" · 오래된 정보":"");
   else snprintf(out,cap,"%lld시간 전 · 오래된 정보",(long long)(age/3600));
 }
-void ui_server_browser(tenv* env) {
+void ui_server_browser(tenv* env,float width) {
   static server_catalog catalog;
   static char selected[MAX_IPV4_LEN+1],search[80];
   static int sort=0;
-  if(igButton("실시간 서버 선택",(ImVec2){0})) {
+  if(igButton("실시간 서버 선택",(ImVec2){width,0})) {
     snprintf(selected,sizeof(selected),"%s",env->usr->usrs.ipv4);
     igOpenPopup_Str("실시간 서버 선택##browser",0);
   }
