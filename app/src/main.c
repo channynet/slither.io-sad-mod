@@ -21,6 +21,7 @@
 #include "network/server_history.h"
 #include "network/server_status.h"
 #include "network/server_catalog.h"
+#include "network/client_access.h"
 #ifdef _WIN32
 #include <windows.h>
 #include <direct.h>
@@ -154,6 +155,7 @@ void tinit(tenv* env) {
   ntl_init();
   server_status_init();
   server_catalog_init();
+  client_access_init();
   link_probe_init();
   personal_tag_init(env);
   ntl_tags_init(env);
@@ -165,6 +167,7 @@ void tdestroy(tenv* env) {
   ntl_destroy();
   server_status_destroy();
   server_catalog_destroy();
+  client_access_destroy();
   link_probe_destroy();
   head_face_destroy(env);
   personal_tag_destroy(env);

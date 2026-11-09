@@ -10,6 +10,9 @@
 //   GET  /v1/img/<hash>   the PNG
 // Nothing else is kept: no names, no accounts. Game servers are only used as room names.
 
+import { accessFetch } from "./access.js";
+export { Access } from "./access.js";
+
 const ENTRY_MS = 12000;
 const MAX_IMAGE = 120 * 1024;
 const MAX_ROOM = 400;
@@ -34,6 +37,8 @@ function cleanTag(t) {
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
+    if (url.pathname === "/admin" || url.pathname === "/v1/access" || url.pathname.startsWith("/v1/admin/"))
+      return accessFetch(request, env);
     if (url.pathname === "/v1/room" && request.method === "POST") {
       const server = (url.searchParams.get("s") || "").slice(0, 200);
       if (!server) return json({ error: "no server" }, 400);

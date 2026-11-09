@@ -234,6 +234,15 @@ void ui_title_screen(tenv* env) {
     igSetCursorPosX(ctx->size[0]/2.0f-logo_size/2);
     igTextColored((ImVec4){1,0.6f,0.3f,1},"%s",server_last_error());
   }
+
+  igPushFont(usr->imgui_data.regular_font[FONT_SIZE_SMALL],
+             usr->imgui_data.regular_font[FONT_SIZE_SMALL]->LegacySize);
+  igSetCursorPosX(ctx->size[0]/2.0f-logo_size/2);
+  igPushTextWrapPos(ctx->size[0]/2.0f+logo_size/2);
+  igTextDisabled("게임 접속 시 IP 주소·추정 국가·도시·앱 버전을 전송합니다. 관리 서버는 최근 접속 시각을 기록합니다.");
+  if(igIsItemHovered(0)) igSetTooltip("목적: 클라이언트 사용 현황 확인과 IP 차단.\n수신 서버: slither-tag-share.sadxxx.workers.dev\n접속 기록은 기본 30일 보관합니다. 차단 목록은 해제할 때까지 유지합니다.\nIP 기반 위치는 실제 위치와 다를 수 있습니다.\n닉네임·채팅·키 입력·정밀 위치는 이 기능으로 전송하지 않습니다.");
+  igPopTextWrapPos();
+  igPopFont();
   if(server_history_save_failed) {
     igSetCursorPosX(ctx->size[0]/2.0f-logo_size/2);
     igTextColored((ImVec4){1,0.6f,0.3f,1},"Could not save server history.");

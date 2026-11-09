@@ -16,6 +16,11 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Test client management server
+        run: node --test tools/tag-share-worker/tests/access.test.mjs
       - name: Prepare pinned tools
         run: python tools/prepare_windows.py
       - name: Validate update transactions

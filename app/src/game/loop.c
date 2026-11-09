@@ -1,6 +1,7 @@
 #include "loop.h"
 
 #include "../network/server.h"
+#include "../network/client_access.h"
 #include "../network/callback.h"
 #include "../network/ntl.h"
 #include "../user.h"
@@ -63,6 +64,11 @@ void game_loop(tenv* env) {
       igProgressBar(-glfwGetTime(), (ImVec2){loading_bar[0], loading_bar[1]},
                     NULL);
       igPopStyleColor(1);
+
+      if(client_access_state() == ACCESS_PENDING) {
+        igSetCursorPosX(ctx->size[0] * 0.5f - loading_bar[0] * 0.5f);
+        igTextUnformatted("클라이언트 사용 허용 여부를 확인하고 있습니다.", NULL);
+      }
 
       if (gdata->closed) {
         gdata->conn = DISCONNECTED;

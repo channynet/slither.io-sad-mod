@@ -9,9 +9,11 @@
 #include "server_history.h"
 #include "server_address.h"
 #include "server_status.h"
+#include "client_access.h"
 #include "../game/input.h"
 #include "../game/perf_trace.h"
 #include "../game/duel_board.h"
+#include "../game/death_review.h"
 
 void server_init(tenv* env) {
   tuser_data* usr = env->usr;
@@ -23,6 +25,7 @@ void server_init(tenv* env) {
 
 static path_choice paths;
 static bool path_retry;
+static bool access_waiting;
 
 static void open_connection(tenv* env) {
   tuser_data* usr = env->usr;
@@ -63,7 +66,9 @@ void server_connect(tenv* env) {
   server_history_remember(usrs->ipv4);
   path_choice_begin(&paths); path_retry=false;
   duel_connected();
-  open_connection(env);
+  usr->gdata.closed = false;
+  access_waiting = true;
+  client_access_request();
 }
 
 bool server_path_check(tenv* env, struct mg_connection* c) {
@@ -79,6 +84,23 @@ bool server_path_retrying(void) { return path_retry; }
 void server_poll(tenv* env) {
   tuser_data* usr = env->usr;
   game_data* gdata = &usr->gdata;
+
+  client_access_heartbeat(gdata->curr_screen == PLAYING && gdata->conn == CONNECTED && !access_waiting);
+  client_access_result access = client_access_state();
+  if (access_waiting && access != ACCESS_PENDING) {
+    access_waiting = false;
+    if (access != ACCESS_BANNED) { glfwSetTime(0); open_connection(env); }
+  }
+  if (access == ACCESS_BANNED) {
+    access_waiting = path_retry = gdata->restart_req = false;
+    death_review_reset();
+    server_set_error("관리자가 이 접속 IP 주소의 클라이언트 사용을 차단했습니다.");
+    if (gdata->connection) gdata->connection->is_closing = true;
+    if (gdata->curr_screen == PLAYING) {
+      gdata->closed = true;
+      if (!gdata->connection) gdata->conn = DISCONNECTED;
+    }
+  }
 
   double start=perf_now();
   if(gdata->network_polled_at && start>=gdata->network_polled_at)

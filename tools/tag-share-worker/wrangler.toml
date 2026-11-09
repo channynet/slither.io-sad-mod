@@ -12,6 +12,17 @@ class_name = "Room"
 name = "IMAGES"
 class_name = "Images"
 
+[[durable_objects.bindings]]
+name = "ACCESS"
+class_name = "Access"
+
+[vars]
+RETENTION_DAYS = "30"
+
 [[migrations]]
 tag = "v1"
 new_sqlite_classes = ["Room", "Images"]
+
+[[migrations]]
+tag = "v2-client-access"
+new_sqlite_classes = ["Access"]

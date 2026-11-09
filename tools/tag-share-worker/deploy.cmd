@@ -6,7 +6,7 @@ set "WORK=%TEMP%\slither-tag-share"
 if exist "%WORK%" rmdir /s /q "%WORK%"
 mkdir "%WORK%\src"
 copy /y "%~dp0wrangler.toml" "%WORK%\" >nul
-copy /y "%~dp0src\index.js" "%WORK%\src\" >nul
+copy /y "%~dp0src\*.js" "%WORK%\src\" >nul
 cd /d "%WORK%"
 echo Cloudflare에 로그인되어 있지 않으면 로그인 창이 열립니다.
 call npx --yes wrangler@4 deploy --config "%WORK%\wrangler.toml"
