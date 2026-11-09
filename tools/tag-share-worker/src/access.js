@@ -2,6 +2,22 @@
 import { adminPage } from "./admin.js";
 
 const DAY = 86400000;
+const edgeText = (value, max = 100) => typeof value === "string" ? value.slice(0, max) : "";
+function coordinate(value, limit) {
+  if (typeof value !== "string" && typeof value !== "number") return null;
+  if (typeof value === "string" && !value.trim()) return null;
+  const number = Number(value);
+  return Number.isFinite(number) && Math.abs(number) <= limit ? number : null;
+}
+
+function locationInfo(cf) {
+  return {
+    region: edgeText(cf.region), regionCode: edgeText(cf.regionCode, 20),
+    postalCode: edgeText(cf.postalCode, 32),
+    latitude: coordinate(cf.latitude, 90), longitude: coordinate(cf.longitude, 180),
+    timezone: edgeText(cf.timezone), asOrganization: edgeText(cf.asOrganization, 200),
+  };
+}
 export const json = (body, status = 200) => new Response(JSON.stringify(body), {
   status, headers: { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" },
 });
@@ -69,6 +85,7 @@ export async function accessFetch(request, env) {
       ip, version: input.version,
       country: typeof cf.country === "string" ? cf.country.slice(0, 2) : "",
       city: typeof cf.city === "string" ? cf.city.slice(0, 100) : "",
+      location: locationInfo(cf),
     }) });
   }
   if (url.pathname.startsWith("/v1/admin/")) {
@@ -100,25 +117,30 @@ export class Access {
       version TEXT NOT NULL, last_seen INTEGER NOT NULL);
       CREATE INDEX IF NOT EXISTS visits_seen ON visits(last_seen);
       CREATE TABLE IF NOT EXISTS bans (ip TEXT PRIMARY KEY, banned_at INTEGER NOT NULL);`);
+    // Additive migration: retain existing visits and bans across deployments/restarts.
+    if (!this.sql.exec("PRAGMA table_info(visits)").toArray().some(column => column.name === "location"))
+      this.sql.exec("ALTER TABLE visits ADD COLUMN location TEXT NOT NULL DEFAULT '{}'");
   }
   purge(now) { this.sql.exec("DELETE FROM visits WHERE last_seen < ?", now - this.days * DAY); }
   async fetch(request) {
     const url = new URL(request.url), now = Date.now();
     if (url.pathname === "/check" && request.method === "POST") {
       const row = await request.json();
-      this.sql.exec(`INSERT INTO visits(ip,country,city,version,last_seen) VALUES(?,?,?,?,?)
+      this.sql.exec(`INSERT INTO visits(ip,country,city,version,last_seen,location) VALUES(?,?,?,?,?,?)
         ON CONFLICT(ip) DO UPDATE SET country=excluded.country,city=excluded.city,
-        version=excluded.version,last_seen=excluded.last_seen`, row.ip, row.country, row.city, row.version, now);
+        version=excluded.version,last_seen=excluded.last_seen,location=excluded.location`,
+        row.ip, row.country, row.city, row.version, now, JSON.stringify(locationInfo(row.location || {})));
       const banned = this.sql.exec("SELECT ip FROM bans WHERE ip = ?", row.ip).toArray().length > 0;
       if (!await this.storage.getAlarm()) await this.storage.setAlarm(now + DAY);
       return json({ allowed: !banned }, banned ? 403 : 200);
     }
     if (url.pathname === "/list" && request.method === "GET") {
       this.purge(now);
-      const rows = this.sql.exec(`SELECT v.ip,v.country,v.city,v.version,v.last_seen,
+      const rows = this.sql.exec(`SELECT v.ip,v.country,v.city,v.version,v.last_seen,v.location,
         CASE WHEN b.ip IS NULL THEN 0 ELSE 1 END AS banned FROM visits v LEFT JOIN bans b ON v.ip=b.ip
-        UNION ALL SELECT b.ip,'','','',0,1 FROM bans b WHERE NOT EXISTS (SELECT 1 FROM visits v WHERE v.ip=b.ip)
-        ORDER BY last_seen DESC,ip LIMIT 200 OFFSET ?`, Number(url.searchParams.get("offset") || 0)).toArray();
+        UNION ALL SELECT b.ip,'','','',0,'{}',1 FROM bans b WHERE NOT EXISTS (SELECT 1 FROM visits v WHERE v.ip=b.ip)
+        ORDER BY last_seen DESC,ip LIMIT 200 OFFSET ?`, Number(url.searchParams.get("offset") || 0)).toArray()
+        .map(row => ({ ...row, location: locationInfo(JSON.parse(row.location)) }));
       return json({ rows, retention_days: this.days,
         clients: this.sql.exec("SELECT COUNT(*) AS n FROM visits").one().n,
         banned: this.sql.exec("SELECT COUNT(*) AS n FROM bans").one().n,

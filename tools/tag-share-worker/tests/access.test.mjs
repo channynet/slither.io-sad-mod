@@ -4,8 +4,12 @@ import { DatabaseSync } from "node:sqlite";
 import worker, { Room } from "../src/index.js";
 import { Access, cleanIP } from "../src/access.js";
 
-function setup() {
+function setup({ legacy = false } = {}) {
   const db = new DatabaseSync(":memory:");
+  if (legacy) db.exec(`CREATE TABLE visits(ip TEXT PRIMARY KEY,country TEXT NOT NULL,city TEXT NOT NULL,version TEXT NOT NULL,last_seen INTEGER NOT NULL);
+    CREATE TABLE bans(ip TEXT PRIMARY KEY,banned_at INTEGER NOT NULL);
+    INSERT INTO visits VALUES('203.0.113.10','KR','Seoul','old',${Date.now()});
+    INSERT INTO bans VALUES('203.0.113.10',${Date.now()});`);
   let alarm = null;
   const storage = {
     sql: { exec(sql, ...params) {
@@ -18,14 +22,15 @@ function setup() {
   const env = { ADMIN_TOKEN: "test-only-administrator-secret-123456789", RETENTION_DAYS: "30" };
   const access = new Access({ storage }, env);
   env.ACCESS = { idFromName: name => name, get: () => ({ fetch: (url, init) => access.fetch(new Request(url, init)) }) };
-  const call = async (path, body, { admin = false, ip = "203.0.113.10", token = env.ADMIN_TOKEN } = {}) => {
+  const call = async (path, body, { admin = false, ip = "203.0.113.10", token = env.ADMIN_TOKEN,
+    cf = { country: "KR", city: "Seoul" } } = {}) => {
     const headers = { "CF-Connecting-IP": ip };
     if (admin) headers.authorization = "Bearer " + token;
     const request = new Request("https://relay.example" + path, {
       method: body === undefined ? "GET" : "POST", headers,
       body: body === undefined ? undefined : JSON.stringify(body),
     });
-    Object.defineProperty(request, "cf", { value: { country: "KR", city: "Seoul" } });
+    Object.defineProperty(request, "cf", { value: cf });
     return worker.fetch(request, env);
   };
   return { db, env, access, call, storage };
@@ -46,7 +51,7 @@ test("authenticated administrator can list, ban and unblock; trusted edge metada
     assert.equal((await call("/v1/access", { version: "2.6-ntl0.101", ip: "1.2.3.4", city: "fake", nickname: "not retained" })).status, 200);
     let data = await (await call("/v1/admin/clients", undefined, { admin: true })).json();
     assert.equal(data.rows.length, 1);
-    assert.deepEqual(Object.keys(data.rows[0]).sort(), ["banned", "city", "country", "ip", "last_seen", "version"]);
+    assert.deepEqual(Object.keys(data.rows[0]).sort(), ["banned", "city", "country", "ip", "last_seen", "location", "version"]);
     assert.equal(data.rows[0].ip, "203.0.113.10");
     assert.equal(data.rows[0].city, "Seoul"); assert.equal(data.rows[0].country, "KR");
     assert.ok(data.rows[0].last_seen > 0); assert.ok(await storage.getAlarm());
@@ -99,4 +104,52 @@ test("existing tag sharing remains independent of access control", async () => {
   const room = new Room({});
   const result = await room.fetch(new Request("https://room/", { method: "POST", body: JSON.stringify({ sid: 123, tag: ["ntl", 8] }) }));
   assert.deepEqual(await result.json(), { p: [[123, "ntl", 8]] });
+});
+
+test("detailed location comes only from edge metadata and refreshes per IP", async () => {
+  const { db, call } = setup();
+  try {
+    const cf = { country: "KR", city: "Seoul", region: "Seoul", regionCode: "11", postalCode: "04524",
+      latitude: "37.56650", longitude: "126.97800", timezone: "Asia/Seoul", asOrganization: "Example Network" };
+    await call("/v1/access", { version: "test", location: { region: "fake", latitude: 12 }, postalCode: "fake" }, { cf });
+    let data = await (await call("/v1/admin/clients", undefined, { admin: true })).json();
+    assert.deepEqual(data.rows[0].location, { region: "Seoul", regionCode: "11", postalCode: "04524",
+      latitude: 37.5665, longitude: 126.978, timezone: "Asia/Seoul", asOrganization: "Example Network" });
+    await call("/v1/access", { version: "new" }, { cf: { latitude: "0", longitude: 0 } });
+    data = await (await call("/v1/admin/clients", undefined, { admin: true })).json();
+    assert.equal(data.rows.length, 1); assert.equal(data.rows[0].version, "new");
+    assert.equal(data.rows[0].location.latitude, 0); assert.equal(data.rows[0].location.longitude, 0);
+    assert.equal(data.rows[0].location.region, ""); assert.equal(data.rows[0].location.postalCode, "");
+  } finally { db.close(); }
+});
+
+test("absent or invalid location fields remain unknown; strings are bounded", async () => {
+  const { db, call } = setup();
+  try {
+    for (const cf of [undefined, null, {}, { latitude: "", longitude: " " }, { latitude: null, longitude: null },
+      { latitude: "91", longitude: "-181" }, { latitude: "NaN", longitude: "Infinity" },
+      { latitude: true, longitude: [] }]) {
+      await call("/v1/access", { version: "test" }, { cf });
+      const data = await (await call("/v1/admin/clients", undefined, { admin: true })).json();
+      assert.equal(data.rows[0].location.latitude, null); assert.equal(data.rows[0].location.longitude, null);
+    }
+    await call("/v1/access", { version: "test" }, { cf: { region: "a".repeat(1000), postalCode: 12345, asOrganization: "a".repeat(1000) } });
+    const data = await (await call("/v1/admin/clients", undefined, { admin: true })).json();
+    assert.equal(data.rows[0].location.region.length, 100);
+    assert.equal(data.rows[0].location.asOrganization.length, 200);
+    assert.equal(data.rows[0].location.postalCode, "");
+  } finally { db.close(); }
+});
+
+test("migration preserves legacy visits and bans and is safe on restart", async () => {
+  const { db, call, storage } = setup({ legacy: true });
+  try {
+    let data = await (await call("/v1/admin/clients", undefined, { admin: true })).json();
+    assert.equal(data.rows[0].version, "old"); assert.equal(data.rows[0].city, "Seoul");
+    assert.equal(data.rows[0].banned, 1); assert.equal(data.rows[0].location.latitude, null);
+    new Access({ storage }, {});
+    assert.equal((await call("/v1/access", { version: "new" }, { cf: { region: "Seoul", latitude: "37", longitude: "127" } })).status, 403);
+    data = await (await call("/v1/admin/clients", undefined, { admin: true })).json();
+    assert.equal(data.rows[0].location.latitude, 37); assert.equal(data.rows[0].banned, 1);
+  } finally { db.close(); }
 });
