@@ -122,6 +122,10 @@ if app.exists(): shutil.rmtree(app)
 contents = app / 'Contents'
 (contents / 'MacOS').mkdir(parents=True); (contents / 'Frameworks').mkdir(); (contents / 'Resources').mkdir()
 shutil.copy2(exe, contents / 'MacOS/SlitherNative')
+updater = contents / 'MacOS/SlitherUpdater'
+subprocess.run([CC, '-O2', '-fobjc-arc', '-Wno-deprecated-declarations', *arch,
+                str(ROOT / 'tools/mac/updater.m'), '-framework', 'Foundation', '-larchive',
+                '-o', str(updater)], check=True)
 shutil.copy2(MOLTENVK, contents / 'Frameworks/libMoltenVK.dylib')
 copy_resources(contents / 'Resources/app')
 icon = ROOT / 'tools/mac/SlitherNative.icns'
@@ -139,6 +143,7 @@ with open(contents / 'Info.plist', 'wb') as f:
 (contents / 'PkgInfo').write_text('APPL????')
 # Apple Silicon runs only signed code: an ad-hoc signature (no Apple account needed).
 subprocess.run(['codesign', '--force', '--sign', '-', str(contents / 'Frameworks/libMoltenVK.dylib')], check=True)
+subprocess.run(['codesign', '--force', '--sign', '-', '--timestamp=none', str(updater)], check=True)
 subprocess.run(['codesign', '--force', '--sign', '-', '--timestamp=none', str(app)], check=True)
 subprocess.run(['codesign', '--verify', '--deep', '--strict', str(app)], check=True)
 print('built', app)
@@ -152,7 +157,12 @@ stage.mkdir()
 subprocess.run(['ditto', str(app), str(stage / 'SlitherNative.app')], check=True)
 for extra in ['README-MAC-KO.txt', 'LICENSE', 'THIRD-PARTY-NOTICES.md']:
     src = ROOT / extra if (ROOT / extra).exists() else ROOT / 'tools/mac' / extra
-    if src.exists(): shutil.copy2(src, stage / extra)
+    if src.exists():
+        if extra == 'README-MAC-KO.txt':
+            text = re.sub(r'2\.6-ntl\d+\.\d+', VERSION, src.read_text(encoding='utf-8'))
+            (stage / extra).write_text(text, encoding='utf-8')
+        else:
+            shutil.copy2(src, stage / extra)
 if (ROOT / 'licenses').is_dir(): shutil.copytree(ROOT / 'licenses', stage / 'licenses')
 for relative in ['glfw/LICENSE.md', 'app/src/cimgui/LICENSE', 'app/src/cimgui/imgui/LICENSE.txt',
                  'app/src/external/LICENSE.txt', 'thermite/src/external/vma/LICENSE.txt',
