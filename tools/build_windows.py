@@ -53,7 +53,7 @@ def main():
     sources = [ROOT / f'glfw/src/{name}.c' for name in glfw]
     for folder in ['thermite/src', 'app/src']:
         sources += list((ROOT / folder).rglob('*.c')) + list((ROOT / folder).rglob('*.cpp'))
-    common = ['-O2', '-g0', '-D_GLFW_WIN32', '-D_WIN32_WINNT=0x0A00', '-DGLFW_INCLUDE_NONE', '-DGLFW_INCLUDE_VULKAN', '-DCGLM_FORCE_DEPTH_ZERO_TO_ONE', '-DCIMGUI_NO_EXPORT', '-DAPP_VERSION="2.6-ntl0.103"', '-DSETTINGS_VERSION="1.3"']
+    common = ['-O2', '-g0', '-D_GLFW_WIN32', '-D_WIN32_WINNT=0x0A00', '-DGLFW_INCLUDE_NONE', '-DGLFW_INCLUDE_VULKAN', '-DCGLM_FORCE_DEPTH_ZERO_TO_ONE', '-DCIMGUI_NO_EXPORT', '-DAPP_VERSION="2.6-ntl0.104"', '-DSETTINGS_VERSION="1.3"']
     # Keep local filesystem paths out of distributed assertion/source strings.
     common += [f'-ffile-prefix-map={ROOT}=.', f'-ffile-prefix-map={ROOT.as_posix()}=.']
     for path in ['glfw/include', 'thermite/include', 'thermite/src', '.tools/Vulkan-Headers/include']:
