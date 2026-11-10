@@ -6,13 +6,18 @@
 ## 배포 (한 번만)
 
 1. Node.js가 있어야 합니다.
-2. 이 폴더의 `deploy.cmd`를 더블클릭합니다(Cloudflare 로그인 → 배포). 직접 하려면 이 폴더에서:
+2. 이 폴더의 `deploy.cmd`를 더블클릭합니다. 직접 하려면 이 폴더에서:
    ```
    npx wrangler login
-   npx wrangler deploy
+   powershell -NoProfile -ExecutionPolicy Bypass -File deploy.ps1
    ```
 3. 마지막에 나오는 주소(`https://slither-tag-share.<계정>.workers.dev`)를 클라이언트의
    태그 설정 → "태그 공유 서버"에 넣습니다.
+
+배포 도구는 서버 검사 후 코드를 업로드합니다. 업로드 뒤 실제 운영 화면이 현재 소스와 일치하는지 해시로 검사합니다.
+`GET /v1/access`는 저장소 코드의 형식 번호만 반환합니다. 이 읽기 전용 검사는 접속 기록을 만들거나 개인정보를 반환하지 않습니다.
+배포 도구는 운영 화면과 저장소 코드 검사가 모두 통과해야 성공으로 종료합니다. 이전 코드가 응답하면 재시도 후 실패를 알립니다.
+이미 배포된 서버만 확인하려면 `deploy.ps1 -VerifyOnly -ServiceUrl https://서버주소`를 실행합니다.
 
 ## 클라이언트 접속 관리
 

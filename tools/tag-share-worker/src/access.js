@@ -73,6 +73,9 @@ export async function accessFetch(request, env) {
   if (!env.ACCESS || typeof env.ADMIN_TOKEN !== "string" || env.ADMIN_TOKEN.length < 32)
     return json({ error: "access service not configured" }, 503);
   const store = env.ACCESS.get(env.ACCESS.idFromName("client-access-v1"));
+  // Read-only deployment probe; no addresses, records or administrator secrets are returned.
+  if (url.pathname === "/v1/access" && request.method === "GET")
+    return store.fetch("https://access/health");
   if (url.pathname === "/v1/access" && request.method === "POST") {
     const ip = cleanIP(request.headers.get("CF-Connecting-IP"));
     if (!ip) return json({ error: "client IP unavailable" }, 503);
@@ -124,6 +127,8 @@ export class Access {
   purge(now) { this.sql.exec("DELETE FROM visits WHERE last_seen < ?", now - this.days * DAY); }
   async fetch(request) {
     const url = new URL(request.url), now = Date.now();
+    if (url.pathname === "/health" && request.method === "GET")
+      return json({ schema: 2 });
     if (url.pathname === "/check" && request.method === "POST") {
       const row = await request.json();
       this.sql.exec(`INSERT INTO visits(ip,country,city,version,last_seen,location) VALUES(?,?,?,?,?,?)

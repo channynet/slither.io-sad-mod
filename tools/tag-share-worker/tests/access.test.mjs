@@ -43,6 +43,20 @@ test("IP canonicalization rejects hostnames, ports, zones and malformed values",
     assert.equal(cleanIP(ip), null, String(ip));
 });
 
+test("deployment probe verifies the storage implementation without recording a visit", async () => {
+  const { db, call, env } = setup();
+  try {
+    const response = await call("/v1/access");
+    assert.equal(response.status, 200);
+    assert.equal(response.headers.get("cache-control"), "no-store");
+    assert.deepEqual(await response.json(), { schema: 2 });
+    assert.equal(db.prepare("SELECT COUNT(*) AS n FROM visits").get().n, 0);
+    assert.equal(db.prepare("SELECT COUNT(*) AS n FROM bans").get().n, 0);
+    env.ADMIN_TOKEN = "";
+    assert.equal((await call("/v1/access")).status, 503);
+  } finally { db.close(); }
+});
+
 test("authenticated administrator can list, ban and unblock; trusted edge metadata wins", async () => {
   const { db, call, storage } = setup();
   try {
