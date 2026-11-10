@@ -1,0 +1,22 @@
+name: Diagnose management endpoint
+on:
+  push:
+    branches: [codex/diagnose-management-geo]
+permissions:
+  contents: read
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Inspect public administrator page
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import urllib.request, json, ssl, socket, hashlib
+          host='slither-tag-share.sadxxx.workers.dev'
+          print('DNS',socket.getaddrinfo(host,443,type=socket.SOCK_STREAM))
+          with urllib.request.urlopen('https://'+host+'/admin?diagnostic=geo0102',timeout=25) as r:
+              body=r.read()
+              print(json.dumps({'status':r.status,'bytes':len(body),'sha256':hashlib.sha256(body).hexdigest(),'new_page':b'geo.latitude' in body,'ray':r.headers.get('cf-ray')}))
+          PY
