@@ -16,6 +16,9 @@ The source tree includes these components and their original license texts:
 | stb | thermite/src/external/stb/LICENSE.txt |
 | cglm | thermite/include/cglm/LICENSE.txt |
 | Bundled fonts | app/res/fonts/LICENSE.txt |
+| libarchive public headers | third_party/libarchive/COPYING |
+
+The macOS updater uses the libarchive library supplied by macOS. Public headers are retained from Apple's source distribution at https://github.com/apple-oss-distributions/libarchive/tree/5649597e7975dd1f8c24ab0176f131f47a1cdae0/libarchive/libarchive so builds do not depend on SDK header availability. No additional libarchive binary is bundled.
 
 Mongoose identifies its terms as GPL-2.0-only or commercial. These are retained as found in upstream; this local build does not change or resolve upstream licensing terms. Distribution bundles include the corresponding source snapshot and retained license texts.
 

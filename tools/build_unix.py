@@ -124,6 +124,7 @@ contents = app / 'Contents'
 shutil.copy2(exe, contents / 'MacOS/SlitherNative')
 updater = contents / 'MacOS/SlitherUpdater'
 subprocess.run([CC, '-O2', '-fobjc-arc', '-Wno-deprecated-declarations', *arch,
+                '-I', str(ROOT / 'third_party/libarchive'),
                 str(ROOT / 'tools/mac/updater.m'), '-framework', 'Foundation', '-larchive',
                 '-o', str(updater)], check=True)
 shutil.copy2(MOLTENVK, contents / 'Frameworks/libMoltenVK.dylib')
@@ -167,7 +168,7 @@ if (ROOT / 'licenses').is_dir(): shutil.copytree(ROOT / 'licenses', stage / 'lic
 for relative in ['glfw/LICENSE.md', 'app/src/cimgui/LICENSE', 'app/src/cimgui/imgui/LICENSE.txt',
                  'app/src/external/LICENSE.txt', 'thermite/src/external/vma/LICENSE.txt',
                  'thermite/src/external/stb/LICENSE.txt', 'thermite/include/cglm/LICENSE.txt',
-                 'third_party/moltenvk/LICENSE', 'third_party/vulkan/LICENSE.md',
+                  'third_party/moltenvk/LICENSE', 'third_party/libarchive/COPYING', 'third_party/vulkan/LICENSE.md',
                  'third_party/vulkan/LICENSES/Apache-2.0.txt', 'third_party/vulkan/LICENSES/MIT.txt']:
     source = ROOT / relative
     if source.exists():

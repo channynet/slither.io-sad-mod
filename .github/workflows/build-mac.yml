@@ -26,7 +26,7 @@ jobs:
         run: python3 tools/build_unix.py --jobs 3
       - name: Test updater validation and transactions
         run: |
-          clang -fobjc-arc -Wno-deprecated-declarations tests/mac_update_test.m -framework Foundation -larchive -o build/tests/mac_update
+          clang -fobjc-arc -Wno-deprecated-declarations -Ithird_party/libarchive tests/mac_update_test.m -framework Foundation -larchive -o build/tests/mac_update
           version=$(python3 -c 'import re; from pathlib import Path; print(re.search(r"APP_VERSION=\"([^\"]+)\"", Path("tools/build_windows.py").read_text()).group(1))')
           build/tests/mac_update "dist/SlitherNative-$version-macOS-Universal.zip" "$version"
       - name: Verify architectures and signature
