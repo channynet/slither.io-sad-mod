@@ -4,6 +4,7 @@
 #include "head_face.h"
 #include "gradient_color.h"
 #include "skin_gradient.h"
+#include "fire_skin.h"
 #include "toast.h"
 #include "../game/native_preferences.h"
 #include "../game/skin_library.h"
@@ -74,6 +75,7 @@ static void saved_skin_controls(tenv* env,float width) {
 }
 
 void ui_skin_editor(tenv* env) {
+  skin_effect_time = (float)glfwGetTime();
   tuser_data* usr = env->usr;
   tcontext* ctx = env->ctx;
   ImGuiStyle* style = igGetStyle();
