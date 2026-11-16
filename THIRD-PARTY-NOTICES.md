@@ -17,6 +17,9 @@ The source tree includes these components and their original license texts:
 | cglm | thermite/include/cglm/LICENSE.txt |
 | Bundled fonts | app/res/fonts/LICENSE.txt |
 | libarchive public headers | third_party/libarchive/COPYING |
+| QuickJS-NG 0.18.0 | app/src/external/quickjs-ng/LICENSE.txt and retained source notices |
+
+The random skin button embeds the existing color laboratory rule engine using QuickJS-NG 0.18.0. The upstream amalgamated source comes from https://github.com/quickjs-ng/quickjs/releases/tag/v0.18.0. The application does not enable QuickJS's host filesystem or operating-system modules. Corresponding generator TypeScript sources and their origin hashes are retained in tools/skin-generator; the embedded script is rebuilt with build_bundle.py.
 
 The macOS updater uses the libarchive library supplied by macOS. Public headers are retained from Apple's source distribution at https://github.com/apple-oss-distributions/libarchive/tree/5649597e7975dd1f8c24ab0176f131f47a1cdae0/libarchive/libarchive so builds do not depend on SDK header availability. No additional libarchive binary is bundled.
 

@@ -8,8 +8,10 @@
 #include "toast.h"
 #include "../game/native_preferences.h"
 #include "../game/skin_library.h"
+#include "../game/skin_generator.h"
 
 #include <string.h>
+#include <time.h>
 
 #include "../user.h"
 
@@ -22,6 +24,21 @@ int skin_code_filter(ImGuiInputTextCallbackData* data) {
 static skin_library saved_skins;
 static int selected_skin=-1;
 static char skin_save_status[160];
+static generated_skin last_generated;
+static void random_skin(tenv* env) {
+  static uint32_t serial;
+  uint32_t seed=(uint32_t)(glfwGetTime()*1000000)^(uint32_t)time(NULL)^(++serial*0x9e3779b9u);
+  generated_skin result;
+  if(!skin_generator_make(seed,&result)) {
+    toast_show("랜덤 스킨을 생성하지 못했습니다. 기존 스킨을 유지합니다.",1,.5f,.3f,5);
+    return;
+  }
+  strcpy(env->usr->usrs.skin_code,result.code);
+  env->usr->usrs.custom_skin=true;
+  native_prefs.fire_skin=false;native_prefs.gradient_enabled=false;
+  last_generated=result;selected_skin=-1;
+  toast_show(result.topic,.6f,.9f,.8f,4);
+}
 static skin_design capture_skin(tenv* env) {
   user_settings* u=&env->usr->usrs;skin_design d={0};
   snprintf(d.code,sizeof(d.code),"%s",u->skin_code);d.custom=u->custom_skin;
@@ -323,8 +340,19 @@ void ui_skin_editor(tenv* env) {
   igSetCursorPosY((palette_top) -
                   ((style->ItemSpacing.y + frame_height) * 3));
   if (igButton(usrs->custom_skin ? "\uea40 Default" : "\ue905 Custom",
-               (ImVec2){controls_width}))
+               (ImVec2){(controls_width-style->ItemSpacing.x)*.5f}))
     usrs->custom_skin = !usrs->custom_skin;
+  igSameLine(0,-1);
+  if(igButton("랜덤 스킨",(ImVec2){(controls_width-style->ItemSpacing.x)*.5f})) random_skin(env);
+  if(igIsItemHovered(0)) {
+    igBeginTooltip();igPushTextWrapPos(igGetFontSize()*24);
+    igTextUnformatted("주제어와 배색 규칙 14개의 적용 여부를 무작위로 정해 250글자 스킨을 만듭니다. 불꽃·그라데이션을 끄고 생성한 몸 색상을 표시합니다. OK를 누르면 보관합니다.",NULL);
+    if(last_generated.topic[0]) {
+      igSeparator();igTextWrapped("주제어: %s",last_generated.topic);
+      igTextWrapped("적용 규칙:\n%s",last_generated.theories[0]?last_generated.theories:"추가 규칙 없음");
+    }
+    igPopTextWrapPos();igEndTooltip();
+  }
 
   igSetCursorPosX(center_x - controls_width * 0.5f);
   igSetCursorPosY((palette_top) -

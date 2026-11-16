@@ -26,6 +26,10 @@ jobs:
         run: |
           clang -std=gnu11 tests/skin_library_test.c app/src/game/skin_library.c app/src/external/mongoose.c -o build/tests/skin_library
           cd build/tests && ./skin_library
+      - name: Test random skin generator
+        run: |
+          clang -std=gnu11 -O1 tests/skin_generator_test.c app/src/game/skin_generator.c app/src/external/quickjs-ng/quickjs-amalgam.c -o build/tests/skin_generator
+          build/tests/skin_generator
       - name: Build Universal application
         run: python3 tools/build_unix.py --jobs 3
       - name: Test updater validation and transactions

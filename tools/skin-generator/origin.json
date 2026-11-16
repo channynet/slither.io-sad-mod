@@ -1,0 +1,32 @@
+{
+  "source": "Existing sibling color laboratory lib directory",
+  "files": {
+    "ai-arrangement.ts": "036c69b464bd1da08a20034de238e4cb5fd7b3192cd755f4c0e53fa48edd0505",
+    "ai-contract.ts": "40e8b7d6f9b110701d9f2468492c4619a923e6c75bd404246d0c88f35809ed29",
+    "chatgpt-handoff.ts": "f743c0d0890dcacfab02609371b6af8895bc8aa86d380d0c3d933125c41208d2",
+    "color-assignment.ts": "fd4c9edd067a9d3eb946033720439c89ba1d52e2896d68aab0c3b86c282e8e05",
+    "color-science.ts": "8b3fe0fa5f8dd0470ea85cbb43aac62fd062b162ef44aff80a09d6a94d982786",
+    "colors.ts": "b07942c5cce3f74c2279d5c5e0c9fdda70502df75556c1eb1218f71b4464f1e5",
+    "concept-input.ts": "207845d088089a4f5e14381f743902363d83e79a2d5fa5cea4a58bb5b3bdf7c8",
+    "concept-library.ts": "b657b55ec453503e0151e9261d2cfd89d9d97195e60148902ad1bfad9f0ae7a2",
+    "family-skins.ts": "d10e4ffe81794859c66d8658032648563113a58ee0ec8f4c134ea643296949d9",
+    "family-theories.ts": "106851f06b4f3b84df4d4d371c2c13cb71c9059114f93fdcd22bf6cddcd245f5",
+    "initial-skin-settings.ts": "82727e9fda0d5070e07688f33502a2e8fc30a3d5bdb616d12bc52604fa4946e7",
+    "layout-requirements.ts": "155ee7a4a7108f83676bf3add07ea19c527932ef892e542517f47d9142a86579",
+    "mood-interpreter.ts": "585633e3205df46e325fff0db2f35cdb15107872e988a9fe631d882e69c46e67",
+    "mood-semantics.ts": "aad34bf312a3ce7614d520c685be0ffa544626df514bf8a5a10d7dfa67eebc2a",
+    "range-layout.ts": "bbf41898dab49773a7a5cab170202e31113050c3bffeb4e3720dede0fe2e9a7f",
+    "skin-change.ts": "e316ee6e0d38c8b016084e5a1e80acd7ea1638f3768462fab668e0894ba12852",
+    "strict-instructions.ts": "4bc08116ef84bab4fd3a2f07f2373ea08251bba19c54a30e882067d5748b6c77",
+    "theory-explanations.ts": "cf1d0b56ae8a97279421bdd66786dea7183eb671062b5b8bf68a10e50d56d6a7",
+    "theory-layout.ts": "2b8f81fab374a405d63162f2883a28a8544c50559c7f3fae3dfd246e0f68637b",
+    "theory-settings.ts": "3d81d991a60ca76f982e1ab6af1af3b6c6596295c0a57d3fcbbfc45f9ec039e1",
+    "utils.ts": "9304a861c8673bee09e0f12de31773abbde503b02e59dfd74763ddec2e37cf05",
+    "worm-renderer.ts": "da9c8aee4223d4f8ba041ca1ff8640726abff28bcc606c0ab4b97f7ff3e8e138"
+  },
+  "quickjs": {
+    "version": "0.18.0",
+    "url": "https://github.com/quickjs-ng/quickjs/releases/download/v0.18.0/quickjs-amalgam.zip",
+    "sha256": "6c05066a6b62b483e2ba0f83d7a16688c6958182b214bfd693529434cef84a9e"
+  }
+}

@@ -166,6 +166,7 @@ for extra in ['README-MAC-KO.txt', 'LICENSE', 'THIRD-PARTY-NOTICES.md']:
             shutil.copy2(src, stage / extra)
 if (ROOT / 'licenses').is_dir(): shutil.copytree(ROOT / 'licenses', stage / 'licenses')
 for relative in ['glfw/LICENSE.md', 'app/src/cimgui/LICENSE', 'app/src/cimgui/imgui/LICENSE.txt',
+                 'app/src/external/quickjs-ng/LICENSE.txt',
                  'app/src/external/LICENSE.txt', 'thermite/src/external/vma/LICENSE.txt',
                  'thermite/src/external/stb/LICENSE.txt', 'thermite/include/cglm/LICENSE.txt',
                   'third_party/moltenvk/LICENSE', 'third_party/libarchive/COPYING', 'third_party/vulkan/LICENSE.md',

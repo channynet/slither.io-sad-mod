@@ -22,6 +22,7 @@ with tempfile.TemporaryDirectory(prefix='preferences-test-', dir=BUILD) as sandb
     print(result.stdout)
 
 for name, sources, extra in [
+    ('skin_generator', ['app/src/game/skin_generator.c','app/src/external/quickjs-ng/quickjs-amalgam.c'], []),
     ('skin_library', ['app/src/game/skin_library.c','app/src/external/mongoose.c'], ['-lws2_32']),
     ('window_startup', ['thermite/src/core/tentry.c'], [*flags]),
     ('gradient_skin', ['app/src/ui/skin_gradient.c','app/src/ui/fire_skin.c'], [*flags,'-DCIMGUI_NO_EXPORT','-ffunction-sections','-fdata-sections','-Wl,--gc-sections']),
