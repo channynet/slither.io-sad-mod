@@ -21,6 +21,19 @@ void ui_overlay(tenv* env) {
   float mww2 = ctx->size[0] / 2.0f;
   float mhh2 = ctx->size[1] / 2.0f;
 
+  // NTL's default centre ellipse: radius 64 in world coordinates.
+  if (gdata->curr_screen==PLAYING && gdata->conn==CONNECTED && gdata->data.follow_view &&
+      gdata->data.grd>0 && isfinite(gdata->data.gsc) && gdata->data.gsc>0) {
+    ImVec2 center={mww2+(gdata->data.grd-gdata->data.view_xx)*gdata->data.gsc,
+                   mhh2+(gdata->data.grd-gdata->data.view_yy)*gdata->data.gsc};
+    float radius=64*gdata->data.gsc;
+    if(center.x+radius>=0 && center.y+radius>=0 && center.x-radius<=ctx->size[0] && center.y-radius<=ctx->size[1]) {
+      float* color=usr->r->global.bd_color;
+      ImDrawList_AddCircle(igGetWindowDrawList(),center,radius,
+        igColorConvertFloat4ToU32((ImVec4){color[0],color[1],color[2],.28f}),0,1.5f);
+    }
+  }
+
   int snakes_len = tdarray_length(gdata->data.snakes);
   if (snakes_len) {
     snake* me = gdata->data.snakes + (snakes_len - 1);
