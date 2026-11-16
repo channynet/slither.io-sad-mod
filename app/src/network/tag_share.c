@@ -21,7 +21,7 @@
 #endif
 #define POLL_MS 4000
 #define MAX_ENTRIES 256
-#define HAVE_MAX 128
+#define HAVE_MAX (MAX_ENTRIES * 2) // A tag and a cosmetic for every visible player.
 
 typedef struct {
   bool want;                          // playing, sharing on, a relay set
@@ -41,7 +41,7 @@ static struct {
   struct { unsigned char* data; size_t length; char hash[17]; } images[2];
   share_entry list[MAX_ENTRIES]; int list_count, list_generation; char list_server[200];
   char asked[16][17]; int asked_count;          // pictures the main thread wants
-  char have[HAVE_MAX][17]; int have_count;      // pictures on disk (found or fetched)
+  char have[HAVE_MAX][17]; int have_count, have_next; // bounded cache of pictures on disk
   char failed[32][17]; int failed_count;
   char status[96];
 } S;
@@ -72,6 +72,12 @@ static void set_status(const char* text) {
   EnterCriticalSection(&S.lock); snprintf(S.status, sizeof S.status, "%s", text); LeaveCriticalSection(&S.lock);
 }
 static void picture_path(const char* hash, char* out, size_t cap) { snprintf(out, cap, TAG_SHARE_DIR "/%s.png", hash); }
+static void remember_picture(const char* hash) { // caller holds S.lock
+  if (in_set(S.have, S.have_count, hash)) return;
+  memcpy(S.have[S.have_next], hash, 17);
+  S.have_next = (S.have_next + 1) % HAVE_MAX;
+  if (S.have_count < HAVE_MAX) S.have_count++;
+}
 
 static DWORD WINAPI worker(void* unused) {
   (void)unused;
@@ -81,8 +87,9 @@ static DWORD WINAPI worker(void* unused) {
   while (!InterlockedCompareExchange(&S.stop, 0, 0)) {
     EnterCriticalSection(&S.lock);
     wish w = S.w;
+    if(strcmp(uploaded_url,w.url)) { memset(uploaded,0,sizeof(uploaded)); snprintf(uploaded_url,sizeof(uploaded_url),"%s",w.url); }
     unsigned char* png[2]={0}; size_t png_length[2]={0};
-    for(int i=0;i<2;i++) if(S.images[i].data && !strcmp(S.images[i].hash,w.hash[i])) {
+    for(int i=0;i<2;i++) if(w.want && strcmp(uploaded[i],w.hash[i]) && S.images[i].data && !strcmp(S.images[i].hash,w.hash[i])) {
       png[i]=malloc(S.images[i].length);
       if(png[i]) { memcpy(png[i],S.images[i].data,S.images[i].length); png_length[i]=S.images[i].length; }
     }
@@ -91,11 +98,14 @@ static DWORD WINAPI worker(void* unused) {
     LeaveCriticalSection(&S.lock);
     char base[200]; base_url(w.url, base, sizeof base);
     if (w.want) {
-      if(strcmp(uploaded_url,w.url)) { memset(uploaded,0,sizeof(uploaded)); snprintf(uploaded_url,sizeof(uploaded_url),"%s",w.url); }
-      for(int i=0;i<2;i++) if(w.hash[i][0] && png[i] && strcmp(uploaded[i],w.hash[i])) {
+      for(int i=0;i<2 && !InterlockedCompareExchange(&S.stop,0,0);i++) if(w.hash[i][0] && png[i]) {
         char url[300];snprintf(url,sizeof(url),"%s/v1/img/%s",base,w.hash[i]);
         int status=http_request("PUT",url,"image/png",png[i],png_length[i],NULL,NULL,0,8000);
         if(status==200) memcpy(uploaded[i],w.hash[i],17);
+      }
+      if(InterlockedCompareExchange(&S.stop,0,0)) {
+        for(int i=0;i<2;i++) free(png[i]);
+        break;
       }
       char server[600], url[900], body[1200];
       url_escape(w.server, server, sizeof server);
@@ -116,7 +126,7 @@ static DWORD WINAPI worker(void* unused) {
       LeaveCriticalSection(&S.lock);
     }
     // pictures asked for: from the relay, kept on disk
-    for (int i = 0; i < asked_count && w.url[0]; i++) {
+    for (int i = 0; i < asked_count && w.url[0] && !InterlockedCompareExchange(&S.stop,0,0); i++) {
       EnterCriticalSection(&S.lock);
       bool skip = in_set(S.have, S.have_count, asked[i]) || in_set(S.failed, S.failed_count, asked[i]);
       LeaveCriticalSection(&S.lock);
@@ -142,14 +152,15 @@ static DWORD WINAPI worker(void* unused) {
         if (!here && (status == 0 || status == 404 || status >= 500)) continue; // upload/network may still be pending
       }
       EnterCriticalSection(&S.lock);
-      if (here) { if (S.have_count < HAVE_MAX) memcpy(S.have[S.have_count++], asked[i], 17); }
+      if (!here && strcmp(S.w.url,w.url)) { LeaveCriticalSection(&S.lock); continue; }
+      if (here) remember_picture(asked[i]);
       else if (S.failed_count < 32) memcpy(S.failed[S.failed_count++], asked[i], 17);
       for (int k = 0; k < S.asked_count; k++) if (!strcmp(S.asked[k], asked[i])) { memmove(S.asked[k], S.asked[k + 1], 17 * (size_t)(S.asked_count - k - 1)); S.asked_count--; break; }
       LeaveCriticalSection(&S.lock);
     }
     for(int i=0;i<2;i++) free(png[i]);
     // wait for the next poll, or until the wish changes / a picture is asked for
-    WaitForSingleObject(S.wake, w.want ? POLL_MS : 1000);
+    if (!InterlockedCompareExchange(&S.stop,0,0)) WaitForSingleObject(S.wake, w.want ? POLL_MS : 1000);
   }
   return 0;
 }
@@ -159,7 +170,8 @@ static void start(void) {
   InitializeCriticalSection(&S.lock);
   S.wake = CreateEventW(NULL, FALSE, FALSE, NULL);
   snprintf(S.status, sizeof S.status, "꺼짐");
-  S.thread = CreateThread(NULL, 0, worker, NULL, 0, NULL);
+  if (S.wake) S.thread = CreateThread(NULL, 0, worker, NULL, 0, NULL);
+  if (!S.thread) snprintf(S.status, sizeof S.status, "공유 작업을 시작하지 못함");
 }
 
 void tag_share_tick(tenv* env) {
@@ -200,6 +212,7 @@ void tag_share_tick(tenv* env) {
   bool same = S.w.want == w.want && !strcmp(S.w.url, w.url) && !strcmp(S.w.server, w.server) && S.w.sid == w.sid && !strcmp(S.w.tag, w.tag) && !strcmp(S.w.appearance,w.appearance);
   if (!same) {
     int generation = S.w.generation + 1;
+    if (strcmp(S.w.url,w.url)) S.failed_count = 0;
     S.w = w; S.w.generation = generation;
     if (!w.want) { S.list_count = 0; S.list_generation++; snprintf(S.status, sizeof S.status, url[0] ? (ntl_tag_prefs.share ? "게임 중에만 공유" : "꺼짐") : "공유 서버 주소 없음"); }
   }
@@ -222,7 +235,7 @@ bool tag_share_lookup(int sid, share_entry* out) {
   return false;
 }
 bool tag_share_image_path(const char* hash, char* path, size_t cap) {
-  if (!S.ready) return false;
+  if (!S.ready || !S.thread || !hash || strlen(hash)!=16 || strspn(hash,"0123456789abcdef")!=16) return false;
   picture_path(hash, path, cap);
   EnterCriticalSection(&S.lock);
   bool have = in_set(S.have, S.have_count, hash), failed = in_set(S.failed, S.failed_count, hash);
@@ -242,5 +255,11 @@ void tag_share_destroy(void) {
   if (!S.ready) return;
   InterlockedExchange(&S.stop, 1);
   SetEvent(S.wake);
-  if (S.thread) { WaitForSingleObject(S.thread, 8000); CloseHandle(S.thread); S.thread = NULL; }
+  if (S.thread) { WaitForSingleObject(S.thread, INFINITE); CloseHandle(S.thread); }
+  if (S.wake) CloseHandle(S.wake);
+  for(int i=0;i<2;i++) free(S.images[i].data);
+  DeleteCriticalSection(&S.lock);
+  memset(&S,0,sizeof(S));
+  list_count=0; list_generation=-1; list_at=0;
+  list_server[0]=my_server[0]=0;
 }

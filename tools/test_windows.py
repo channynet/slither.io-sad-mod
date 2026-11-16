@@ -72,6 +72,7 @@ for name, sources, extra in [
     ('body_hug', [], []),
     ('ntl_tags', ['app/src/game/ntl_tags.c'], []),
     ('tag_share', ['app/src/network/tag_share_proto.c','app/src/external/mongoose.c'], ['-lws2_32']),
+    ('tag_share_worker', ['app/src/network/tag_share_proto.c','app/src/external/mongoose.c'], [*flags,'-DCIMGUI_NO_EXPORT','-ffunction-sections','-fdata-sections','-Wl,--gc-sections','-lws2_32']),
     ('picture_worker', ['app/src/ui/picture_worker.c','app/src/ui/tag_image.c','thermite/src/external/stb/stb_image.c'], ['-I',str(ROOT / 'thermite/src')]),
     ('screenshot_png', ['thermite/src/external/stb/stb_image_write.c','thermite/src/external/stb/stb_image.c'], ['-I',str(ROOT / 'thermite/src')]),
 ]:
@@ -94,3 +95,7 @@ for name, sources, extra in [
             print(result.stdout)
 
 subprocess.run([sys.executable, str(ROOT / 'tools/test_korean_input.py')], check=True)
+http_test = BUILD / 'http_simple_test.exe'
+run([BIN / 'x86_64-w64-mingw32-clang.exe','-std=gnu11','-O1','-static',
+     ROOT / 'tests/http_simple_test.c','-lwinhttp','-o',http_test])
+subprocess.run([sys.executable, str(ROOT / 'tools/test_http_simple.py'), str(http_test)], check=True)

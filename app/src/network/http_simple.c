@@ -2,13 +2,22 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stdint.h>
+#include <errno.h>
+#include <wchar.h>
 
 typedef struct { unsigned char* data; size_t length, cap, max; } reply_buffer;
 static int append(reply_buffer* b, const void* bytes, size_t n) {
-  if (b->length + n > b->max) n = b->max > b->length ? b->max - b->length : 0;
-  if (b->length + n + 1 > b->cap) {
-    size_t cap = b->cap ? b->cap * 2 : 4096;
-    while (cap < b->length + n + 1) cap *= 2;
+  if (b->length > b->max || n > b->max - b->length || n >= SIZE_MAX - b->length) return 0;
+  if (!n) return 1;
+  size_t needed = b->length + n + 1;
+  if (needed > b->cap) {
+    size_t cap = b->cap ? b->cap : 4096;
+    while (cap < needed) {
+      if (cap > SIZE_MAX / 2) { cap = needed; break; }
+      cap *= 2;
+    }
+    if (cap - 1 > b->max) cap = b->max + 1;
     unsigned char* grown = realloc(b->data, cap);
     if (!grown) return 0;
     b->data = grown; b->cap = cap;
@@ -39,18 +48,32 @@ int http_request_referer(const char* method, const char* url, const char* refere
   HINTERNET connection = session ? WinHttpConnect(session, host, parts.nPort, 0) : NULL;
   HINTERNET request = connection ? WinHttpOpenRequest(connection, wmethod, path, NULL, referer ? wreferer : WINHTTP_NO_REFERER, WINHTTP_DEFAULT_ACCEPT_TYPES,
                                                       parts.nScheme == INTERNET_SCHEME_HTTPS ? WINHTTP_FLAG_SECURE : 0) : NULL;
-  if (session) WinHttpSetTimeouts(session, timeout_ms, timeout_ms, timeout_ms, timeout_ms);
+  if (request) WinHttpSetTimeouts(request, timeout_ms, timeout_ms, timeout_ms, timeout_ms);
   if (request && WinHttpSendRequest(request, headers[0] ? headers : WINHTTP_NO_ADDITIONAL_HEADERS, headers[0] ? (DWORD)-1L : 0,
                                     (void*)body, (DWORD)body_len, (DWORD)body_len, 0) && WinHttpReceiveResponse(request, NULL)) {
     DWORD code = 0, size = sizeof code;
     WinHttpQueryHeaders(request, WINHTTP_QUERY_STATUS_CODE | WINHTTP_QUERY_FLAG_NUMBER, NULL, &code, &size, NULL);
     reply_buffer b = {NULL, 0, 0, max_out};
     char chunk[16384]; DWORD got = 0; int ok = 1;
-    while (ok && b.length < max_out) {
-      if (!WinHttpReadData(request, chunk, sizeof chunk, &got)) { ok = 0; break; }
+    wchar_t declared[64]; DWORD declared_size = sizeof declared;
+    int check_length = 0; unsigned long long expected_length = 0;
+    if (max_out && wcscmp(wmethod,L"HEAD") && code != 204 && code != 304) {
+      if (WinHttpQueryHeaders(request, WINHTTP_QUERY_CONTENT_LENGTH, NULL, declared, &declared_size, NULL)) {
+        wchar_t* end = NULL; errno = 0;
+        expected_length = wcstoull(declared, &end, 10);
+        ok = declared[0]>=L'0' && declared[0]<=L'9' && end && !*end && errno!=ERANGE && expected_length<=max_out;
+        check_length = 1;
+      } else if (GetLastError()!=ERROR_WINHTTP_HEADER_NOT_FOUND) ok = 0;
+    }
+    while (ok && max_out) {
+      // Read one byte beyond the limit to distinguish an exact fit from truncation.
+      size_t remaining = max_out - b.length;
+      DWORD wanted = remaining < sizeof chunk ? (DWORD)remaining + 1 : sizeof chunk;
+      if (!WinHttpReadData(request, chunk, wanted, &got)) { ok = 0; break; }
       if (!got) break;
       ok = append(&b, chunk, got);
     }
+    if (check_length && b.length != expected_length) ok = 0;
     if (ok) {
       status = (int)code;
       if (out) *out = b.data; else free(b.data);
@@ -66,6 +89,8 @@ int http_request_referer(const char* method, const char* url, const char* refere
 #include <curl/curl.h>
 static size_t on_data(char* data, size_t size, size_t n, void* user) {
   reply_buffer* b = user;
+  if (size && n > SIZE_MAX / size) return 0;
+  if (!b->max) return size * n; // The caller only needs the status (e.g. an upload).
   return append(b, data, size * n) ? size * n : 0;
 }
 int http_request_referer(const char* method, const char* url, const char* referer, const char* content_type, const void* body, size_t body_len,
