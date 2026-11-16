@@ -702,11 +702,16 @@ void redraw(tenv* env) {
           }
         }
 
-        bool gradient=(native_prefs.gradient_enabled || native_prefs.fire_skin) && o->id==gdata->data.snake_id;
+        bool own_style=o->id==gdata->data.snake_id;
+        share_entry shared_style={0};
+        bool remote_style=!own_style && tag_share_lookup(o->id,&shared_style);
+        bool gradient=own_style ? (native_prefs.gradient_enabled || native_prefs.fire_skin) :
+                                  (remote_style && (shared_style.gradient_count || shared_style.fire_strength>0));
         {
           int first=o->cusk && o->cusk_len ? o->cusk_data[0] : gdata->default_skins[o->cv][1];
           if(first<0 || first>=NUM_COLOR_GROUPS) first=0;
           skin_graphics_begin(gdata->cg_glow_colors[first].raw,o->id==gdata->data.snake_id);
+          skin_effect_remote(remote_style?&shared_style:NULL);
         }
         if (mode->render_mode == 0) {
           float shadow_strength = 0.25f;
@@ -1066,10 +1071,11 @@ void redraw(tenv* env) {
           }
         }
 
-        if (native_prefs.fire_skin && o->id == gdata->data.snake_id && !o->dead) {
+        float fire_strength=own_style ? (native_prefs.fire_skin?native_prefs.fire_strength:0) : shared_style.fire_strength;
+        if (fire_strength>0 && !o->dead) {
           fire_body body = {gdata->data.pbx, gdata->data.pby, gdata->data.pba, gdata->data.pbu, bp,
                             lsz * .8f, gdata->data.view_xx, gdata->data.view_yy, gdata->data.gsc,
-                            mww2, mhh2, a, native_prefs.fire_strength};
+                            mww2, mhh2, a, fire_strength};
           fire_skin_effects(usr->r->bstb, usr->r->bsta, &body, skin_effect_time);
         }
 
@@ -1473,6 +1479,7 @@ void redraw(tenv* env) {
                        ? o->alive_amt * o->alive_amt * sqrtf(1 - o->dead_amt)
                        : a;
 
+        skin_effect_remote(NULL);
         bool custom_face=o->id==gdata->data.snake_id && head_face_available(native_prefs.face_smile,native_prefs.face_claws);
         if(!custom_face) {
           bp_renderer_push(

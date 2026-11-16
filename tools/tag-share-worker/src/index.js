@@ -34,6 +34,21 @@ function cleanTag(t) {
   return null;
 }
 
+function cleanAppearance(a) {
+  if (!a || typeof a !== "object" || Array.isArray(a)) return null;
+  const out = {};
+  if (typeof a.fire === "number" && Number.isFinite(a.fire) && a.fire > 0)
+    out.fire = num(a.fire, .2, 1.5, .8);
+  const c = a.cosmetic;
+  if (Array.isArray(c) && typeof c[0] === "string" && /^[0-9a-f]{16}$/.test(c[0]))
+    out.cosmetic = [c[0], num(c[1],24,320,160), num(c[2],-100,100,-18), num(c[3],-180,180,0), c[4] ? 1 : 0];
+  const g = a.gradient;
+  if (Array.isArray(g) && Number.isInteger(g[0]) && g[0]>=2 && g[0]<=4 && g.length===1+g[0]*3 &&
+      g.slice(1).every(v=>typeof v==="number" && Number.isFinite(v)))
+    out.gradient = [g[0], ...g.slice(1).map(v=>num(v,0,1,0))];
+  return Object.keys(out).length ? out : null;
+}
+
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
@@ -77,12 +92,16 @@ export class Room {
     const sid = body.sid;
     if (Number.isInteger(sid) && sid >= 0 && sid < 65536) {
       const tag = cleanTag(body.tag);
-      if (tag && (this.entries.has(sid) || this.entries.size < MAX_ROOM)) this.entries.set(sid, { tag, at: now });
-      else if (!tag) this.entries.delete(sid);
+      const appearance = cleanAppearance(body.appearance);
+      if ((tag || appearance) && (this.entries.has(sid) || this.entries.size < MAX_ROOM)) this.entries.set(sid, { tag, appearance, at: now });
+      else if (!tag && !appearance) this.entries.delete(sid);
     }
-    const p = [];
-    for (const [s, e] of this.entries) p.push([s, ...e.tag]);
-    return json({ p });
+    const p = [], a = [];
+    for (const [s, e] of this.entries) {
+      if(e.tag) p.push([s, ...e.tag]);
+      if(e.appearance) a.push([s, e.appearance]);
+    }
+    return json({ p, a, appearanceSchema: 1 });
   }
 }
 

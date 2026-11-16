@@ -9,6 +9,7 @@
 #include "picture_worker.h"
 #include "personal_tag.h"
 #include "tag_attachment.h"
+#include "cosmetic_geometry.h"
 #include "../network/tag_share.h"
 #include <math.h>
 #include <stdio.h>
@@ -69,6 +70,17 @@ static VkDescriptorSet picture_for(int id) {
   for (int i = 0; i < wanted_count; i++) if (wanted[i] == id) return 0;
   if (wanted_count < 8) wanted[wanted_count++] = id;
   return 0;
+}
+void ntl_tags_preview(tenv* env,float x,float y,float scale) {
+  (void)env;
+  if(ntl_tag_prefs.mode!=1) return;
+  int id=ntl_tag_own_local(); const ntl_tag_def* d=ntl_tag_get(id);
+  if(!d) return;
+  VkDescriptorSet descriptor=picture_for(id);
+  if(!descriptor) return;
+  picture* p=&pictures[id];
+  personal_tag_draw_image(descriptor,p->tex->size[0],p->tex->size[1],fmaxf(d->w,d->h)*PICTURE_SCALE,60,0,
+                          x,y,scale,0,0,0,1,ntl_tag_look_for(true));
 }
 void ntl_tags_prepare(tenv* env) {
   frame++;
@@ -243,6 +255,17 @@ void ntl_tags_draw(tenv* env) {
     bool own = s->id == g->data.snake_id;
     share_entry se;                                    // a player of this client: the tag it shares wins
     bool shared_tag = !own && ntl_tag_prefs.show_others && tag_share_lookup(s->id, &se);
+    if(shared_tag && se.cosmetic_hash[0]) {
+      share_picture* picture=share_picture_for(se.cosmetic_hash);
+      if(picture && picture->descriptor) {
+        float points[8],sc=(s->sc>0?s->sc:1)*gsc;
+        float x=cx+(s->xx+s->fx-g->data.view_xx)*gsc,y=cy+(s->yy+s->fy-g->data.view_yy)*gsc;
+        cosmetic_quad(points,x,y,se.cosmetic_size,picture->tex->size[0],picture->tex->size[1],sc,s->ehang,se.cosmetic_gap,se.cosmetic_rotate,se.cosmetic_angle);
+        ImDrawList_AddImageQuad(draw,(ImTextureRef){NULL,(ImTextureID)picture->descriptor},
+          (ImVec2){points[0],points[1]},(ImVec2){points[2],points[3]},(ImVec2){points[4],points[5]},(ImVec2){points[6],points[7]},
+          (ImVec2){0,0},(ImVec2){1,0},(ImVec2){1,1},(ImVec2){0,1},igGetColorU32_Vec4((ImVec4){1,1,1,s->alive_amt*(1-s->dead_amt)}));
+      }
+    }
     if (shared_tag && se.kind == SHARE_IMAGE) { draw_shared_image(env, s, &se, now); continue; }
     int tag = shared_tag && se.kind == SHARE_NTL ? se.ntl : tag_of(env, s, own);
     const ntl_tag_def* d = ntl_tag_get(tag);
@@ -289,6 +312,7 @@ static bool thumbnail(int id, bool selected) {
   ImVec2 size = {54, 54};
   char label[24]; snprintf(label, sizeof label, "##ntltag%d", id);
   bool clicked;
+  igPushStyleVar_Vec2(ImGuiStyleVar_FramePadding,(ImVec2){4,4});
   if (igIsRectVisible_Nil((ImVec2){size.x + 8, size.y + 8})) {
     VkDescriptorSet t = picture_for(id);
     if (t) {
@@ -296,21 +320,22 @@ static bool thumbnail(int id, bool selected) {
       clicked = igImageButton(label, (ImTextureRef){NULL, (ImTextureID)t}, size, (ImVec2){0, 0}, (ImVec2){1, 1}, bg, (ImVec4){1, 1, 1, 1});
     } else {
       char text[24]; snprintf(text, sizeof text, "%d%s", id, label);
-      clicked = igButton(text, (ImVec2){size.x + 6, size.y + 6});
+      clicked = igButton(text, (ImVec2){size.x + 8, size.y + 8});
     }
-  } else clicked = igButton(label, (ImVec2){size.x + 6, size.y + 6});
+  } else clicked = igButton(label, (ImVec2){size.x + 8, size.y + 8});
+  igPopStyleVar(1);
   if (igIsItemHovered(0)) igSetTooltip("NTL 태그 %d%s", id, ntl_tag_needs_password(id) ? (ntl_tag_auth_for(id) ? " · 비밀번호 확인됨" : " · 비밀번호 없으면 내 화면·이 클라이언트 사용자에게만") : " · 무료");
   return clicked;
 }
 static void grid(const int* ids, int n) {
   ImVec2 avail; igGetContentRegionAvail(&avail);
   float width = avail.x;
-  int per_row = (int)(width / 66); if (per_row < 1) per_row = 1;
+  int per_row = (int)((width + 8) / 70); if (per_row < 1) per_row = 1;
   int shown = 0;
   for (int i = 0; i < n; i++) {
     int id = ids[i];
     if (!ntl_tag_get(id)) continue;
-    if (shown % per_row) igSameLine(0, 4);
+    if (shown % per_row) igSameLine(0, 8);
     if (thumbnail(id, ntl_tag_prefs.tag == id || pick == id)) {
       if (!ntl_tag_needs_password(id) || ntl_tag_auth_for(id)) {
         ntl_tag_prefs.tag = id; ntl_tag_prefs.local_only = false; pick = -1; save();
@@ -364,8 +389,8 @@ void ntl_tags_controls(tenv* env) {
   igTextDisabled("NTL 태그 서버: %s", ntl_tag_server_status());
   igTextDisabled("NTL 온라인 태그: %s", ntl_tags_online_status());
   // players of this client: each other's tags through the relay (tools/tag-share-worker)
-  if (igCheckbox("이 클라이언트 사용자끼리 태그 공유", &ntl_tag_prefs.share)) save();
-  if (igIsItemHovered(0)) igSetTooltip("내 이미지 태그와 비밀번호 없이 쓰는 태그를 이 클라이언트를 쓰는 다른 사람도 보고,\n그 사람들의 것도 내 화면에 보입니다. 게임 서버 주소·지렁이 번호·태그만 보냅니다(닉네임 없음).");
+  if (igCheckbox("이 클라이언트 사용자끼리 외형 공유", &ntl_tag_prefs.share)) save();
+  if (igIsItemHovered(0)) igSetTooltip("같은 게임 서버의 이 클라이언트 사용자에게 태그·코스메틱·불꽃·그라데이션을 공유합니다.\n양쪽 모두 외형 공유가 켜져 있어야 합니다. 구버전에는 새 효과가 표시되지 않습니다.");
   igSetNextItemWidth(260);
   igInputTextWithHint("태그 공유 서버", "비우면 기본 공유 서버", ntl_tag_prefs.share_url, sizeof ntl_tag_prefs.share_url, 0, NULL, NULL);
   if (igIsItemDeactivatedAfterEdit()) save();

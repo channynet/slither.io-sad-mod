@@ -69,6 +69,34 @@ static bool select_item(personal_image* p,int index) {
   }
   save_settings(p); apply_item(p,index,next); save_settings(p); return true;
 }
+void personal_images_capture(skin_image_state out[2]) {
+  personal_image* slots[]={&tag,&cosmetic};
+  memset(out,0,sizeof(skin_image_state)*2);
+  for(int i=0;i<2;i++) {
+    personal_image* p=slots[i];
+    out[i].id=p->library.items[p->library.selected].id;
+    out[i].enabled=p->enabled;out[i].rotate=p->rotate;out[i].sway=p->sway;
+    out[i].size=p->size;out[i].gap=p->gap;out[i].angle=p->angle;
+  }
+}
+bool personal_images_restore(const skin_image_state state[2]) {
+  personal_image* slots[]={&tag,&cosmetic};tag_image next[2]={0};int indices[2]={-1,-1};
+  for(int i=0;i<2;i++) {
+    personal_image* p=slots[i];
+    if(p->library.read_only) goto failed;
+    for(int k=0;k<p->library.count;k++) if(p->library.items[k].id==state[i].id) indices[i]=k;
+    if(indices[i]<0 || !load_item(p,indices[i],&next[i])) goto failed;
+  }
+  for(int i=0;i<2;i++) {
+    personal_image* p=slots[i];apply_item(p,indices[i],next[i]);
+    p->enabled=state[i].enabled;p->rotate=state[i].rotate;p->sway=state[i].sway;
+    p->size=state[i].size;p->gap=state[i].gap;p->angle=state[i].angle;save_settings(p);
+  }
+  return true;
+failed:
+  for(int i=0;i<2;i++) tag_image_free(&next[i]);
+  return false;
+}
 static void read_settings(personal_image* p) {
   FILE* f=fopen(p->settings_path,"rb"); if(!f) return;
   char data[1024]={0}; size_t n=fread(data,1,sizeof(data)-1,f); fclose(f);
@@ -273,9 +301,10 @@ void personal_tag_controls(tenv* env) {
 }
 void personal_image_editor(tenv* env) {
   ImFont* font=env->usr->imgui_data.regular_font[FONT_SIZE_SMALL]; igPushFont(font,font->LegacySize);
-  igSetNextWindowPos((ImVec2){env->ctx->size[0]-12,100},ImGuiCond_FirstUseEver,(ImVec2){1,0});
-  igSetNextWindowSize((ImVec2){380,600},ImGuiCond_FirstUseEver);
-  if(igBegin("태그 / cosmetic",NULL,ImGuiWindowFlags_NoDocking)) {
+  float inspector_width=fminf(380,fmaxf(280,env->ctx->size[0]*.34f));
+  igSetNextWindowPos((ImVec2){env->ctx->size[0]-16,20},ImGuiCond_Always,(ImVec2){1,0});
+  igSetNextWindowSize((ImVec2){inspector_width,env->ctx->size[1]-40},ImGuiCond_Always);
+  if(igBegin("태그 / cosmetic",NULL,ImGuiWindowFlags_NoDocking|ImGuiWindowFlags_NoMove|ImGuiWindowFlags_NoResize|ImGuiWindowFlags_NoCollapse)) {
     if(igBeginTabBar("personal-image-tabs",0)) {
       if(igBeginTabItem("그라데이션",NULL,0)) {
         skin_gradient_controls(); igEndTabItem();
@@ -315,6 +344,35 @@ void personal_cosmetic_preview(tenv* env,float x,float y,float scale,float direc
     (ImVec2){points[0],points[1]},(ImVec2){points[2],points[3]},(ImVec2){points[4],points[5]},(ImVec2){points[6],points[7]},
     (ImVec2){0,0},(ImVec2){1,0},(ImVec2){1,1},(ImVec2){0,1},igGetColorU32_Vec4((ImVec4){1,1,1,alpha}));
 }
+void personal_preview_bounds(float bounds[4]) {
+  // Bounds relative to the preview head, in world units. Include the two body rows.
+  bounds[0]=-522; bounds[1]=-16; bounds[2]=16; bounds[3]=60;
+  float points[8],cord[14];
+  for(int i=0;i<2;i++) {
+    personal_image* p=i?&cosmetic:&tag;
+    if(!p->enabled || !p->tex || (!i && ntl_tag_prefs.mode==1)) continue;
+    if(i) cosmetic_quad(points,0,0,p->size,p->tex->size[0],p->tex->size[1],1,0,p->gap,p->rotate,p->angle);
+    else {
+      ntl_tag_look look=ntl_tag_look_for(true);
+      tag_attachment_geometry(points,cord,0,0,p->size*look.size,p->tex->size[0],p->tex->size[1],1,0,0,p->gap*look.rope,p->angle);
+    }
+    for(int k=0;k<4;k++) {
+      bounds[0]=fminf(bounds[0],points[k*2]-12);bounds[2]=fmaxf(bounds[2],points[k*2]+12);
+      bounds[1]=fminf(bounds[1],points[k*2+1]-12);bounds[3]=fmaxf(bounds[3],points[k*2+1]+12);
+    }
+  }
+  if(ntl_tag_prefs.mode==1) {
+    const ntl_tag_def* d=ntl_tag_get(ntl_tag_own_local());
+    if(d) {
+      ntl_tag_look l=ntl_tag_look_for(true);
+      tag_attachment_geometry(points,cord,0,0,fmaxf(d->w,d->h)*.285f*l.size,d->w,d->h,1,0,0,60*l.rope,0);
+      for(int k=0;k<4;k++) {
+        bounds[0]=fminf(bounds[0],points[k*2]-12);bounds[2]=fmaxf(bounds[2],points[k*2]+12);
+        bounds[1]=fminf(bounds[1],points[k*2+1]-12);bounds[3]=fmaxf(bounds[3],points[k*2+1]+12);
+      }
+    }
+  }
+}
 void personal_tag_draw_image(VkDescriptorSet picture,int tw,int th,float size,float gap,float angle,
     float x,float y,float scale,float direction,float trailing,float swing,float alpha,ntl_tag_look look) {
   float points[8],cord[14];
@@ -337,7 +395,8 @@ static void draw_tag(float x,float y,float scale,float direction,float trailing,
       x,y,scale,direction,trailing,swing,alpha,ntl_tag_look_for(true));
 }
 // ---- sharing my image tag: its picture as a small PNG (at most 192 px across, 120 KB)
-static struct { unsigned char* png; size_t length; char hash[17]; int item; bool tried; } shared={.item=-1};
+typedef struct { unsigned char* png; size_t length; char hash[17]; int item; bool tried; } image_share_cache;
+static image_share_cache shared_cache[2]={{.item=-1},{.item=-1}};
 typedef struct { unsigned char* data; size_t length, cap; } png_buffer;
 static void png_out(void* context,void* data,int size) {
   png_buffer* b=context;
@@ -371,28 +430,31 @@ static unsigned char* small_png(const tag_image* src,int most,size_t* length) {
   if(!ok) { free(b.data); return NULL; }
   *length=b.length; return b.data;
 }
-bool personal_tag_share(share_image* out) {
-  if(!tag.enabled || !tag.tex || tag.library.selected<0 || tag.library.selected>=tag.library.count) return false;
-  if(shared.item!=tag.library.selected) {
-    free(shared.png); shared.png=NULL; shared.length=0; shared.item=tag.library.selected; shared.tried=false;
+static bool personal_image_share(personal_image* p,int slot,share_image* out) {
+  image_share_cache* cache=&shared_cache[slot];
+  if(!p->enabled || !p->tex || p->library.selected<0 || p->library.selected>=p->library.count) return false;
+  if(cache->item!=p->library.selected) {
+    free(cache->png); cache->png=NULL; cache->length=0; cache->item=p->library.selected; cache->tried=false;
   }
-  if(!shared.png && !shared.tried) {
-    shared.tried=true;
+  if(!cache->png && !cache->tried) {
+    cache->tried=true;
     tag_image src={0};
-    if(load_item(&tag,tag.library.selected,&src)) {
-      for(int most=192;most>=48 && !shared.png;most-=48) {
-        shared.png=small_png(&src,most,&shared.length);
-        if(shared.png && shared.length>120*1024) { free(shared.png); shared.png=NULL; }
+    if(load_item(p,p->library.selected,&src)) {
+      for(int most=192;most>=48 && !cache->png;most-=48) {
+        cache->png=small_png(&src,most,&cache->length);
+        if(cache->png && cache->length>120*1024) { free(cache->png); cache->png=NULL; }
       }
       tag_image_free(&src);
-      if(shared.png) tag_share_hash(shared.png,shared.length,shared.hash);
+      if(cache->png) tag_share_hash(cache->png,cache->length,cache->hash);
     }
   }
-  if(!shared.png) return false;
-  *out=(share_image){shared.png,shared.length,"",tag.size,tag.gap,tag.angle,tag.sway};
-  memcpy(out->hash,shared.hash,17);
+  if(!cache->png) return false;
+  *out=(share_image){cache->png,cache->length,"",p->size,p->gap,p->angle,slot==0?p->sway:p->rotate};
+  memcpy(out->hash,cache->hash,17);
   return true;
 }
+bool personal_tag_share(share_image* out) { return personal_image_share(&tag,0,out); }
+bool personal_cosmetic_share(share_image* out) { return personal_image_share(&cosmetic,1,out); }
 void personal_tag_preview(tenv* env,float x,float y,float scale,float direction,float alpha) {
   (void)env;
   if(tag.enabled && tag.tex && ntl_tag_prefs.mode!=1) {
@@ -416,6 +478,7 @@ void personal_tag_draw(tenv* env) {
 void personal_tag_toggle(void) { tag_motion.valid=false; tag_swing.valid=preview_swing.valid=false; tag.enabled=!tag.enabled; save_settings(&tag); }
 void personal_cosmetic_toggle(void) { cosmetic.enabled=!cosmetic.enabled; save_settings(&cosmetic); }
 void personal_tag_destroy(tenv* env) {
+  for(int i=0;i<2;i++) { free(shared_cache[i].png);shared_cache[i].png=NULL; }
   personal_image* slots[]={&tag,&cosmetic};
   for(int i=0;i<2;i++) {
     personal_image* p=slots[i]; save_settings(p); tag_image_free(&p->pending);

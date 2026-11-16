@@ -117,7 +117,7 @@ test("invalid requests never write records; administrator page reveals no secret
 test("existing tag sharing remains independent of access control", async () => {
   const room = new Room({});
   const result = await room.fetch(new Request("https://room/", { method: "POST", body: JSON.stringify({ sid: 123, tag: ["ntl", 8] }) }));
-  assert.deepEqual(await result.json(), { p: [[123, "ntl", 8]] });
+  assert.deepEqual(await result.json(), { p: [[123, "ntl", 8]], a: [], appearanceSchema: 1 });
 });
 
 test("detailed location comes only from edge metadata and refreshes per IP", async () => {

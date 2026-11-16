@@ -30,10 +30,12 @@ void toast_draw(tenv* env) {
     float fade = (float)(t->until - now); if (fade > 1) fade = 1;
     ImVec2 ts; igPushFont(font, size); igCalcTextSize(&ts, t->text, NULL, false, -1); igPopFont();
     float x = env->ctx->size[0] / 2.0f - ts.x / 2;
-    ImDrawList_AddRectFilled(draw, (ImVec2){x - 12, y - 6}, (ImVec2){x + ts.x + 12, y + ts.y + 6},
-                             igColorConvertFloat4ToU32((ImVec4){0, 0, 0, .62f * fade}), 8, 0);
+    ImDrawList_AddRectFilled(draw, (ImVec2){x - 18, y - 10}, (ImVec2){x + ts.x + 18, y + ts.y + 10},
+                             igColorConvertFloat4ToU32((ImVec4){0, 0, 0, .72f * fade}), 14, 0);
+    ImDrawList_AddRect(draw, (ImVec2){x - 18, y - 10}, (ImVec2){x + ts.x + 18, y + ts.y + 10},
+                      igColorConvertFloat4ToU32((ImVec4){1, 1, 1, .12f * fade}),14,0,1);
     ImDrawList_AddText_FontPtr(draw, font, size, (ImVec2){x, y},
                                igColorConvertFloat4ToU32((ImVec4){t->color[0], t->color[1], t->color[2], fade}), t->text, NULL, 0, NULL);
-    y += ts.y + 16;
+    y += ts.y + 30;
   }
 }

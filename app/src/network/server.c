@@ -55,9 +55,11 @@ static void open_connection(tenv* env) {
   if (!gdata->connection) gdata->closed = true;
 }
 
+#include "../ui/skin_editor.h"
 void server_connect(tenv* env) {
   tuser_data* usr = env->usr;
   user_settings* usrs = &usr->usrs;
+  ui_skin_remember(env);
 
   server_status_menu(false);
   server_clear_error();

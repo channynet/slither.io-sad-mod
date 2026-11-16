@@ -4,6 +4,7 @@
 #include "../user.h"
 #include "../game/ntl_tags.h"
 #include "../ui/personal_tag.h"
+#include "../game/native_preferences.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -27,7 +28,8 @@ typedef struct {
   char url[160], server[200];
   int sid;
   char tag[200];                      // the "tag" JSON for the room ("null": none)
-  char hash[17];                      // my image tag's (or "")
+  char hash[2][17];
+  char appearance[768];
   int generation;
 } wish;
 static struct {
@@ -36,7 +38,7 @@ static struct {
   HANDLE wake, thread;
   volatile LONG stop;
   wish w;
-  unsigned char* png; size_t png_length; char png_hash[17];   // my image tag's picture (our own copy)
+  struct { unsigned char* data; size_t length; char hash[17]; } images[2];
   share_entry list[MAX_ENTRIES]; int list_count, list_generation; char list_server[200];
   char asked[16][17]; int asked_count;          // pictures the main thread wants
   char have[HAVE_MAX][17]; int have_count;      // pictures on disk (found or fetched)
@@ -46,6 +48,7 @@ static struct {
 // main-thread copies
 static share_entry list[MAX_ENTRIES]; static int list_count, list_generation = -1;
 static char list_server[200], my_server[200];
+static ULONGLONG list_at;
 
 static bool in_set(char (*set)[17], int count, const char* hash) {
   for (int i = 0; i < count; i++) if (!strcmp(set[i], hash)) return true;
@@ -72,40 +75,44 @@ static void picture_path(const char* hash, char* out, size_t cap) { snprintf(out
 
 static DWORD WINAPI worker(void* unused) {
   (void)unused;
-  char uploaded[17] = "";
+  char uploaded[2][17] = {{0}};
+  char uploaded_url[160]="";
   make_dir(TAG_SHARE_DIR);
   while (!InterlockedCompareExchange(&S.stop, 0, 0)) {
     EnterCriticalSection(&S.lock);
     wish w = S.w;
-    unsigned char* png = NULL; size_t png_length = 0;
-    if (S.png && !strcmp(S.png_hash, w.hash)) { png = malloc(S.png_length); if (png) { memcpy(png, S.png, S.png_length); png_length = S.png_length; } }
+    unsigned char* png[2]={0}; size_t png_length[2]={0};
+    for(int i=0;i<2;i++) if(S.images[i].data && !strcmp(S.images[i].hash,w.hash[i])) {
+      png[i]=malloc(S.images[i].length);
+      if(png[i]) { memcpy(png[i],S.images[i].data,S.images[i].length); png_length[i]=S.images[i].length; }
+    }
     char asked[16][17]; int asked_count = S.asked_count;
     memcpy(asked, S.asked, sizeof asked);
     LeaveCriticalSection(&S.lock);
     char base[200]; base_url(w.url, base, sizeof base);
     if (w.want) {
-      // my image tag's picture, once a run
-      if (w.hash[0] && png && strcmp(uploaded, w.hash)) {
-        char url[300]; snprintf(url, sizeof url, "%s/v1/img/%s", base, w.hash);
-        int status = http_request("PUT", url, "image/png", png, png_length, NULL, NULL, 0, 8000);
-        if (status == 200) memcpy(uploaded, w.hash, 17);
+      if(strcmp(uploaded_url,w.url)) { memset(uploaded,0,sizeof(uploaded)); snprintf(uploaded_url,sizeof(uploaded_url),"%s",w.url); }
+      for(int i=0;i<2;i++) if(w.hash[i][0] && png[i] && strcmp(uploaded[i],w.hash[i])) {
+        char url[300];snprintf(url,sizeof(url),"%s/v1/img/%s",base,w.hash[i]);
+        int status=http_request("PUT",url,"image/png",png[i],png_length[i],NULL,NULL,0,8000);
+        if(status==200) memcpy(uploaded[i],w.hash[i],17);
       }
-      char server[600], url[900], body[300];
+      char server[600], url[900], body[1200];
       url_escape(w.server, server, sizeof server);
       snprintf(url, sizeof url, "%s/v1/room?s=%s", base, server);
-      snprintf(body, sizeof body, "{\"sid\":%d,\"tag\":%s}", w.sid, w.tag);
+      snprintf(body, sizeof body, "{\"sid\":%d,\"tag\":%s,\"appearance\":%s}", w.sid, w.tag,w.appearance);
       unsigned char* reply = NULL; size_t length = 0;
       int status = http_request("POST", url, "application/json", body, strlen(body), &reply, &length, 256 * 1024, 6000);
       share_entry got[MAX_ENTRIES]; int n = 0;
       if (status == 200 && reply) n = tag_share_parse((const char*)reply, length, got, MAX_ENTRIES);
       free(reply);
       EnterCriticalSection(&S.lock);
-      if (status == 200) {
+      if (status == 200 && S.w.generation==w.generation) {
         memcpy(S.list, got, sizeof(share_entry) * (size_t)n); S.list_count = n; S.list_generation++;
         snprintf(S.list_server, sizeof S.list_server, "%s", w.server);
         int others = 0; for (int i = 0; i < n; i++) if (got[i].sid != w.sid) others++;
-        snprintf(S.status, sizeof S.status, "연결됨 · 이 서버의 공유 태그 %d개", others);
-      } else snprintf(S.status, sizeof S.status, status ? "공유 서버 오류 (%d)" : "공유 서버에 연결하지 못함", status);
+        snprintf(S.status, sizeof S.status, "연결됨 · 이 서버의 외형 공유 %d명", others);
+      } else if(S.w.generation==w.generation) snprintf(S.status, sizeof S.status, status ? "공유 서버 오류 (%d)" : "공유 서버에 연결하지 못함", status);
       LeaveCriticalSection(&S.lock);
     }
     // pictures asked for: from the relay, kept on disk
@@ -132,7 +139,7 @@ static DWORD WINAPI worker(void* unused) {
           if (!here) remove(tmp);
         }
         free(data);
-        if (!here && status == 0) continue;                  // (no connection: try again later)
+        if (!here && (status == 0 || status == 404 || status >= 500)) continue; // upload/network may still be pending
       }
       EnterCriticalSection(&S.lock);
       if (here) { if (S.have_count < HAVE_MAX) memcpy(S.have[S.have_count++], asked[i], 17); }
@@ -140,7 +147,7 @@ static DWORD WINAPI worker(void* unused) {
       for (int k = 0; k < S.asked_count; k++) if (!strcmp(S.asked[k], asked[i])) { memmove(S.asked[k], S.asked[k + 1], 17 * (size_t)(S.asked_count - k - 1)); S.asked_count--; break; }
       LeaveCriticalSection(&S.lock);
     }
-    free(png);
+    for(int i=0;i<2;i++) free(png[i]);
     // wait for the next poll, or until the wish changes / a picture is asked for
     WaitForSingleObject(S.wake, w.want ? POLL_MS : 1000);
   }
@@ -163,7 +170,7 @@ void tag_share_tick(tenv* env) {
   wish w = {0};
   w.want = ntl_tag_prefs.share && url[0] && me && !me->dead;
   snprintf(my_server, sizeof my_server, "%s", env->usr->usrs.ipv4);
-  share_image image = {0};
+  share_image image[2] = {0};
   if (w.want) {
     snprintf(w.url, sizeof w.url, "%s", url);
     snprintf(w.server, sizeof w.server, "%s", env->usr->usrs.ipv4);
@@ -172,32 +179,45 @@ void tag_share_tick(tenv* env) {
     if (ntl_tag_prefs.mode == 1) {
       int t = ntl_tag_own_local();                    // (a bought tag worn without its password too)
       if (t >= 0) snprintf(w.tag, sizeof w.tag, "[\"ntl\",%d]", t);
-    } else if (personal_tag_share(&image)) {
-      snprintf(w.tag, sizeof w.tag, "[\"img\",\"%s\",%.1f,%.1f,%.1f,%d]", image.hash, image.size, image.gap, image.angle, image.sway ? 1 : 0);
-      memcpy(w.hash, image.hash, 17);
+    } else if (personal_tag_share(&image[0])) {
+      snprintf(w.tag, sizeof w.tag, "[\"img\",\"%s\",%.1f,%.1f,%.1f,%d]", image[0].hash, image[0].size, image[0].gap, image[0].angle, image[0].sway ? 1 : 0);
+      memcpy(w.hash[0], image[0].hash, 17);
     }
+    char cosmetic[200]="null",gradient[256]="null";
+    if(personal_cosmetic_share(&image[1])) {
+      memcpy(w.hash[1],image[1].hash,17);
+      snprintf(cosmetic,sizeof(cosmetic),"[\"%s\",%.1f,%.1f,%.1f,%d]",image[1].hash,image[1].size,image[1].gap,image[1].angle,image[1].sway?1:0);
+    }
+    if(native_prefs.gradient_enabled) {
+      int n=native_prefs.gradient_count; if(n<2 || n>4) n=2;
+      int at=snprintf(gradient,sizeof(gradient),"[%d",n);
+      for(int i=0;i<n*3;i++) at+=snprintf(gradient+at,sizeof(gradient)-at,",%.3f",native_prefs.gradient_colors[i/3][i%3]);
+      snprintf(gradient+at,sizeof(gradient)-at,"]");
+    }
+    snprintf(w.appearance,sizeof(w.appearance),"{\"fire\":%.3f,\"gradient\":%s,\"cosmetic\":%s}",native_prefs.fire_skin?native_prefs.fire_strength:0,gradient,cosmetic);
   } else if (url[0]) snprintf(w.url, sizeof w.url, "%s", url);
   EnterCriticalSection(&S.lock);
-  bool same = S.w.want == w.want && !strcmp(S.w.url, w.url) && !strcmp(S.w.server, w.server) && S.w.sid == w.sid && !strcmp(S.w.tag, w.tag);
+  bool same = S.w.want == w.want && !strcmp(S.w.url, w.url) && !strcmp(S.w.server, w.server) && S.w.sid == w.sid && !strcmp(S.w.tag, w.tag) && !strcmp(S.w.appearance,w.appearance);
   if (!same) {
     int generation = S.w.generation + 1;
     S.w = w; S.w.generation = generation;
     if (!w.want) { S.list_count = 0; S.list_generation++; snprintf(S.status, sizeof S.status, url[0] ? (ntl_tag_prefs.share ? "게임 중에만 공유" : "꺼짐") : "공유 서버 주소 없음"); }
   }
-  if (w.hash[0] && strcmp(S.png_hash, w.hash) && image.png && image.length) {   // (a copy: personal_tag may let go of its own)
-    unsigned char* copy = malloc(image.length);
-    if (copy) { memcpy(copy, image.png, image.length); free(S.png); S.png = copy; S.png_length = image.length; memcpy(S.png_hash, w.hash, 17); }
+  for(int i=0;i<2;i++) if(w.hash[i][0] && strcmp(S.images[i].hash,w.hash[i]) && image[i].png && image[i].length) {
+    unsigned char* copy=malloc(image[i].length);
+    if(copy) { memcpy(copy,image[i].png,image[i].length);free(S.images[i].data);S.images[i].data=copy;
+      S.images[i].length=image[i].length;memcpy(S.images[i].hash,w.hash[i],17); }
   }
   if (S.list_generation != list_generation) {
     memcpy(list, S.list, sizeof(share_entry) * (size_t)S.list_count); list_count = S.list_count;
-    list_generation = S.list_generation;
+    list_generation = S.list_generation; list_at=GetTickCount64();
     snprintf(list_server, sizeof list_server, "%s", S.list_server);
   }
   LeaveCriticalSection(&S.lock);
   if (!same) SetEvent(S.wake);
 }
 bool tag_share_lookup(int sid, share_entry* out) {
-  if (!ntl_tag_prefs.share || strcmp(list_server, my_server)) return false;
+  if (!ntl_tag_prefs.share || strcmp(list_server, my_server) || GetTickCount64()-list_at>12000) return false;
   for (int i = 0; i < list_count; i++) if (list[i].sid == sid) { *out = list[i]; return true; }
   return false;
 }

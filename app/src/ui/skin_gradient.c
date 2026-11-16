@@ -5,7 +5,15 @@
 #include "fire_skin.h"
 #include <math.h>
 
+static const share_entry* remote_effect;
+void skin_effect_remote(const share_entry* appearance) { remote_effect=appearance; }
+
 void skin_effect_color(float out[3],int index,int count) {
+  if(remote_effect) {
+    if(remote_effect->fire_strength>0) fire_body_color(out,index,count,skin_effect_time);
+    else gradient_color(out,remote_effect->gradient_colors,remote_effect->gradient_count,count>1?(float)index/(count-1):0);
+    return;
+  }
   if(native_prefs.fire_skin) fire_body_color(out,index,count,skin_effect_time);
   else gradient_color(out,native_prefs.gradient_colors,native_prefs.gradient_count,count>1?(float)index/(count-1):0);
 }
@@ -13,6 +21,7 @@ void skin_effect_color(float out[3],int index,int count) {
 static float plain[3]={1,1,1};
 static bool own_snake;
 void skin_graphics_begin(const float color[3],bool own) {
+  remote_effect=NULL;
   plain[0]=color[0]; plain[1]=color[1]; plain[2]=color[2]; own_snake=own;
 }
 
@@ -42,5 +51,7 @@ void skin_gradient_body(tenv* env,bool enabled,int mode,int index,int count,cons
   instance.uv_rect=env->usr->gdata.cg_uvs[mode==0?9:BLANK_UV];
   float shade=mode==0?original->color.r:1;
   instance.color.r=color[0]*shade; instance.color.g=color[1]*shade; instance.color.b=color[2]*shade;
+  if(remote_effect && native_prefs.others_opacity>0 && native_prefs.others_opacity<1)
+    instance.color.a*=native_prefs.others_opacity;
   bp_renderer_push(env->usr->r->bpr,&instance);
 }

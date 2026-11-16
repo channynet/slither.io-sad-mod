@@ -1,5 +1,7 @@
 #ifndef SKIN_GRADIENT_H
 #define SKIN_GRADIENT_H
+#include "../network/tag_share.h"
+void skin_effect_remote(const share_entry* appearance);
 #include <thermite.h>
 #include "../rendering/bp_renderer.h"
 void skin_gradient_body(tenv* env,bool enabled,int mode,int index,int count,const bp_instance* original);

@@ -2,6 +2,7 @@
 
 #include "../user.h"
 #include "../game/native_preferences.h"
+#include "../network/ntl.h"
 
 void ui_settings_init(tenv* env) {}
 
@@ -17,15 +18,19 @@ void ui_settings(tenv* env) {
              usr->imgui_data.regular_font[usrs->ui_font_size]->LegacySize);
 
   float frame_height = igGetFrameHeight();
-  float child_window_height =
-      ctx->size[1] - style->WindowPadding.y * 4 - frame_height;
-
-  if (igBeginTable("settings_table", 4, ImGuiTableFlags_None, (ImVec2){}, 0)) {
-    igTableNextRow(ImGuiTableRowFlags_None, 0);
-    igTableSetColumnIndex(0);
-
+  float page_width=fminf(1080,ctx->size[0]-32);
+  igSetCursorPos((ImVec2){(ctx->size[0]-page_width)*.5f,20});
+  igBeginChild_Str("##settings_page",(ImVec2){page_width,ctx->size[1]-40},
+                  ImGuiChildFlags_Borders,0);
+  igTextUnformatted("Settings",NULL);
+  igTextDisabled("General, display and controls");
+  igSpacing();
+  ImVec2 available; igGetContentRegionAvail(&available);
+  float child_window_height=fmaxf(80,available.y-frame_height*2-style->ItemSpacing.y*4);
+  if (igBeginTabBar("##settings_tabs", ImGuiTabBarFlags_None)) {
+    if(igBeginTabItem("General",NULL,0)) {
     igBeginChild_Str("general_settings_child_holder",
-                     (ImVec2){-1, child_window_height}, ImGuiChildFlags_None,
+                     (ImVec2){0, child_window_height}, ImGuiChildFlags_AlwaysUseWindowPadding,
                      ImGuiWindowFlags_None);
     igSeparatorText("General");
     if (igBeginTable("field:value", 2, ImGuiTableFlags_None, (ImVec2){}, 0)) {
@@ -110,13 +115,30 @@ void ui_settings(tenv* env) {
       igEndTable();
     }
     igEndChild();
+    igEndTabItem();
+    }
+
+    if(igBeginTabItem("화면",NULL,0)) {
+      igBeginChild_Str("display_settings",(ImVec2){0,child_window_height},
+                      ImGuiChildFlags_AlwaysUseWindowPadding,0);
+      ntl_display_settings(env);
+      igEndChild();
+      igEndTabItem();
+    }
+    if(igBeginTabItem("플레이",NULL,0)) {
+      igBeginChild_Str("gameplay_settings",(ImVec2){0,child_window_height},
+                      ImGuiChildFlags_AlwaysUseWindowPadding,0);
+      ntl_gameplay_settings(env);
+      igEndChild();
+      igEndTabItem();
+    }
 
     for (int i = 0; i < 2; i++) {
-      igTableSetColumnIndex(i + 1);
+      if(!igBeginTabItem(i==0 ? "Normal mode" : "Assist mode",NULL,0)) continue;
       igPushID_Int(i + 1);
       gameplay_mode* mode = usrs->modes + i;
-      igBeginChild_ID(igGetID_Int(i + 1), (ImVec2){-1, child_window_height},
-                      ImGuiChildFlags_None, ImGuiWindowFlags_None);
+      igBeginChild_ID(igGetID_Int(i + 1), (ImVec2){0, child_window_height},
+                      ImGuiChildFlags_AlwaysUseWindowPadding, ImGuiWindowFlags_None);
       igSeparatorText(i == 0 ? "Normal mode" : "Assist mode");
 
       if (igBeginTable("field:value", 2, ImGuiTableFlags_None, (ImVec2){}, 0)) {
@@ -206,11 +228,12 @@ void ui_settings(tenv* env) {
       }
       igEndChild();
       igPopID();
+      igEndTabItem();
     }
 
-    igTableSetColumnIndex(3);
-    igBeginChild_Str("hotkey_child_window", (ImVec2){-1, child_window_height},
-                     ImGuiChildFlags_None, ImGuiWindowFlags_None);
+    if(igBeginTabItem("Hotkeys",NULL,0)) {
+    igBeginChild_Str("hotkey_child_window", (ImVec2){0, child_window_height},
+                     ImGuiChildFlags_AlwaysUseWindowPadding, ImGuiWindowFlags_None);
     igSeparatorText("Hotkeys");
     if (igBeginTable("field:value", 2, ImGuiTableFlags_None, (ImVec2){}, 0)) {
       igTableNextRow(ImGuiTableRowFlags_None, 0);
@@ -290,24 +313,27 @@ void ui_settings(tenv* env) {
       igEndTable();
     }
     igEndChild();
-
-    igEndTable();
+    igEndTabItem();
+    }
+    igEndTabBar();
   }
 
-  igSetCursorPosX(ctx->size[0] - style->WindowPadding.x - 150 -
-                  style->ItemSpacing.x - 150);
-  igSetCursorPosY(ctx->size[1] - style->WindowPadding.y - frame_height);
-  if (igButton("Reset", (ImVec2){150, 0})) {
+  igSpacing();
+  igGetContentRegionAvail(&available);
+  float button_width=fminf(150,(available.x-style->ItemSpacing.x)*.5f);
+  igSetCursorPosX(igGetCursorPosX()+fmaxf(0,available.x-button_width*2-style->ItemSpacing.x));
+  if (igButton("Reset", (ImVec2){button_width, 0})) {
     user_settings_default(usrs);
     env->config.vsync = usrs->vsync;
     twindow_request_refresh(env->wnd);
   }
   igSameLine(0, -1);
-  if (igButton("OK", (ImVec2){150, 0})) {
+  if (igButton("OK", (ImVec2){button_width, 0})) {
     save_user_settings(usrs);
     gdata->curr_screen = TITLE_SCREEN;
   }
 
+  igEndChild();
   igPopFont();
 }
 

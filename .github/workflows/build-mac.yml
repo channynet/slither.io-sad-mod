@@ -22,6 +22,10 @@ jobs:
           mkdir -p build/tests
           clang -std=gnu11 -DGLFW_INCLUDE_NONE -DGLFW_INCLUDE_VULKAN -Iglfw/include -Ithermite/include -Ithermite/src -Ithird_party/vulkan/include tests/window_startup_test.c thermite/src/core/tentry.c -o build/tests/window_startup
           build/tests/window_startup
+      - name: Test saved skin library
+        run: |
+          clang -std=gnu11 tests/skin_library_test.c app/src/game/skin_library.c app/src/external/mongoose.c -o build/tests/skin_library
+          cd build/tests && ./skin_library
       - name: Build Universal application
         run: python3 tools/build_unix.py --jobs 3
       - name: Test updater validation and transactions

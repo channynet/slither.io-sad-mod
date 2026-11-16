@@ -5,7 +5,7 @@
 
 void skin_gradient_controls(void) {
   igCheckbox("그라데이션 스킨 · Ctrl+F2",&native_prefs.gradient_enabled);
-  igTextWrapped("머리에서 꼬리까지 선택한 색이 이어집니다. 내 화면에만 보이며 자동 저장됩니다.");
+  igTextWrapped("머리에서 꼬리까지 선택한 색이 이어집니다. 외형 공유를 켜면 같은 서버의 이 클라이언트 사용자에게도 보입니다. 설정은 자동 저장됩니다.");
   igSliderInt("색 개수",&native_prefs.gradient_count,2,4,"%d",ImGuiSliderFlags_AlwaysClamp);
   for(int i=0;i<native_prefs.gradient_count;i++) {
     char label[40];
@@ -34,7 +34,7 @@ void skin_gradient_controls(void) {
 
 void fire_skin_controls(void) {
   igCheckbox("불꽃 스킨",&native_prefs.fire_skin);
-  igTextWrapped("몸이 불타는 색으로 일렁이고, 아래로 불빛이 번지며 옆구리에서 불꽃이 피어올라 뒤로 흩어집니다. 내 화면의 내 지렁이에만 보이며 자동 저장됩니다.");
+  igTextWrapped("몸이 불타는 색으로 일렁이고 옆구리에서 불꽃이 피어오릅니다. 외형 공유를 켜면 같은 서버의 이 클라이언트 사용자에게도 보입니다. 설정은 자동 저장됩니다.");
   igBeginDisabled(!native_prefs.fire_skin);
   igSetNextItemWidth(180);
   igSliderFloat("불꽃 크기",&native_prefs.fire_strength,.2f,1.5f,"%.1f",ImGuiSliderFlags_AlwaysClamp);

@@ -15,6 +15,12 @@ typedef struct {
   int sid, kind, ntl;                 // the game server's snake id; SHARE_*; the NTL tag
   char hash[17];                      // SHARE_IMAGE: the picture
   float size, gap, angle; bool sway;  // SHARE_IMAGE: as its owner set it
+  char cosmetic_hash[17];
+  float cosmetic_size, cosmetic_gap, cosmetic_angle;
+  bool cosmetic_rotate;
+  float fire_strength;
+  int gradient_count;
+  float gradient_colors[4][3];
 } share_entry;
 
 // My own image tag, for the relay: its PNG (at most 120 KB), hash and settings.

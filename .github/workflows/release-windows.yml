@@ -18,7 +18,7 @@ jobs:
         with:
           node-version: '24'
       - name: Test client management server
-        run: node --test tools/tag-share-worker/tests/access.test.mjs
+        run: node --test tools/tag-share-worker/tests/access.test.mjs tools/tag-share-worker/tests/appearance.test.mjs
       - name: Prepare pinned tools
         run: python tools/prepare_windows.py
       - name: Validate update transactions

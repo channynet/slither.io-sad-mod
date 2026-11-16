@@ -9,6 +9,7 @@
 #include <stdio.h>
 #include "target_marker.h"
 #include "../ui/head_point_geometry.h"
+#include "../ui/hud_panel.h"
 
 void ui_overlay(tenv* env) {
   target_marker_draw(env);
@@ -77,6 +78,8 @@ void ui_overlay(tenv* env) {
   ImGuiStyle* style = igGetStyle();
   float line_height=usr->imgui_data.mono_font[usrs->stats_font_size]->LegacySize+style->ItemSpacing.y;
   if (usrs->hotkeys[HOTKEY_HUD].active) {
+    igSetCursorPos((ImVec2){26,132});
+    hud_panel_begin();
 
     igPushFont(usr->imgui_data.mono_font[usrs->stats_font_size],
                usr->imgui_data.mono_font[usrs->stats_font_size]->LegacySize);
@@ -132,7 +135,9 @@ void ui_overlay(tenv* env) {
                       usrs->stats_font_size);
     }
 
-    igSetCursorPosY(ctx->size[1] - (line_height * 3) - style->WindowPadding.y);
+    hud_panel_end();
+    igSetCursorPos((ImVec2){26,ctx->size[1]-(line_height*3)-24});
+    hud_panel_begin();
 
     igTextColored((ImVec4){1, 1, 1, 0.3}, "\ueaeb");
     igSameLine(0, -1);
@@ -168,6 +173,7 @@ void ui_overlay(tenv* env) {
       igPopFont();
     }
 
+    hud_panel_end();
     igPopFont();
 
   } // VV hides statistics only; navigation remains visible.
@@ -198,11 +204,12 @@ void ui_overlay(tenv* env) {
 
     float tb_width =
         psize.x + nksize.x + scsize.x + (style->CellPadding.x * 2 * 3);
-    igSetCursorPosX(ctx->size[0] - tb_width - style->WindowPadding.x);
-    igSetCursorPosY(style->WindowPadding.y);
+    igSetCursorPosX(ctx->size[0] - tb_width - 26);
+    igSetCursorPosY(24);
+    hud_panel_begin();
 
     if (igBeginTable("leaderboard_table", 3, ImGuiTableFlags_NoHostExtendX,
-                     (ImVec2){}, 0)) {
+                     (ImVec2){tb_width,0}, 0)) {
       igTableSetupColumn("##position", ImGuiTableColumnFlags_WidthFixed,
                          psize.x, 0);
       igTableSetupColumn("##nickname", ImGuiTableColumnFlags_WidthFixed,
@@ -239,6 +246,7 @@ void ui_overlay(tenv* env) {
       }
       igEndTable();
     }
+    hud_panel_end();
   }
 
   usr->r->global.minimap_circ[2] = usrs->minimap_size;
@@ -260,8 +268,10 @@ void ui_overlay(tenv* env) {
       lctxtsz.x * 0.5f);
   igSetCursorPosY(ctx->size[1] - style->WindowPadding.y - line_height);
 
+  hud_panel_begin();
   igTextColored((ImVec4){1, 1, 1, 0.3f}, "\ue947");
   igSameLine(0, -1);
   igTextColored((ImVec4){1, 1, 1, 0.7f}, "%d° %d%%", pang, dst);
+  hud_panel_end();
   igPopFont();
 }

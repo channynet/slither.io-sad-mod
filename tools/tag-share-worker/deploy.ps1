@@ -10,7 +10,7 @@ try {
     $expectedHash = (& node --input-type=module -e "import {adminPage} from './src/admin.js'; import {createHash} from 'node:crypto'; console.log(createHash('sha256').update(adminPage).digest('hex'));").Trim()
     if ($LASTEXITCODE -ne 0 -or $expectedHash -notmatch '^[a-f0-9]{64}$') { throw 'Cannot calculate administrator page hash.' }
     if (!$VerifyOnly) {
-        & node --test tests/access.test.mjs
+        & node --test tests/access.test.mjs tests/appearance.test.mjs
         if ($LASTEXITCODE -ne 0) { throw 'Management server tests failed; deployment cancelled.' }
         # A unique staging directory avoids inherited project configuration and preserves prior runs.
         $stage = Join-Path $env:TEMP ('slither-tag-deploy-' + [guid]::NewGuid().ToString('N'))
@@ -54,7 +54,9 @@ try {
                 if ($actualHash -ne $expectedHash) { throw 'The live administrator page differs from this source.' }
                 $health = Invoke-RestMethod -Uri "$ServiceUrl/v1/access?verify=$nonce" -Headers @{'Cache-Control'='no-cache'} -TimeoutSec 15
                 if ($health.schema -ne 2) { throw 'The live access storage implementation is outdated.' }
-                Write-Host "Verified deployment: $ServiceUrl (administrator page matches; access schema 2)."
+                $room = Invoke-RestMethod -Uri "$ServiceUrl/v1/room?s=deployment-check" -Method Post -ContentType 'application/json' -Body '{"sid":-1}' -TimeoutSec 15
+                if ($room.appearanceSchema -ne 1) { throw 'The live appearance relay is outdated.' }
+                Write-Host "Verified deployment: $ServiceUrl (administrator page matches; access schema 2; appearance schema 1)."
                 exit 0
             } catch {
                 Write-Host "Verification $attempt/$Attempts failed: $($_.Exception.Message)"

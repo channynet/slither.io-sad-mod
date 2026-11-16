@@ -93,53 +93,40 @@ void ui_title_screen(tenv* env) {
   usr->r->global.bd_opacity = 0;
   usr->r->global.minimap_opacity = 0;
 
-  float frame_height = igGetFrameHeight();
-
-  float logo_size = 400;
-  float logo_gap = 5;
-
-  igPushFont(usr->imgui_data.mono_font[usrs->ui_font_size],
-             usr->imgui_data.mono_font[usrs->ui_font_size]->LegacySize);
-  igSetCursorPosX(ctx->size[0] / 2.0f - logo_size / 2);
-  igSetCursorPosY(ctx->size[1] / 2.0f -
-                  (igGetFrameHeight() - style->ItemSpacing.x) * 3);
   draw_menu_meme(env);
-  int tot_sec = (int)usrs->play_time;
-  int hours = tot_sec / 3600;
-  int minutes = (tot_sec % 3600) / 60;
-  int seconds = tot_sec % 60;
-  igTextColored((ImVec4){1, 1, 1, 0.5f}, "\ue99e");
-  igSameLine(0, -1);
-  igTextColored((ImVec4){1, 1, 1, 0.5f}, "%d", usrs->score);
-  igSetCursorPosX(ctx->size[0] / 2.0f - logo_size / 2);
-  igSetCursorPosY(ctx->size[1] / 2.0f -
-                  (igGetFrameHeight() - style->ItemSpacing.x) * 2);
-  igTextColored((ImVec4){1, 1, 1, 0.5f}, "\ueaeb");
-  igSameLine(0, -1);
-  igTextColored((ImVec4){1, 1, 1, 0.5f}, "%d", usrs->kills);
-  igSetCursorPosX(ctx->size[0] / 2.0f - logo_size / 2);
-  igSetCursorPosY(ctx->size[1] / 2.0f -
-                  (igGetFrameHeight() - style->ItemSpacing.x));
-  igTextColored((ImVec4){1, 1, 1, 0.6}, "\ue952");
-  igSameLine(0, -1);
-  igTextColored((ImVec4){1, 1, 1, 0.6}, "%02d:%02d:%02d", hours, minutes,
-                seconds);
+  float frame_height = igGetFrameHeight();
+  float panel_width = fminf(480, ctx->size[0] - 32);
+  float panel_height = fminf(ctx->size[1] - 48, frame_height * 9 + 158);
+  igSetCursorPos((ImVec2){(ctx->size[0]-panel_width)*.5f,
+                         fmaxf(24,(ctx->size[1]-panel_height)*.5f)});
+  igPushStyleVar_Vec2(ImGuiStyleVar_WindowPadding,(ImVec2){24,24});
+  igBeginChild_Str("##welcome",(ImVec2){panel_width,panel_height},
+                  ImGuiChildFlags_Borders,0);
+  igPopStyleVar(1);
+  ImVec2 available; igGetContentRegionAvail(&available);
+  float logo_size = available.x;
+  igPushFont(usr->imgui_data.regular_font_bold[FONT_SIZE_LARGE],
+             usr->imgui_data.regular_font_bold[FONT_SIZE_LARGE]->LegacySize);
+  igTextUnformatted("Slither Native",NULL);
   igPopFont();
-
-  igSetCursorPosX(ctx->size[0] / 2.0f - logo_size / 2);
-  igSetCursorPosY(ctx->size[1] / 2.0f + style->ItemSpacing.y);
-  igPushItemWidth(logo_size);
-  igPushStyleColor_Vec4(ImGuiCol_FrameBg,
-                        (ImVec4){0.297f, 0.265f, 0.484f, 1.0f});
+  igTextDisabled("NTL  /  Ready to play");
+  igSpacing();
+  int tot_sec = (int)usrs->play_time;
+  if(igBeginTable("##career",3,ImGuiTableFlags_SizingStretchSame,(ImVec2){0},0)) {
+    igTableNextRow(0,0);
+    igTableSetColumnIndex(0); igTextDisabled("Score"); igText("%d",usrs->score);
+    igTableSetColumnIndex(1); igTextDisabled("Kills"); igText("%d",usrs->kills);
+    igTableSetColumnIndex(2); igTextDisabled("Play time");
+    igText("%02d:%02d:%02d",tot_sec/3600,(tot_sec%3600)/60,tot_sec%60);
+    igEndTable();
+  }
+  igSpacing();
+  igSetNextItemWidth(logo_size);
   igInputTextWithHint("##nickname_input", "Nickname", usrs->nickname,
-                      MAX_NICKNAME_LEN + 1, ImGuiInputTextFlags_None, NULL,
-                      NULL);
-  igSetCursorPosX(ctx->size[0] / 2.0f - logo_size / 2);
-  igSetCursorPosY(ctx->size[1] / 2.0f + style->ItemSpacing.y * 2 +
-                  frame_height);
+                      MAX_NICKNAME_LEN + 1, ImGuiInputTextFlags_None, NULL, NULL);
   igSetNextItemWidth(logo_size-frame_height-style->ItemSpacing.x);
-  igInputTextWithHint("##ipv4_input", "IP:포트 또는 온라인 주소", usrs->ipv4, MAX_IPV4_LEN + 1,
-                      ImGuiInputTextFlags_None, NULL, NULL);
+  igInputTextWithHint("##ipv4_input", "IP:포트 또는 온라인 주소", usrs->ipv4,
+                      MAX_IPV4_LEN + 1, ImGuiInputTextFlags_None, NULL, NULL);
   igSameLine(0,-1);
   igSetNextItemWidth(frame_height);
   igSetNextWindowSizeConstraints((ImVec2){480,0},(ImVec2){900,650},NULL,NULL);
@@ -195,26 +182,14 @@ void ui_title_screen(tenv* env) {
     igEndCombo();
   }
   if(igIsItemHovered(0)) igSetTooltip("최근 서버 · 인원 · 핑");
-  igPopStyleColor(1);
-  igPopItemWidth();
-  igSetCursorPosX(ctx->size[0] / 2.0f - logo_size / 2);
-  igSetCursorPosY(ctx->size[1] / 2.0f + style->ItemSpacing.y * 3 +
-                  frame_height * 2);
   ui_server_browser(env,logo_size);
-
-  igSetCursorPosX(ctx->size[0] / 2.0f - logo_size / 2);
-  igSetCursorPosY(ctx->size[1] / 2.0f + style->ItemSpacing.y * 4 +
-                  frame_height * 3);
-
-  if (igButton("\uea1c Play", (ImVec2){logo_size})) {
+  igSpacing();
+  if (igButton("\uea1c Play", (ImVec2){logo_size,frame_height+10})) {
     usr->gdata.conn = CONNECTING;
     usr->gdata.curr_screen = PLAYING;
     glfwSetTime(0);
     server_connect(env);
   }
-  igSetCursorPosX(ctx->size[0] / 2.0f - logo_size / 2);
-  igSetCursorPosY(ctx->size[1] / 2.0f + style->ItemSpacing.y * 5 +
-                  frame_height * 4);
   if (igButton("\ue90c Skin editor",
                (ImVec2){logo_size / 2 - style->ItemSpacing.x / 2}))
     usr->gdata.curr_screen = SKIN_EDITOR;
@@ -223,22 +198,18 @@ void ui_title_screen(tenv* env) {
                (ImVec2){logo_size / 2 - style->ItemSpacing.x / 2})) {
     usr->gdata.curr_screen = SETTINGS;
   }
-  igSetCursorPosX(ctx->size[0] / 2.0f - logo_size / 2);
-  igSetCursorPosY(ctx->size[1] / 2.0f + style->ItemSpacing.y * 6 +
-                  frame_height * 5);
   if (igButton("\ue9b6 Quit", (ImVec2){logo_size})) {
     env->config.running = false;
     save_user_settings(usrs);
   }
   if(*server_last_error()) {
-    igSetCursorPosX(ctx->size[0]/2.0f-logo_size/2);
     igTextColored((ImVec4){1,0.6f,0.3f,1},"%s",server_last_error());
   }
 
   if(server_history_save_failed) {
-    igSetCursorPosX(ctx->size[0]/2.0f-logo_size/2);
     igTextColored((ImVec4){1,0.6f,0.3f,1},"Could not save server history.");
   }
 
+  igEndChild();
   igPopFont();
 }

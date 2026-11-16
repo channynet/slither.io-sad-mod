@@ -718,17 +718,19 @@ static void draw_chat_line(ImFont* font,const chat_line* line) {
   }
 }
 static void draw_chat(tenv* env) {
-  float width=fminf(280,env->ctx->size[0]-16),height=fminf(230,env->ctx->size[1]*.4f);
-  igSetNextWindowPos((ImVec2){4,fminf(220,env->ctx->size[1]-height-40)},ImGuiCond_FirstUseEver,(ImVec2){0});
+  float width=fminf(320,env->ctx->size[0]-32),height=fminf(260,env->ctx->size[1]*.4f);
+  igSetNextWindowPos((ImVec2){16,fminf(320,env->ctx->size[1]-height-120)},ImGuiCond_FirstUseEver,(ImVec2){0});
   igSetNextWindowSize((ImVec2){width,height},ImGuiCond_FirstUseEver);
   igSetNextWindowSizeConstraints((ImVec2){220,100},(ImVec2){fmaxf(220,env->ctx->size[0]-8),fmaxf(100,env->ctx->size[1]-40)},NULL,NULL);
-  igSetNextWindowBgAlpha(.12f);
+  igSetNextWindowBgAlpha(.58f);
   ImFont* font=env->usr->imgui_data.regular_font[FONT_SIZE_SMALL]; igPushFont(font,18);
-  igPushStyleVar_Float(ImGuiStyleVar_WindowRounding,0);
-  igPushStyleVar_Vec2(ImGuiStyleVar_WindowPadding,(ImVec2){2,2});
-  igPushStyleVar_Vec2(ImGuiStyleVar_ItemSpacing,(ImVec2){2,0});
+  igPushStyleVar_Float(ImGuiStyleVar_WindowRounding,14);
+  igPushStyleVar_Vec2(ImGuiStyleVar_WindowPadding,(ImVec2){12,12});
+  igPushStyleVar_Vec2(ImGuiStyleVar_ItemSpacing,(ImVec2){6,4});
   igBegin("##ntl_chat",NULL,ImGuiWindowFlags_NoTitleBar|ImGuiWindowFlags_NoCollapse|ImGuiWindowFlags_NoDocking);
-  igBeginChild_Str("##team_messages",(ImVec2){0,-igGetFrameHeight()},0,0);
+  igPushStyleColor_Vec4(ImGuiCol_ChildBg,(ImVec4){0,0,0,0});
+  igBeginChild_Str("##team_messages",(ImVec2){0,-igGetFrameHeightWithSpacing()},0,0);
+  igPopStyleColor(1);
   if(!history_count) {
     igTextColored((ImVec4){.12f,.56f,1,1},"# %s",active?"팀 메시지를 기다리는 중입니다.":"팀 연결 안 됨 · 아래 …에서 설정");
     igTextDisabled("입력창 클릭 · Enter 전송 · Esc 복귀");
@@ -741,19 +743,19 @@ static void draw_chat(tenv* env) {
   scroll_chat=false; chat_at_bottom=igGetScrollY()>=igGetScrollMaxY()-8;
   igEndChild();
   igBeginDisabled(!active && !demo);
-  igSetNextItemWidth(-28);
+  igSetNextItemWidth(-38);
   bool typing=false;
   bool send=chat_input(&chat_editor,draft,sizeof(draft),&typing);
   chat_typing=typing;
   if(send) { send_chat(); if(!draft[0]) igSetWindowFocus_Str(NULL); }
   if(typing && igIsKeyPressed_Bool(ImGuiKey_Escape,false)) igSetWindowFocus_Str(NULL);
   igEndDisabled();
-  igSameLine(0,2);
-  if(igButton("…",(ImVec2){26,0})) igOpenPopup_Str("chat-options",0);
+  igSameLine(0,6);
+  if(igButton("…",(ImVec2){32,0})) igOpenPopup_Str("chat-options",0);
   if(igIsItemHovered(0)) igSetTooltip("%s",status);
   if(igBeginPopup("chat-options",0)) {
     igTextWrapped("%s",status);
-    if(igMenuItem_Bool("팀 연결 / 설정",NULL,false,true)) options_open=true;
+    if(igMenuItem_Bool("팀 연결 설정",NULL,false,true)) options_open=true;
     if(igMenuItem_Bool("팀원 현황",NULL,native_prefs.team_status,true)) native_prefs.team_status=!native_prefs.team_status;
     if(igMenuItem_Bool("채팅 숨기기","F8 / H H",false,true)) panel=false;
     igEndPopup();
@@ -830,9 +832,8 @@ void ntl_frame(tenv* env) {
   if(options_open) {
     igSetNextWindowPos((ImVec2){12,90},ImGuiCond_FirstUseEver,(ImVec2){0});
     igSetNextWindowSize((ImVec2){470,min(760,env->ctx->size[1]-110)},ImGuiCond_Always);
-    if(igBegin("팀 / 화면 설정",&options_open,ImGuiWindowFlags_NoDocking)) {
+    if(igBegin("팀 연결 설정",&options_open,ImGuiWindowFlags_NoDocking)) {
       igTextWrapped("%s",status);
-      igCheckbox("팀원 현황 표시",&native_prefs.team_status);
       if(updated) igText("마지막 응답: %llu초 전%s",(GetTickCount64()-updated)/1000,GetTickCount64()-updated>10000 ? " · 위치가 오래됨" : "");
       team_key_user=usr;
       if(!active && !demo) {
@@ -856,23 +857,7 @@ void ntl_frame(tenv* env) {
         igEndDisabled();
         igSameLine(0,-1);
         if(igButton("팀 연결",(ImVec2){0})) connect_team(usr);
-        igSameLine(0,-1);
-        if(igButton("오프라인 화면 시험",(ImVec2){0})) {
-          demo=true; memset(&visible,0,sizeof(visible)); memset(&previous,0,sizeof(previous));
-          ntl_parse("[{\"nick\":\"TEST0001팀원\",\"srv\":\"demo\",\"valx\":18000,\"valy\":19000,\"dt\":\"FPS: 60 @ 42(70) ms\",\"msg\":\"안녕하세요&nbsp;위치&nbsp;시험\"}]","",&visible);
-          float c=game->data.grd>0 ? game->data.grd : 21600;
-          float r=game->data.flux_grd>0 ? game->data.flux_grd : c;
-          visible.rows[0].x=c+r*.3f; visible.rows[0].y=c-r*.2f;
-          visible.rows[1]=visible.rows[0]; strcpy(visible.rows[1].nick,"TEST0002도움 요청");
-          visible.rows[1].x=c-r*.35f; visible.rows[1].y=c+r*.25f; visible.rows[1].sos=true;
-          visible.rows[1].fps=120; visible.rows[1].ping=85;
-          visible.rows[2]=visible.rows[0]; strcpy(visible.rows[2].nick,"TEST0003다른 서버"); strcpy(visible.rows[2].server,"example.invalid:444");
-          visible.rows[2].fps=75; visible.rows[2].ping=160;
-          visible.rows[3]=visible.rows[0]; strcpy(visible.rows[3].nick,"TEST0004대기 중"); strcpy(visible.rows[3].server,"_GAME_MENU_");
-          visible.rows[3].fps=visible.rows[3].ping=-1;
-          visible.count=4; team_status_build(&roster,&visible,"","demo"); native_prefs.team_status=true;
-          updated=GetTickCount64(); log_line("팀원","안녕하세요 · 네트워크 전송 없는 화면 시험입니다"); copy(status,sizeof(status),"오프라인 시험 · 실제 팀에 연결하지 않음");
-        }
+
       } else {
         if(!demo && profiles.selected>=0 && profiles.selected<profiles.count) {
           igText("연결된 팀키: %s",profiles.items[profiles.selected].name);
@@ -881,119 +866,146 @@ void ntl_frame(tenv* env) {
         if(igButton(demo ? "시험 종료" : "팀 연결 끊기",(ImVec2){0})) disconnect_team();
       }
       if(key_status[0]) igTextWrapped("%s",key_status);
-      igSeparator();
-      if(igCollapsingHeader_TreeNodeFlags("이미지 태그 / cosmetic",0)) personal_tag_controls(env);
-      if(igCollapsingHeader_TreeNodeFlags("불꽃 스킨",0)) fire_skin_controls();
-      igSeparator();
-      if(igCollapsingHeader_TreeNodeFlags("이름 색상",0)) {
-        igCheckbox("팀원 닉네임 강조(팀 색 + 반짝임) · Ctrl+F3",&native_prefs.team_name_emphasis);
-        igSetItemTooltip("NTL 팀원 이름에 어두운 배경과 팀 색 테두리·표식을 표시합니다. 점수와 상대 이름은 그대로입니다.");
-        igCheckbox("이름 단일 색 · Ctrl+F11",&native_prefs.uniform_names);
-        igBeginDisabled(!native_prefs.uniform_names);
-        igSetNextItemWidth(180);
-        igColorEdit3("기본 이름 색",native_prefs.name_color,ImGuiColorEditFlags_NoInputs);
-        igSetNextItemWidth(180);
-        igColorEdit3("팀원 이름 색",native_prefs.team_name_color,ImGuiColorEditFlags_NoInputs);
-        igTextWrapped("일반 이름은 기본 색, NTL 팀원의 이름 전체만 팀원 색으로 표시합니다. 팀 연결이 필요하며 설정은 자동 저장됩니다.");
-        float* base=native_prefs.name_color; float* ally=native_prefs.team_name_color;
-        igTextColored((ImVec4){base[0],base[1],base[2],1},"일반 플레이어 10.0K");
-        igTextColored((ImVec4){ally[0],ally[1],ally[2],1},"팀원 닉네임"); igSameLine(0,0);
-        igTextColored((ImVec4){base[0],base[1],base[2],1}," 10.0K");
-        igEndDisabled();
-      }
-      igCheckbox("지렁이 외곽선 강조 · Ctrl+F10",&native_prefs.snake_outline);
-      igCheckbox("내 머리 앞 기준점 · Ctrl+F12",&native_prefs.head_point);
-      igSetItemTooltip("내 머리 앞 중앙을 표시합니다. 서버의 정확한 사망 판정 범위를 나타내지는 않습니다.");
-      igCheckbox("사망 순간 화면 정지 · Ctrl+F4",&native_prefs.death_freeze);
-      igSeparatorText("안전 벽 (Safewall)");
-      igCheckbox("안전 벽",&native_prefs.safe_wall);
-      igSetItemTooltip("NTL의 Safewall과 같은 방식입니다. 벽 가까이에서 마우스가 맵 밖을 가리키면\n벽 안쪽의 안전한 원 위의 점으로 방향을 돌려 벽을 따라 미끄러지게 합니다.\n마우스를 맵 안쪽으로 두거나, 정확히 바깥쪽(±9도)을 가리키면 마우스대로 움직입니다.\n봇(T)이 켜져 있으면 봇이 벽을 피합니다. 벽을 따라 돌리는 동안 아래 표시가 주황색이 됩니다.");
-      igBeginDisabled(!native_prefs.safe_wall);
-      igText("방식"); igSameLine(0,-1);
-      if(igRadioButton_Bool("1 · 마우스 위치",native_prefs.safe_wall_script==1)) native_prefs.safe_wall_script=1;
-      igSetItemTooltip("NTL 방식 1: 머리에서 마우스 쪽 0.78 거리의 점이 벽 밖이면, 벽 원 위의 가장 가까운 점으로 갑니다.\n벽 50 안쪽에서만 동작합니다.");
-      igSameLine(0,-1);
-      if(igRadioButton_Bool("2 · 속도·각도·굵기 (NTL 기본)",native_prefs.safe_wall_script==2)) native_prefs.safe_wall_script=2;
-      igSetItemTooltip("NTL 방식 2 (기본): 속도·회전 반경·벽을 향한 각도로 미리 돌기 시작하고,\n앞쪽 일정 거리에서 안전 원과 만나는 점 중 마우스에 가까운 쪽으로 갑니다. 벽 500 안쪽에서 동작합니다.");
-      igCheckbox("벽과 거리 직접 정하기",&native_prefs.safe_wall_tight);
-      igSetItemTooltip("켜면 아래 거리만큼 벽 안쪽으로 붙여 탑니다(두 방식 모두). 끄면 NTL의 벽 오프셋을 씁니다.");
-      igBeginDisabled(!native_prefs.safe_wall_tight);
-      igSetNextItemWidth(200);
-      igSliderFloat("벽과 거리",&native_prefs.safe_wall_distance,0,20,"%.1f",ImGuiSliderFlags_AlwaysClamp);
-      igSetItemTooltip("머리 중심이 벽선에서 이만큼 안쪽을 따라갑니다 (기본 1 = 완전 밀착, 몸이 벽선에 겹쳐 보임).\n0에 가까울수록 붙고, 핑이 높아 벽에 죽으면 올리세요. NTL 오프셋 -10은 3, 0은 7, 10은 11과 비슷합니다.\nCtrl+클릭하면 숫자를 직접 입력할 수 있습니다.");
-      igEndDisabled();
-      igBeginDisabled(native_prefs.safe_wall_tight);
-      igSetNextItemWidth(160);
-      igSliderInt("벽 오프셋",&native_prefs.safe_wall_offset,-10,10,"%d",ImGuiSliderFlags_AlwaysClamp);
-      igEndDisabled();
-      igSetItemTooltip("NTL의 Border assist offset과 같습니다 (기본 0, 방식 2에 적용).\n벽에 자주 죽으면 올려서 조금 더 떨어지게, 핑이 아주 낮으면 내려서 더 붙게 하세요.\n-10이면 벽에서 3, 0이면 7, 10이면 11만큼 안쪽을 지나갑니다.");
-      igEndDisabled();
-      igSeparatorText("몸 붙기 (E 누르는 동안)");
-      igSetNextItemWidth(200);
-      igSliderFloat("히트박스까지 거리",&native_prefs.hug_gap,0,30,"%.1f",ImGuiSliderFlags_AlwaysClamp);
-      igSetItemTooltip("E를 누르고 있는 동안 가장 가까운 적(팀원 제외)의 몸을 따라, 지금 가는 방향으로 히트박스에 붙어서 갑니다.\n죽는 판정은 내 머리 앞쪽 끝(코)이 상대 몸 반지름 안에 들어갈 때뿐이라, 옆으로 나란히 갈 때는\n머리 중심을 상대 몸 반지름 바로 바깥에 두어 화면에서는 몸이 겹쳐 보입니다.\n이 값은 코와 상대 히트박스 사이 거리입니다 (기본 1). 꼬리 끝에서는 돌아서 반대쪽으로 붙고,\n머리 쪽 끝에서는 머리 옆을 따라 계속 갑니다. 벽 가까이에서는 안전 벽이 우선합니다. 봇(T)이 켜져 있으면 쓰지 않습니다.\nCtrl+클릭으로 숫자를 직접 넣을 수 있습니다.");
-      igSeparatorText("벽 상태");
-      igCheckbox("벽 색으로 상태 표시 (줄어듦 빨강 · 멈춤 주황 · 넓어짐 초록)",&native_prefs.wall_semaphore);
-      igSetItemTooltip("NTL의 Dynamic border semaphore와 같습니다. 벽이 움직이는 서버에서 벽 선 색으로\n줄어드는지(빨강), 멈췄는지(주황), 넓어지는지(초록) 보여줍니다.\n벽이 움직이지 않는 서버에서는 벽 색이 그대로입니다.");
-      igCheckbox("유리 벽 (흐리게)",&native_prefs.glass_border);
-      igSetItemTooltip("NTL의 Glass Border: 벽 선과 바깥을 흐리게 그립니다.");
-      igSeparatorText("SOS (플레이 중 S 두 번)");
-      igText("지금: %s",sos_on ? "SOS 보내는 중" : "꺼짐"); igSameLine(0,-1);
-      igBeginDisabled(!active && !demo);
-      if(igButton(sos_on ? "SOS 끄기" : "SOS 보내기",(ImVec2){0})) ntl_toggle_sos();
-      igEndDisabled();
-      igCheckbox("SOS를 켤 때 채팅으로 \"Help me!\" 보내기",&native_prefs.sos_chat);
-      igSetItemTooltip("NTL의 Send chat alert when SOS와 같습니다. 팀원 화면에서 나는 빨간색으로 보이고,\n팀원이 SOS를 켜면 화면 위에 알림이 뜨고 지도에 빨간 원으로 표시됩니다.");
-      igSeparatorText("줌 · 스크린샷");
-      igSetNextItemWidth(200);
-      igSliderFloat("시작 줌",&native_prefs.start_zoom,.2f,3,"%.2f",ImGuiSliderFlags_AlwaysClamp);
-      igSetItemTooltip("게임을 시작할 때마다 이 줌으로 시작합니다 (1.00 = 기본, 작을수록 멀리 봄).\n플레이 중 X를 누르면 이 줌으로 돌아갑니다. 휠과 M/N으로 바꾸는 것은 그대로입니다.");
-      igTextWrapped("Z: 스크린샷 (게임 폴더의 screenshots에 PNG로 저장)");
-      igSeparatorText("그래픽 (7 두 번으로 바꾸기)");
-      { static const char* modes[]={"기본 스킨","스킨 없음 (단색)","고대비 스킨"};
-        igSetNextItemWidth(200); igCombo_Str_arr("지렁이 그래픽",&native_prefs.skin_mode,modes,3,-1); }
-      igSetItemTooltip("NTL Graphics 와 High visibility skins:\n스킨 없음 · 지렁이마다 스킨 대신 한 가지 색으로 그려 몸이 잘 구별됩니다.\n고대비 · 스킨 무늬를 더 밝고 선명하게 그립니다.");
-      igCheckbox("내 지렁이는 원래 스킨 유지",&native_prefs.keep_own_skin);
-      igSetNextItemWidth(200);
-      igSliderFloat("다른 지렁이 불투명도",&native_prefs.others_opacity,.15f,1,"%.2f",ImGuiSliderFlags_AlwaysClamp);
-      igSetItemTooltip("1.00이면 그대로, 낮추면 다른 지렁이 몸이 반투명해져 뒤의 먹이와 몸이 보입니다.");
-      igSeparatorText("봇 (T 두 번으로 켜고 끔)");
-      igCheckbox("스마트 봇 · B 두 번",&native_prefs.bot_smart);
-      igSetItemTooltip("켜면 NTL처럼 먹이를 먹으며 자라다가, 아래 길이가 되면 몸을 말아 자기 몸을 따라 돕니다.\n끄면 길이와 상관없이 바로 자기 몸을 따라 돕니다.");
-      igSetNextItemWidth(140);
-      if(igInputInt("봇 길이",&native_prefs.bot_length,100,1000,0)) native_prefs.bot_length=native_prefs.bot_length<100?100:native_prefs.bot_length>50000?50000:native_prefs.bot_length;
-      igSetItemTooltip("스마트 봇이 자라기를 멈추고 돌기 시작하는 길이입니다 (NTL 기본값 2000).");
-      igCheckbox("느린 경로면 다시 접속",&native_prefs.path_retry);
-      if(igIsItemHovered(0)) igSetTooltip("접속 직후 왕복 시간이 그 서버의 가장 빠른 값보다 12ms 넘게 느리면 끊고 다시 연결합니다 (최대 3번).\n접속 횟수가 늘어나므로 서버가 연속 접속을 거부할 수 있습니다. 기본은 꺼짐입니다.");
-      igCheckbox("플레이 중 Wi-Fi 주변 검색 중지",&native_prefs.wifi_low_latency);
-      if(igIsItemHovered(0)) igSetTooltip("Wi-Fi가 주변 채널을 훑는 동안 생기는 주기적인 핑 급등을 줄입니다.\n플레이 화면에서만 적용되고 메뉴로 나가거나 종료하면 원래대로 돌아갑니다.\n유선 연결이나 지원하지 않는 어댑터에서는 아무 일도 하지 않습니다.");
-      igSetItemTooltip("켜면 사망 알림 직전의 게임 화면을 유지합니다. 자동 재시작보다 우선하며 R로 다시 시작, Esc로 메뉴에 돌아갑니다.");
-      igTextWrapped("타겟: Backspace 두 번 → 상대 머리 위 숫자/문자. 같은 서버의 NTL 팀에 공유됩니다(약 4초 갱신). Delete는 내 표시/재전송을 해제하며, 팀 표적은 마지막 목격 후 5분에 만료됩니다.");
-      if(!death_review.frozen && game->conn==CONNECTED && game->data.follow_view && igButton("타겟 선택",(ImVec2){0})) {
-        target_marker_input(env,true); options_open=false;
-      }
-      igSeparator();
-      const char* choices[]={"60 FPS (기본)","120 FPS","제한 없음"};
-      igTextUnformatted(env->ctx->present_mode==VK_PRESENT_MODE_MAILBOX_KHR ? "화면 찢어짐 방지 · 저지연" : "화면 찢어짐 방지 · 동기화",NULL);
-      igSetNextItemWidth(200); igCombo_Str_arr("FPS · Ctrl+F5",&cap_choice,choices,3,-1);
-      const char* scales[]={"100% · 선명하게","75% · 기본","50% · 가볍게"};
-      igSetNextItemWidth(200);
-      if(igCombo_Str_arr("해상도 · Ctrl+F6",&scale_choice,scales,3,-1)) {
-        const float factors[]={1,0.75f,0.5f}; usr->render_scale=factors[scale_choice];
-      }
-      if(igButton("가벼운 그래픽 · Ctrl+F7",(ImVec2){0})) ntl_lightweight_settings(&usr->usrs);
-      igText("최근 %d프레임 중 33ms 초과: %d",sample_count,slow_frames);
-      igPlotLines_FloatPtr("##frametimes",samples,sample_count,sample_count==600 ? sample_next : 0,"프레임 간격 (ms)",0,70,(ImVec2){-1,60},sizeof(float));
-
-      if(igCollapsingHeader_TreeNodeFlags("팀원 목록",0)) for(int i=0;i<visible.count;i++) {
-        ntl_member* m=&visible.rows[i]; char name[257]; member_name(m->nick,name,sizeof(name));
-        igTextWrapped("%s · %d · %s",name,m->score,m->server);
-      }
       capture_mouse|=igIsWindowHovered(ImGuiHoveredFlags_RootAndChildWindows);
     }
     igEnd();
   }
   igPopFont();
+}
+
+void ntl_display_settings(tenv* env) {
+  tuser_data* usr=env->usr;
+  igSeparatorText("표시 / 스킨");
+  igCheckbox("팀원 현황 표시",&native_prefs.team_status);
+  if(igCollapsingHeader_TreeNodeFlags("이미지 태그 / cosmetic",0)) personal_tag_controls(env);
+  if(igCollapsingHeader_TreeNodeFlags("불꽃 스킨",0)) fire_skin_controls();
+  igSeparator();
+  if(igCollapsingHeader_TreeNodeFlags("이름 색상",0)) {
+    igCheckbox("팀원 닉네임 강조(팀 색 + 반짝임) · Ctrl+F3",&native_prefs.team_name_emphasis);
+    igSetItemTooltip("NTL 팀원 이름에 어두운 배경과 팀 색 테두리·표식을 표시합니다. 점수와 상대 이름은 그대로입니다.");
+    igCheckbox("이름 단일 색 · Ctrl+F11",&native_prefs.uniform_names);
+    igBeginDisabled(!native_prefs.uniform_names);
+    igSetNextItemWidth(180);
+    igColorEdit3("기본 이름 색",native_prefs.name_color,ImGuiColorEditFlags_NoInputs);
+    igSetNextItemWidth(180);
+    igColorEdit3("팀원 이름 색",native_prefs.team_name_color,ImGuiColorEditFlags_NoInputs);
+    igTextWrapped("일반 이름은 기본 색, NTL 팀원의 이름 전체만 팀원 색으로 표시합니다. 팀 연결이 필요하며 설정은 자동 저장됩니다.");
+    float* base=native_prefs.name_color; float* ally=native_prefs.team_name_color;
+    igTextColored((ImVec4){base[0],base[1],base[2],1},"일반 플레이어 10.0K");
+    igTextColored((ImVec4){ally[0],ally[1],ally[2],1},"팀원 닉네임"); igSameLine(0,0);
+    igTextColored((ImVec4){base[0],base[1],base[2],1}," 10.0K");
+    igEndDisabled();
+  }
+  igCheckbox("지렁이 외곽선 강조 · Ctrl+F10",&native_prefs.snake_outline);
+  igCheckbox("내 머리 앞 기준점 · Ctrl+F12",&native_prefs.head_point);
+  igSetItemTooltip("내 머리 앞 중앙을 표시합니다. 서버의 정확한 사망 판정 범위를 나타내지는 않습니다.");
+  igCheckbox("사망 순간 화면 정지 · Ctrl+F4",&native_prefs.death_freeze);
+  igSetItemTooltip("켜면 사망 알림 직전의 게임 화면을 유지합니다. 자동 재시작보다 우선하며 R로 다시 시작, Esc로 메뉴에 돌아갑니다.");
+  igSeparatorText("벽 상태");
+  igCheckbox("벽 색으로 상태 표시 (줄어듦 빨강 · 멈춤 주황 · 넓어짐 초록)",&native_prefs.wall_semaphore);
+  igSetItemTooltip("NTL의 Dynamic border semaphore와 같습니다. 벽이 움직이는 서버에서 벽 선 색으로\n줄어드는지(빨강), 멈췄는지(주황), 넓어지는지(초록) 보여줍니다.\n벽이 움직이지 않는 서버에서는 벽 색이 그대로입니다.");
+  igCheckbox("유리 벽 (흐리게)",&native_prefs.glass_border);
+  igSetItemTooltip("NTL의 Glass Border: 벽 선과 바깥을 흐리게 그립니다.");
+  igSeparatorText("줌 · 스크린샷");
+  igSetNextItemWidth(200);
+  igSliderFloat("시작 줌",&native_prefs.start_zoom,.2f,3,"%.2f",ImGuiSliderFlags_AlwaysClamp);
+  igSetItemTooltip("게임을 시작할 때마다 이 줌으로 시작합니다 (1.00 = 기본, 작을수록 멀리 봄).\n플레이 중 X를 누르면 이 줌으로 돌아갑니다. 휠과 M/N으로 바꾸는 것은 그대로입니다.");
+  igTextWrapped("Z: 스크린샷 (게임 폴더의 screenshots에 PNG로 저장)");
+  igSeparatorText("그래픽 (7 두 번으로 바꾸기)");
+  { static const char* modes[]={"기본 스킨","스킨 없음 (단색)","고대비 스킨"};
+    igSetNextItemWidth(200); igCombo_Str_arr("지렁이 그래픽",&native_prefs.skin_mode,modes,3,-1); }
+  igSetItemTooltip("NTL Graphics 와 High visibility skins:\n스킨 없음 · 지렁이마다 스킨 대신 한 가지 색으로 그려 몸이 잘 구별됩니다.\n고대비 · 스킨 무늬를 더 밝고 선명하게 그립니다.");
+  igCheckbox("내 지렁이는 원래 스킨 유지",&native_prefs.keep_own_skin);
+  igSetNextItemWidth(200);
+  igSliderFloat("다른 지렁이 불투명도",&native_prefs.others_opacity,.15f,1,"%.2f",ImGuiSliderFlags_AlwaysClamp);
+  igSetItemTooltip("1.00이면 그대로, 낮추면 다른 지렁이 몸이 반투명해져 뒤의 먹이와 몸이 보입니다.");
+  igSeparatorText("성능 / 해상도");
+  const char* choices[]={"60 FPS (기본)","120 FPS","제한 없음"};
+  igTextUnformatted(env->ctx->present_mode==VK_PRESENT_MODE_MAILBOX_KHR ? "화면 찢어짐 방지 · 저지연" : "화면 찢어짐 방지 · 동기화",NULL);
+  igSetNextItemWidth(200); igCombo_Str_arr("FPS · Ctrl+F5",&cap_choice,choices,3,-1);
+  const char* scales[]={"100% · 선명하게","75% · 기본","50% · 가볍게"};
+  igSetNextItemWidth(200);
+  if(igCombo_Str_arr("해상도 · Ctrl+F6",&scale_choice,scales,3,-1)) {
+    const float factors[]={1,0.75f,0.5f}; usr->render_scale=factors[scale_choice];
+  }
+  if(igButton("가벼운 그래픽 · Ctrl+F7",(ImVec2){0})) ntl_lightweight_settings(&usr->usrs);
+  igText("최근 %d프레임 중 33ms 초과: %d",sample_count,slow_frames);
+  igPlotLines_FloatPtr("##frametimes",samples,sample_count,sample_count==600 ? sample_next : 0,"프레임 간격 (ms)",0,70,(ImVec2){-1,60},sizeof(float));
+
+}
+
+void ntl_gameplay_settings(tenv* env) {
+  game_data* game=&env->usr->gdata;
+  igSeparatorText("안전 벽 (Safewall)");
+  igCheckbox("안전 벽",&native_prefs.safe_wall);
+  igSetItemTooltip("NTL의 Safewall과 같은 방식입니다. 벽 가까이에서 마우스가 맵 밖을 가리키면\n벽 안쪽의 안전한 원 위의 점으로 방향을 돌려 벽을 따라 미끄러지게 합니다.\n마우스를 맵 안쪽으로 두거나, 정확히 바깥쪽(±9도)을 가리키면 마우스대로 움직입니다.\n봇(T)이 켜져 있으면 봇이 벽을 피합니다. 벽을 따라 돌리는 동안 아래 표시가 주황색이 됩니다.");
+  igBeginDisabled(!native_prefs.safe_wall);
+  igText("방식"); igSameLine(0,-1);
+  if(igRadioButton_Bool("1 · 마우스 위치",native_prefs.safe_wall_script==1)) native_prefs.safe_wall_script=1;
+  igSetItemTooltip("NTL 방식 1: 머리에서 마우스 쪽 0.78 거리의 점이 벽 밖이면, 벽 원 위의 가장 가까운 점으로 갑니다.\n벽 50 안쪽에서만 동작합니다.");
+  igSameLine(0,-1);
+  if(igRadioButton_Bool("2 · 속도·각도·굵기 (NTL 기본)",native_prefs.safe_wall_script==2)) native_prefs.safe_wall_script=2;
+  igSetItemTooltip("NTL 방식 2 (기본): 속도·회전 반경·벽을 향한 각도로 미리 돌기 시작하고,\n앞쪽 일정 거리에서 안전 원과 만나는 점 중 마우스에 가까운 쪽으로 갑니다. 벽 500 안쪽에서 동작합니다.");
+  igCheckbox("벽과 거리 직접 정하기",&native_prefs.safe_wall_tight);
+  igSetItemTooltip("켜면 아래 거리만큼 벽 안쪽으로 붙여 탑니다(두 방식 모두). 끄면 NTL의 벽 오프셋을 씁니다.");
+  igBeginDisabled(!native_prefs.safe_wall_tight);
+  igSetNextItemWidth(200);
+  igSliderFloat("벽과 거리",&native_prefs.safe_wall_distance,0,20,"%.1f",ImGuiSliderFlags_AlwaysClamp);
+  igSetItemTooltip("머리 중심이 벽선에서 이만큼 안쪽을 따라갑니다 (기본 1 = 완전 밀착, 몸이 벽선에 겹쳐 보임).\n0에 가까울수록 붙고, 핑이 높아 벽에 죽으면 올리세요. NTL 오프셋 -10은 3, 0은 7, 10은 11과 비슷합니다.\nCtrl+클릭하면 숫자를 직접 입력할 수 있습니다.");
+  igEndDisabled();
+  igBeginDisabled(native_prefs.safe_wall_tight);
+  igSetNextItemWidth(160);
+  igSliderInt("벽 오프셋",&native_prefs.safe_wall_offset,-10,10,"%d",ImGuiSliderFlags_AlwaysClamp);
+  igEndDisabled();
+  igSetItemTooltip("NTL의 Border assist offset과 같습니다 (기본 0, 방식 2에 적용).\n벽에 자주 죽으면 올려서 조금 더 떨어지게, 핑이 아주 낮으면 내려서 더 붙게 하세요.\n-10이면 벽에서 3, 0이면 7, 10이면 11만큼 안쪽을 지나갑니다.");
+  igEndDisabled();
+  igSeparatorText("몸 붙기 (E 누르는 동안)");
+  igSetNextItemWidth(200);
+  igSliderFloat("히트박스까지 거리",&native_prefs.hug_gap,0,30,"%.1f",ImGuiSliderFlags_AlwaysClamp);
+  igSetItemTooltip("E를 누르고 있는 동안 가장 가까운 적(팀원 제외)의 몸을 따라, 지금 가는 방향으로 히트박스에 붙어서 갑니다.\n죽는 판정은 내 머리 앞쪽 끝(코)이 상대 몸 반지름 안에 들어갈 때뿐이라, 옆으로 나란히 갈 때는\n머리 중심을 상대 몸 반지름 바로 바깥에 두어 화면에서는 몸이 겹쳐 보입니다.\n이 값은 코와 상대 히트박스 사이 거리입니다 (기본 1). 꼬리 끝에서는 돌아서 반대쪽으로 붙고,\n머리 쪽 끝에서는 머리 옆을 따라 계속 갑니다. 벽 가까이에서는 안전 벽이 우선합니다. 봇(T)이 켜져 있으면 쓰지 않습니다.\nCtrl+클릭으로 숫자를 직접 넣을 수 있습니다.");
+  igSeparatorText("봇 (T 두 번으로 켜고 끔)");
+  igCheckbox("스마트 봇 · B 두 번",&native_prefs.bot_smart);
+  igSetItemTooltip("켜면 NTL처럼 먹이를 먹으며 자라다가, 아래 길이가 되면 몸을 말아 자기 몸을 따라 돕니다.\n끄면 길이와 상관없이 바로 자기 몸을 따라 돕니다.");
+  igSetNextItemWidth(140);
+  if(igInputInt("봇 길이",&native_prefs.bot_length,100,1000,0)) native_prefs.bot_length=native_prefs.bot_length<100?100:native_prefs.bot_length>50000?50000:native_prefs.bot_length;
+  igSetItemTooltip("스마트 봇이 자라기를 멈추고 돌기 시작하는 길이입니다 (NTL 기본값 2000).");
+  igCheckbox("느린 경로면 다시 접속",&native_prefs.path_retry);
+  if(igIsItemHovered(0)) igSetTooltip("접속 직후 왕복 시간이 그 서버의 가장 빠른 값보다 12ms 넘게 느리면 끊고 다시 연결합니다 (최대 3번).\n접속 횟수가 늘어나므로 서버가 연속 접속을 거부할 수 있습니다. 기본은 꺼짐입니다.");
+  igCheckbox("플레이 중 Wi-Fi 주변 검색 중지",&native_prefs.wifi_low_latency);
+  if(igIsItemHovered(0)) igSetTooltip("Wi-Fi가 주변 채널을 훑는 동안 생기는 주기적인 핑 급등을 줄입니다.\n플레이 화면에서만 적용되고 메뉴로 나가거나 종료하면 원래대로 돌아갑니다.\n유선 연결이나 지원하지 않는 어댑터에서는 아무 일도 하지 않습니다.");
+  igTextWrapped("타겟: Backspace 두 번 → 상대 머리 위 숫자/문자. 같은 서버의 NTL 팀에 공유됩니다(약 4초 갱신). Delete는 내 표시/재전송을 해제하며, 팀 표적은 마지막 목격 후 5분에 만료됩니다.");
+  if(!death_review.frozen && game->conn==CONNECTED && game->data.follow_view && igButton("타겟 선택",(ImVec2){0})) {
+    target_marker_input(env,true); native_settings_open=false; options_open=false;
+  }
+  igSeparatorText("SOS (플레이 중 S 두 번)");
+  igText("지금: %s",sos_on ? "SOS 보내는 중" : "꺼짐"); igSameLine(0,-1);
+  igBeginDisabled(!active && !demo);
+  if(igButton(sos_on ? "SOS 끄기" : "SOS 보내기",(ImVec2){0})) ntl_toggle_sos();
+  igEndDisabled();
+  igCheckbox("SOS를 켤 때 채팅으로 \"Help me!\" 보내기",&native_prefs.sos_chat);
+  igSetItemTooltip("NTL의 Send chat alert when SOS와 같습니다. 팀원 화면에서 나는 빨간색으로 보이고,\n팀원이 SOS를 켜면 화면 위에 알림이 뜨고 지도에 빨간 원으로 표시됩니다.");
+  igSeparatorText("팀 기능");
+  if(!active && !demo) {
+    if(igButton("오프라인 화면 시험",(ImVec2){0})) {
+      demo=true; memset(&visible,0,sizeof(visible)); memset(&previous,0,sizeof(previous));
+      ntl_parse("[{\"nick\":\"TEST0001팀원\",\"srv\":\"demo\",\"valx\":18000,\"valy\":19000,\"dt\":\"FPS: 60 @ 42(70) ms\",\"msg\":\"안녕하세요&nbsp;위치&nbsp;시험\"}]","",&visible);
+      float c=game->data.grd>0 ? game->data.grd : 21600;
+      float r=game->data.flux_grd>0 ? game->data.flux_grd : c;
+      visible.rows[0].x=c+r*.3f; visible.rows[0].y=c-r*.2f;
+      visible.rows[1]=visible.rows[0]; strcpy(visible.rows[1].nick,"TEST0002도움 요청");
+      visible.rows[1].x=c-r*.35f; visible.rows[1].y=c+r*.25f; visible.rows[1].sos=true;
+      visible.rows[1].fps=120; visible.rows[1].ping=85;
+      visible.rows[2]=visible.rows[0]; strcpy(visible.rows[2].nick,"TEST0003다른 서버"); strcpy(visible.rows[2].server,"example.invalid:444");
+      visible.rows[2].fps=75; visible.rows[2].ping=160;
+      visible.rows[3]=visible.rows[0]; strcpy(visible.rows[3].nick,"TEST0004대기 중"); strcpy(visible.rows[3].server,"_GAME_MENU_");
+      visible.rows[3].fps=visible.rows[3].ping=-1;
+      visible.count=4; team_status_build(&roster,&visible,"","demo"); native_prefs.team_status=true;
+      updated=GetTickCount64(); log_line("팀원","안녕하세요 · 네트워크 전송 없는 화면 시험입니다"); copy(status,sizeof(status),"오프라인 시험 · 실제 팀에 연결하지 않음");
+    }  } else if(demo && igButton("시험 종료",(ImVec2){0})) disconnect_team();
+  if(igCollapsingHeader_TreeNodeFlags("팀원 목록",0)) for(int i=0;i<visible.count;i++) {
+    ntl_member* m=&visible.rows[i]; char name[257]; member_name(m->nick,name,sizeof(name));
+    igTextWrapped("%s · %d · %s",name,m->score,m->server);
+  }
 }
 
 // Waits about `ms` (fractions too). Windows: a high-resolution waitable timer (Windows 10 1803+),

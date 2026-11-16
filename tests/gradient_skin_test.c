@@ -70,5 +70,11 @@ int main(void) {
   skin_graphics_begin(plain,true); skin_gradient_body(&env,false,0,3,10,&original);
   assert(captured.color.a==original.color.a);                                 // my own snake is not faded
   puts("Graphics options: skinless, high visibility, own skin kept, others' opacity passed");
+  share_entry remote={.gradient_count=2,.gradient_colors={{0,1,0},{0,0,1}}};
+  skin_graphics_begin(plain,false);skin_effect_remote(&remote);
+  skin_gradient_body(&env,true,1,0,10,&original);
+  close_color(captured.color.raw,(float[]){0,1,0});assert(fabsf(captured.color.a-.21f)<.00001f);
+  skin_graphics_begin(plain,true);skin_gradient_body(&env,true,1,0,10,&original);
+  close_color(captured.color.raw,colors[0]);assert(captured.color.a==original.color.a);
   puts("Gradient: 2-4 stops, endpoints, interpolation, all render modes, OFF identity, alpha/geometry and one instance per segment passed");
 }

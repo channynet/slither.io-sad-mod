@@ -44,20 +44,24 @@ void ui_server_browser(tenv* env,float width) {
   }
   ImVec2 size={fminf(1050,env->ctx->size[0]-32),fminf(780,env->ctx->size[1]-32)};
   igSetNextWindowSize(size,ImGuiCond_Appearing);
+  igSetNextWindowSizeConstraints((ImVec2){fminf(640,size.x),fminf(480,size.y)},
+      (ImVec2){env->ctx->size[0]-32,env->ctx->size[1]-32},NULL,NULL);
   igSetNextWindowPos((ImVec2){env->ctx->size[0]/2.0f,env->ctx->size[1]/2.0f},ImGuiCond_Appearing,(ImVec2){.5f,.5f});
   bool open=true;
   if(!igBeginPopupModal("실시간 서버 선택##browser",&open,ImGuiWindowFlags_NoSavedSettings)) return;
   server_catalog_request(); server_catalog_copy(&catalog);
-  igTextDisabled("목록을 연 동안 30초마다 갱신합니다. 접속 수에는 봇이 포함될 수 있습니다.");
+  igTextWrapped("목록을 연 동안 30초마다 갱신합니다. 접속 수에는 봇이 포함될 수 있습니다.");
   if(catalog.failed) {
     if(catalog.http_status) igTextColored((ImVec4){1,.65f,.3f,1},"목록 수신 실패 (HTTP %d). 잠시 후 자동으로 재시도합니다.",catalog.http_status);
     else igTextColored((ImVec4){1,.65f,.3f,1},"목록 서버에 연결하지 못했습니다. 잠시 후 자동으로 재시도합니다.");
     if(catalog.received_at) igTextDisabled("이전에 받은 목록을 표시합니다. 서버별 갱신 시각을 확인하세요.");
   } else if(catalog.pending) igTextDisabled("서버 목록을 받는 중입니다.");
   else { char age[80]; age_text(catalog.received_at,age,sizeof(age)); igTextDisabled("%d개 서버 · 목록 수신 %s",catalog.count,age); }
-  igSetNextItemWidth(fminf(280,size.x*.4f));
+  ImVec2 content; igGetContentRegionAvail(&content);
+  float sort_width=fminf(240,content.x*.34f);
+  igSetNextItemWidth(fmaxf(120,content.x-sort_width-igGetStyle()->ItemSpacing.x));
   igInputTextWithHint("##server_search","주소 / 국가 코드 / 도시 검색",search,sizeof(search),0,NULL,NULL);
-  igSameLine(0,-1); igSetNextItemWidth(160);
+  igSameLine(0,-1); igSetNextItemWidth(sort_width);
   igCombo_Str("##server_sort",&sort,"접속 수 많은 순\0핑 낮은 순\0국가 순\0",-1);
   int order[SERVER_CATALOG_LIMIT],n=0;
   server_status statuses[SERVER_CATALOG_LIMIT];
@@ -85,8 +89,15 @@ void ui_server_browser(tenv* env,float width) {
     order[j+1]=k;
   }
   ImVec2 avail; igGetContentRegionAvail(&avail);
+  bool compact=avail.y<480;
+  bool tabs_open=compact && igBeginTabBar("##server_views",0);
+  bool show_list=!compact || (tabs_open && igBeginTabItem("서버 목록",NULL,0));
+  if(show_list) {
+  igGetContentRegionAvail(&avail);
   float list_height=fmaxf(100,(avail.y-igGetFrameHeightWithSpacing()*5)*.48f);
-  if(igBeginTable("##server_table",5,ImGuiTableFlags_RowBg|ImGuiTableFlags_BordersInnerH|ImGuiTableFlags_ScrollY|ImGuiTableFlags_Resizable,(ImVec2){0,list_height},0)) {
+  if(compact) list_height=fmaxf(100,avail.y-igGetFrameHeightWithSpacing()*2);
+  igBeginChild_Str("##server_list_panel",(ImVec2){0,list_height},ImGuiChildFlags_Borders,ImGuiWindowFlags_NoScrollbar);
+  if(igBeginTable("##server_table",5,ImGuiTableFlags_RowBg|ImGuiTableFlags_ScrollY|ImGuiTableFlags_Resizable,(ImVec2){0,0},0)) {
     igTableSetupColumn("국가 · 지역",ImGuiTableColumnFlags_WidthStretch,1.4f,0);
     igTableSetupColumn("서버 주소",ImGuiTableColumnFlags_WidthStretch,1.6f,0);
     igTableSetupColumn("접속 수",ImGuiTableColumnFlags_WidthFixed,75,0);
@@ -113,9 +124,14 @@ void ui_server_browser(tenv* env,float width) {
     }
     igEndTable();
   }
+  igEndChild();
+  if(compact) igEndTabItem();
+  }
   server_catalog_entry* picked=NULL;
   for(int i=0;i<catalog.count;i++) if(!strcmp(selected,catalog.entries[i].address)) picked=&catalog.entries[i];
-  igSeparator();
+  bool show_ranking=!compact || (tabs_open && igBeginTabItem("상위 10명",NULL,0));
+  if(show_ranking) {
+  igSpacing();
   if(picked) {
     char age[80]; age_text(picked->updated_at,age,sizeof(age));
     igText("%s · %s · %s",picked->address,country_name(picked->country),picked->location);
@@ -124,7 +140,8 @@ void ui_server_browser(tenv* env,float width) {
   } else igTextDisabled("서버를 선택하면 상위 10명의 닉네임과 점수가 표시됩니다.");
   igGetContentRegionAvail(&avail);
   float ranking_height=fmaxf(80,avail.y-igGetFrameHeightWithSpacing()*2.5f);
-  if(igBeginTable("##server_leaders",3,ImGuiTableFlags_RowBg|ImGuiTableFlags_ScrollY,(ImVec2){0,ranking_height},0)) {
+  igBeginChild_Str("##server_ranking_panel",(ImVec2){0,ranking_height},ImGuiChildFlags_Borders,ImGuiWindowFlags_NoScrollbar);
+  if(igBeginTable("##server_leaders",3,ImGuiTableFlags_RowBg|ImGuiTableFlags_ScrollY,(ImVec2){0,0},0)) {
     igTableSetupColumn("순위",ImGuiTableColumnFlags_WidthFixed,60,0);
     igTableSetupColumn("닉네임",ImGuiTableColumnFlags_WidthStretch,1,0);
     igTableSetupColumn("점수",ImGuiTableColumnFlags_WidthFixed,140,0);
@@ -138,8 +155,12 @@ void ui_server_browser(tenv* env,float width) {
     if(picked && !picked->leader_count) { igTableNextRow(0,0); igTableSetColumnIndex(1); igTextDisabled("순위 정보 없음"); }
     igEndTable();
   }
+  igEndChild();
+  if(compact) igEndTabItem();
+  }
+  if(tabs_open) igEndTabBar();
   igBeginDisabled(!picked);
-  bool join=igButton("선택한 서버로 접속",(ImVec2){210,0});
+  bool join=igButton("선택한 서버로 접속",(ImVec2){260,0});
   igEndDisabled(); igSameLine(0,-1);
   if(igButton("닫기",(ImVec2){80,0})) igCloseCurrentPopup();
   igTextDisabled("목록 출처: leaderboard.0x0efe.dev (saya) · 핑: 내 PC 측정");

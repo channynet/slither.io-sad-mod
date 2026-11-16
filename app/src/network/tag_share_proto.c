@@ -25,7 +25,7 @@ int tag_share_parse(const char* json, size_t length, share_entry* out, int cap) 
   size_t offset = 0; int n = 0;
   while (n < cap && (offset = mg_json_next(list, offset, NULL, &item)) != 0) {
     double sid = -1, v;
-    if (!mg_json_get_num(item, "$[0]", &sid) || sid < 0 || sid >= 65536) continue;
+    if (!mg_json_get_num(item, "$[0]", &sid) || !isfinite(sid) || floor(sid)!=sid || sid < 0 || sid >= 65536) continue;
     char* kind = mg_json_get_str(item, "$[1]");
     share_entry e = {.sid = (int)sid};
     if (kind && !strcmp(kind, "ntl") && mg_json_get_num(item, "$[2]", &v) && v >= 0 && v < 1000) { e.kind = SHARE_NTL; e.ntl = (int)v; }
@@ -42,6 +42,35 @@ int tag_share_parse(const char* json, size_t length, share_entry* out, int cap) 
     }
     free(kind);
     if (e.kind != SHARE_NONE) out[n++] = e;
+  }
+  at=mg_json_get(all,"$.a",&toklen);
+  if(at<0 || toklen<2 || json[at]!='[') return n;
+  list=mg_str_n(json+at,(size_t)toklen); offset=0;
+  while((offset=mg_json_next(list,offset,NULL,&item))!=0) {
+    double sid=-1,v;
+    if(!mg_json_get_num(item,"$[0]",&sid) || !isfinite(sid) || floor(sid)!=sid || sid<0 || sid>=65536) continue;
+    int k=0; while(k<n && out[k].sid!=(int)sid) k++;
+    share_entry e=k<n?out[k]:(share_entry){.sid=(int)sid};
+    if(mg_json_get_num(item,"$[1].fire",&v) && v>0) e.fire_strength=within(v,.2f,1.5f,0);
+    char* hash=mg_json_get_str(item,"$[1].cosmetic[0]");
+    if(hex16(hash)) {
+      memcpy(e.cosmetic_hash,hash,17);
+      e.cosmetic_size=mg_json_get_num(item,"$[1].cosmetic[1]",&v)?within(v,24,320,160):160;
+      e.cosmetic_gap=mg_json_get_num(item,"$[1].cosmetic[2]",&v)?within(v,-100,100,-18):-18;
+      e.cosmetic_angle=mg_json_get_num(item,"$[1].cosmetic[3]",&v)?within(v,-180,180,0):0;
+      e.cosmetic_rotate=mg_json_get_num(item,"$[1].cosmetic[4]",&v) && v!=0;
+    }
+    free(hash);
+    if(mg_json_get_num(item,"$[1].gradient[0]",&v) && v>=2 && v<=4 && floor(v)==v) {
+      e.gradient_count=(int)v;
+      for(int i=0;i<e.gradient_count*3;i++) {
+        char path[48];snprintf(path,sizeof(path),"$[1].gradient[%d]",i+1);
+        if(!mg_json_get_num(item,path,&v) || !isfinite(v)) { e.gradient_count=0; break; }
+        e.gradient_colors[i/3][i%3]=within(v,0,1,0);
+      }
+    }
+    if(k<n) out[k]=e;
+    else if(n<cap && (e.fire_strength>0 || e.gradient_count || e.cosmetic_hash[0])) out[n++]=e;
   }
   return n;
 }

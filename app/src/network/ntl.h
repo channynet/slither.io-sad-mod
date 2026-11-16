@@ -5,6 +5,8 @@
 void ntl_init(void);
 void ntl_destroy(void);
 void ntl_frame(tenv* env);
+void ntl_display_settings(tenv* env);
+void ntl_gameplay_settings(tenv* env);
 void ntl_pace(tenv* env);
 bool ntl_mouse_captured(void);
 bool ntl_chat_typing(void);

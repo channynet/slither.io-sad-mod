@@ -19,6 +19,12 @@ int main(void) {
   assert(e[2].sid == 16 && e[2].size == 320 && e[2].gap == 0 && e[2].angle == 180 && !e[2].sway);   // (kept in range)
   assert(tag_share_parse("{\"p\":[]}", 8, e, 8) == 0 && tag_share_parse("oops", 4, e, 8) == 0);
   assert(tag_share_parse(reply, strlen(reply), e, 1) == 1);
+  const char* appearance="{\"p\":[[12,\"ntl\",590]],\"a\":[[12,{\"fire\":9,\"cosmetic\":[\"0123456789abcdef\",160,-18,45,1]}],[13,{\"gradient\":[2,1,0,0,0,0,1]}],[14,{\"cosmetic\":[\"../invalid\"]}],[15,{\"gradient\":[3,1]}],[16.5,{\"fire\":1}]]}";
+  n=tag_share_parse(appearance,strlen(appearance),e,8);
+  assert(n==2 && e[0].kind==SHARE_NTL && e[0].fire_strength==1.5f);
+  assert(!strcmp(e[0].cosmetic_hash,"0123456789abcdef") && e[0].cosmetic_gap==-18 && e[0].cosmetic_rotate);
+  assert(e[1].sid==13 && e[1].kind==SHARE_NONE && e[1].gradient_count==2 && e[1].gradient_colors[1][2]==1);
+  assert(tag_share_parse(appearance,strlen(appearance),e,1)==1 && e[0].fire_strength==1.5f);
   printf("Tag share: hash, room reply passed\n");
   return 0;
 }

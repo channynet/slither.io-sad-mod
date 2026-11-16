@@ -126,27 +126,34 @@ void imgui_init(tenv* env) {
   style->DockingNodeHasCloseButton = false;
   style->WindowMenuButtonPosition = ImGuiDir_None;
   style->TabCloseButtonMinWidthUnselected = -1;
-  style->WindowBorderSize = style->FrameBorderSize = style->ChildBorderSize =
-      style->PopupBorderSize = style->TabBorderSize = 1;
-  style->FramePadding = (ImVec2){8, 8};
-  style->ItemSpacing = (ImVec2){4, 4};
-  style->ItemInnerSpacing = (ImVec2){4, 4};
-  style->WindowPadding = (ImVec2){4, 4};
+  style->WindowBorderSize = style->ChildBorderSize = style->PopupBorderSize = 1;
+  style->FrameBorderSize = 1;
+  style->TabBorderSize = 0;
+  style->FramePadding = (ImVec2){14, 9};
+  style->ItemSpacing = (ImVec2){10, 8};
+  style->ItemInnerSpacing = (ImVec2){8, 6};
+  style->WindowPadding = (ImVec2){16, 16};
   style->GrabMinSize = 18;
-  style->FrameRounding = style->TabRounding = style->ChildRounding =
-      style->GrabRounding = style->PopupRounding = style->ScrollbarRounding =
-          style->WindowRounding = style->TreeLinesRounding = 3;
-  style->ScrollbarSize = 10;
+  style->FrameRounding = 10;
+  style->TabRounding = 8;
+  style->ChildRounding = style->PopupRounding = 14;
+  style->WindowRounding = 18;
+  style->GrabRounding = style->ScrollbarRounding = 12;
+  style->TreeLinesRounding = 4;
+  style->WindowTitleAlign = (ImVec2){0.04f, 0.5f};
+  style->SeparatorTextPadding = (ImVec2){4, 10};
+  style->ScrollbarSize = 12;
   style->DockingSeparatorSize = 1;
-  style->ScrollbarPadding = 1;
-  style->CellPadding.x = 2;
+  style->ScrollbarPadding = 3;
+  style->CellPadding = (ImVec2){8, 5};
 
   igStyleColorsDark(style);
   style->Colors[ImGuiCol_Text] = (ImVec4){0.89f, 0.89f, 0.89f, 1.00f};
   style->Colors[ImGuiCol_WindowBg] = style->Colors[ImGuiCol_PopupBg] =
       (ImVec4){0.20f, 0.20f, 0.20f, 1.00f};
-  style->Colors[ImGuiCol_Border] = (ImVec4){0.00f, 0.00f, 0.00f, 1.00f};
-  style->Colors[ImGuiCol_BorderShadow] = (ImVec4){1.00f, 1.00f, 1.00f, 0.18f};
+  style->Colors[ImGuiCol_Border] = (ImVec4){1.00f, 1.00f, 1.00f, 0.12f};
+  style->Colors[ImGuiCol_BorderShadow] = (ImVec4){0, 0, 0, 0};
+  style->Colors[ImGuiCol_ChildBg] = (ImVec4){0.16f, 0.16f, 0.16f, 0.70f};
   style->Colors[ImGuiCol_FrameBg] = (ImVec4){0.16f, 0.16f, 0.16f, 1.00f};
   style->Colors[ImGuiCol_TitleBgActive] = (ImVec4){0.12f, 0.12f, 0.12f, 1.00f};
   style->Colors[ImGuiCol_Button] = (ImVec4){0.25f, 0.25f, 0.25f, 1.00f};
