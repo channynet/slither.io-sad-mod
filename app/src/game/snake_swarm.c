@@ -15,13 +15,14 @@ static float target_x,target_y,center_x,center_y;
 static double last_command;
 static int last_mode=-1;
 static unsigned session;
-static char status[320];
+static char status[640];
 static const char* modes[]={"마우스 추적","사용자 추적","직진","비","회오리"};
 static const char* reason(const char* state) {
  if(!strcmp(state,"connection_failed")) return "접속 실패 · 재시도 대기";
  if(!strcmp(state,"handshake_rejected")) return "생성 전 연결 종료 · 재시도 대기";
  if(!strcmp(state,"handshake_timeout")) return "생성 응답 없음 · 재시도 대기";
  if(!strcmp(state,"connection_closed")) return "연결 종료 · 재시도 대기";
+ if(!strcmp(state,"respawning")) return "봇 사망 · 재생성 대기";
  if(!strcmp(state,"control_timeout")) return "제어 신호 중단";
  if(!strcmp(state,"invalid_target")) return "잘못된 목표";
  if(!strcmp(state,"worker_failed") || !state[0]) return "봇 프로그램 실행 오류";
@@ -68,7 +69,7 @@ void snake_swarm_tick(tenv* env) {
  if(!isfinite(target_x)||!isfinite(target_y)) return;
  if(toggle && !active) {
   active=swarm_worker_start(env->usr->usrs.ipv4,target_x,target_y,native_prefs.swarm_count);
-  if(!active) {snprintf(status,sizeof(status),"봇 실행 실패 · 봇 프로그램 파일을 확인하세요");return;}
+  if(!active) {swarm_worker_state s=swarm_worker_poll();snprintf(status,sizeof(status),"봇 실행 실패 · 봇 프로그램 파일을 확인하세요\n%s",s.detail);return;}
   session=g->network_session;last_command=-1;
  }
  if(!active) return;
@@ -88,6 +89,9 @@ void snake_swarm_tick(tenv* env) {
  snprintf(status,sizeof(status),"봇 %d/%d · 접속 중 %d · 재시도 대기 %d\n%s · %s",
   s.active,s.total,s.connecting,s.waiting,modes[native_prefs.swarm_mode],
   s.active==s.total?"G로 종료":reason(s.state));
+ if(s.detail[0]) {
+  size_t used=strlen(status);snprintf(status+used,sizeof(status)-used,"\n%s",s.detail);
+ }
 }
 void snake_swarm_settings(tenv* env) {
  igSeparatorText("봇 조종");

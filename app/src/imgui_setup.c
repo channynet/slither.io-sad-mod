@@ -16,28 +16,7 @@
 #include <unistd.h>
 #endif
 
-void imgui_init(tenv* env) {
-  tuser_data* usr = env->usr;
-
-  igCreateContext(NULL);
-  igImplVulkan_Init(&(ImGui_ImplVulkan_InitInfo){
-      .ApiVersion = VK_API_VERSION_1_0,
-      .Instance = env->ctx->instance,
-      .PhysicalDevice = env->ctx->ph_device,
-      .Device = env->ctx->device,
-      .QueueFamily = env->ctx->queue_family,
-      .Queue = env->ctx->queue,
-      .DescriptorPool = env->ctx->descriptor_pool,
-      .DescriptorPoolSize = 0,
-      .MinImageCount = env->ctx->min_image_count,
-      .ImageCount = env->ctx->fif,
-      .PipelineCache = NULL,
-      .PipelineInfoMain = {.RenderPass = env->ctx->renderpass,
-                           .Subpass = 0,
-                           .MSAASamples = VK_SAMPLE_COUNT_1_BIT},
-      .UseDynamicRendering = false});
-  igImplGlfw_InitForVulkan(env->wnd->handle, true);
-  text_input_ime_install();
+void imgui_load_fonts(tuser_data* usr) {
   ImGuiIO* io = igGetIO_Nil();
   char korean_font[260]="";
   bool korean_available = false;
@@ -87,13 +66,18 @@ void imgui_init(tenv* env) {
                                  .GlyphOffset = (ImVec2){0, 2 + i},
                                  .GlyphMinAdvanceX = 26.0f + i * 6};
 
+    korean_config->MergeMode = true;
     usr->imgui_data.mono_font[i] = ImFontAtlas_AddFontFromFileTTF(
         io->Fonts, "app/res/fonts/mono_regular.ttf", 20 + i * 4, NULL, NULL);
+    if (korean_available)
+      ImFontAtlas_AddFontFromMemoryTTF(io->Fonts, korean_data, (int)korean_size,
+                                     20 + i * 4, korean_config, NULL);
 
     ImFontAtlas_AddFontFromFileTTF(
         io->Fonts, "app/res/fonts/iconfont.ttf", 20 + i * 4, &icons_config,
         (const ImWchar[]){0xe900, 0xeaea, 0});
 
+    korean_config->MergeMode = false;
     usr->imgui_data.regular_font[i] = korean_available
         ? ImFontAtlas_AddFontFromMemoryTTF(io->Fonts, korean_data, (int)korean_size, 20 + i * 4, korean_config, NULL)
         : ImFontAtlas_AddFontFromFileTTF(io->Fonts, "app/res/fonts/regular_regular.ttf", 20 + i * 4, NULL, NULL);
@@ -102,8 +86,12 @@ void imgui_init(tenv* env) {
         io->Fonts, "app/res/fonts/iconfont.ttf", 20 + i * 4, &icons_config,
         (const ImWchar[]){0xe900, 0xeaea, 0});
 
+    korean_config->MergeMode = true;
     usr->imgui_data.mono_font_bold[i] = ImFontAtlas_AddFontFromFileTTF(
         io->Fonts, "app/res/fonts/mono_bold.ttf", 20 + i * 4, NULL, NULL);
+    if (korean_available)
+      ImFontAtlas_AddFontFromMemoryTTF(io->Fonts, korean_data, (int)korean_size,
+                                     20 + i * 4, korean_config, NULL);
 
     ImFontAtlas_AddFontFromFileTTF(io->Fonts, "app/res/fonts/iconfont.ttf",
                                    20 + i * 4, &icons_config,
@@ -111,6 +99,9 @@ void imgui_init(tenv* env) {
 
     usr->imgui_data.regular_font_bold[i] = ImFontAtlas_AddFontFromFileTTF(
         io->Fonts, "app/res/fonts/regular_bold.ttf", 20 + i * 4, NULL, NULL);
+    if (korean_available)
+      ImFontAtlas_AddFontFromMemoryTTF(io->Fonts, korean_data, (int)korean_size,
+                                     20 + i * 4, korean_config, NULL);
 
     ImFontAtlas_AddFontFromFileTTF(io->Fonts, "app/res/fonts/iconfont.ttf",
                                    20 + i * 4, &icons_config,
@@ -118,6 +109,33 @@ void imgui_init(tenv* env) {
   }
   ImFontConfig_destroy(korean_config);
   free(korean_data);
+
+}
+
+void imgui_init(tenv* env) {
+  tuser_data* usr = env->usr;
+
+  igCreateContext(NULL);
+  igImplVulkan_Init(&(ImGui_ImplVulkan_InitInfo){
+      .ApiVersion = VK_API_VERSION_1_0,
+      .Instance = env->ctx->instance,
+      .PhysicalDevice = env->ctx->ph_device,
+      .Device = env->ctx->device,
+      .QueueFamily = env->ctx->queue_family,
+      .Queue = env->ctx->queue,
+      .DescriptorPool = env->ctx->descriptor_pool,
+      .DescriptorPoolSize = 0,
+      .MinImageCount = env->ctx->min_image_count,
+      .ImageCount = env->ctx->fif,
+      .PipelineCache = NULL,
+      .PipelineInfoMain = {.RenderPass = env->ctx->renderpass,
+                           .Subpass = 0,
+                           .MSAASamples = VK_SAMPLE_COUNT_1_BIT},
+      .UseDynamicRendering = false});
+  igImplGlfw_InitForVulkan(env->wnd->handle, true);
+  text_input_ime_install();
+  imgui_load_fonts(usr);
+  ImGuiIO* io = igGetIO_Nil();
 
   io->ConfigFlags |= ImGuiConfigFlags_DockingEnable;
   io->IniFilename = "native-layout.ini";

@@ -146,8 +146,16 @@ void ui_overlay(tenv* env) {
     igText("");
 
     if (usrs->hotkeys[HOTKEY_MENU].active) {
-      display_hotkeys(usr, (icon_sz.x - char_sz.x) * 0.5f,
-                      usrs->stats_font_size);
+      float help_height = ctx->size[1] - line_height * 3 - 48 - igGetCursorPosY();
+      if (help_height > line_height) {
+        float help_width = fminf(ctx->size[0] - 52, char_sz.x * 42 + style->ScrollbarSize);
+        if (igBeginChild_Str("##hotkey_help", (ImVec2){help_width, help_height},
+                             0, ImGuiWindowFlags_NoBackground)) {
+          display_hotkeys(usr, (icon_sz.x - char_sz.x) * 0.5f,
+                          usrs->stats_font_size);
+        }
+        igEndChild();
+      }
     }
 
     hud_panel_end();

@@ -43,7 +43,7 @@ jobs:
         run: |
           export SLITHER_MISSILE_WORKER_TEST="$PWD/dist/SlitherNative.app/Contents/Resources/app/res/swarm/worker"
           cd third_party/snake-missile
-          go test -count=1 -run TestWorkerModesAndWatchdog ./application
+          go test -count=1 -run 'TestWorkerModesAndWatchdog|TestWorkerReportsConnectionFailure' ./application
       - name: Test HTTP response limits and tag sharing
         run: |
           clang -std=gnu11 -O1 tests/http_simple_test.c -lcurl -o build/tests/http_simple

@@ -5,6 +5,7 @@
 #include "network_pump.h"
 #include "server_status.h"
 #include "target_identity.h"
+#include "skin_wire.h"
 #include "socket_latency.h"
 #include "../game/perf_trace.h"
 #include "../game/death_review.h"
@@ -113,22 +114,15 @@ void decode_secret(const uint8_t* packet, size_t packet_len, uint8_t* result) {
 
 uint8_t* get_skin_compressed(tuser_data* usr) {
   user_settings* usrs = &usr->usrs;
-
-  int skin_len = strlen(usrs->skin_code);
-  uint8_t* reduced = tdarray_create(uint8_t);
-  uint8_t sequence_count = 0;
-
-  for (int i = 0; i < skin_len; i++) {
-    sequence_count++;
-
-    uint8_t cg_id = get_cg_id(&usr->gdata, usrs->skin_code[i]);
-
-    if (usrs->skin_code[i + 1] != usrs->skin_code[i]) {
-      tdarray_push(&reduced, &sequence_count);
-      tdarray_push(&reduced, &cg_id);
-      sequence_count = 0;
-    }
+  uint8_t colors[MAX_SKIN_CODE_LEN], packed[SKIN_WIRE_BYTES];
+  size_t skin_len = 0;
+  while (skin_len < MAX_SKIN_CODE_LEN && usrs->skin_code[skin_len]) {
+    int color = get_cg_id(&usr->gdata, usrs->skin_code[skin_len]);
+    colors[skin_len++] = color < 0 ? 0 : (uint8_t)color;
   }
+  size_t packed_len = skin_wire_encode(colors, skin_len, packed);
+  uint8_t* reduced = tdarray_create(uint8_t);
+  for (size_t i = 0; i < packed_len; i++) tdarray_push(&reduced, &packed[i]);
   return reduced;
 }
 

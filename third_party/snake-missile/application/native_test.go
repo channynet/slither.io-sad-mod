@@ -28,6 +28,13 @@ func newTestServer(t *testing.T, modern bool, versions ...byte) *testServer {
 	t.Helper()
 	s := &testServer{angles: make(chan byte, 512)}
 	s.server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Public servers reject duplicate version headers. The client library
+		// already adds this header; a second spelling must never reach the wire.
+		if versions := r.Header.Values("Sec-WebSocket-Version"); len(versions) != 1 || versions[0] != "13" {
+			t.Errorf("invalid WebSocket version headers: %v", versions)
+			http.Error(w, "invalid WebSocket version headers", http.StatusBadRequest)
+			return
+		}
 		up := websocket.Upgrader{CheckOrigin: func(*http.Request) bool { return true }}
 		c, err := up.Upgrade(w, r, nil)
 		if err != nil {

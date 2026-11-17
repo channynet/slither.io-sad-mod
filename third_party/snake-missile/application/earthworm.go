@@ -84,7 +84,6 @@ func (earthworm *Earthworm) ConnectToServerContext(ctx context.Context, serverAd
 		"User-Agent":               {"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36"},
 		"Accept-Encoding":          {"gzip, deflate"},
 		"Sec-WebSocket-Extensions": {"permessage-deflate; client_max_window_bits"},
-		"Sec-websocket-version":    {"13"},
 		"Origin":                   {"http://slither.com"},
 		"Pragma":                   {"no-cache"},
 		"Cache-Control":            {"no-cache"},

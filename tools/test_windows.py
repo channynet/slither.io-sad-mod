@@ -22,6 +22,7 @@ with tempfile.TemporaryDirectory(prefix='preferences-test-', dir=BUILD) as sandb
     print(result.stdout)
 
 for name, sources, extra in [
+    ('skin_wire', [], []),
     ('snake_swarm', ['app/src/game/snake_swarm.c'], [*flags,'-DCIMGUI_NO_EXPORT','-ffunction-sections','-fdata-sections','-Wl,--gc-sections']),
     ('skin_generator', ['app/src/game/skin_generator.c','app/src/external/quickjs-ng/quickjs-amalgam.c'], []),
     ('skin_library', ['app/src/game/skin_library.c','app/src/external/mongoose.c'], ['-lws2_32']),
@@ -96,6 +97,7 @@ for name, sources, extra in [
             print(result.stdout)
 
 subprocess.run([sys.executable, str(ROOT / 'tools/test_korean_input.py')], check=True)
+subprocess.run([sys.executable, str(ROOT / 'tools/test_font_coverage.py')], check=True)
 http_test = BUILD / 'http_simple_test.exe'
 run([BIN / 'x86_64-w64-mingw32-clang.exe','-std=gnu11','-O1','-static',
      ROOT / 'tests/http_simple_test.c','-lwinhttp','-o',http_test])

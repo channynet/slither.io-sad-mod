@@ -40,6 +40,14 @@ type NativeEngine struct {
 	gate                   sync.Mutex
 	nextConnect            time.Time
 	connectGap, retryPause time.Duration
+	// Optional diagnostic sink; callbacks run on the owning worm's goroutine.
+	OnError func(index int, detail string)
+}
+
+func (e *NativeEngine) reportError(index int, err error) {
+	if e.OnError != nil && err != nil {
+		e.OnError(index, err.Error())
+	}
 }
 
 func NewNativeEngine(properties *ProgramProperties) (*NativeEngine, error) {
@@ -107,6 +115,7 @@ func (e *NativeEngine) runWorm(ctx context.Context, index int, report func(int, 
 		}
 		report(index, "connecting")
 		if err := worm.ConnectToServerContext(ctx, e.manager.Properties.ServerAddress); err != nil {
+			e.reportError(index, err)
 			e.coolDown()
 			report(index, "connection_failed")
 		} else {
@@ -170,6 +179,7 @@ func (e *NativeEngine) serve(ctx context.Context, worm *Earthworm, index int, re
 			return "stopped"
 		case packet := <-incoming:
 			if packet.err != nil {
+				e.reportError(index, packet.err)
 				if !initialized {
 					return "handshake_rejected"
 				}

@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 #ifdef _WIN32
 #include <windows.h>
 static HANDLE process,job,writer,reader;
@@ -98,8 +99,11 @@ bool swarm_worker_start(const char* server,float x,float y,int count) {
   return true;
 #ifdef _WIN32
 fail:
+  {
+  DWORD error=GetLastError();
   if(child_in) CloseHandle(child_in);if(child_out) CloseHandle(child_out);
-  swarm_worker_stop();return false;
+  swarm_worker_stop();snprintf(state.detail,sizeof(state.detail),"Windows error %lu",(unsigned long)error);return false;
+  }
 #endif
 }
 void swarm_worker_target(float x,float y) {
@@ -117,6 +121,22 @@ static void parse_status(char* line,size_t n) {
   char* value=mg_json_get_str(json,"$.state");
   if(!value) return;
   snprintf(state.state,sizeof(state.state),"%s",value);free(value);
+  char previous[sizeof(state.detail)];snprintf(previous,sizeof(previous),"%s",state.detail);
+  value=mg_json_get_str(json,"$.detail");
+  snprintf(state.detail,sizeof(state.detail),"%s",value?value:"");free(value);
+  for(char* p=state.detail;*p;p++) if((unsigned char)*p<32 || *p==127) *p=' ';
+  if(state.detail[0] && strcmp(previous,state.detail)) {
+    FILE* log=fopen("swarm-log.txt","a");
+    if(log) {
+      fseek(log,0,SEEK_END);
+      if(ftell(log)>1024*1024) {fclose(log);log=fopen("swarm-log.txt","w");}
+      if(log) {
+        time_t now=time(NULL);struct tm* date=localtime(&now);char stamp[32]="";
+        if(date) strftime(stamp,sizeof(stamp),"%Y-%m-%d %H:%M:%S",date);
+        fprintf(log,"%s %s: %s\n",stamp,state.state,state.detail);fclose(log);
+      }
+    }
+  }
   state.active=(int)mg_json_get_long(json,"$.active",0);
   state.total=(int)mg_json_get_long(json,"$.total",0);
   state.connecting=(int)mg_json_get_long(json,"$.connecting",0);

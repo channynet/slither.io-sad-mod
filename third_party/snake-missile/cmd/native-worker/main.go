@@ -30,10 +30,11 @@ type status struct {
 	Total      int    `json:"total"`
 	Connecting int    `json:"connecting"`
 	Waiting    int    `json:"waiting"`
+	Detail     string `json:"detail,omitempty"`
 }
 
 // Keep a pending failure visible while other worms connect successfully.
-func summarize(states []string) status {
+func summarize(states, details []string) status {
 	s := status{State: "connecting", Total: len(states)}
 	counts := map[string]int{}
 	for _, state := range states {
@@ -53,8 +54,17 @@ func summarize(states []string) status {
 	for _, state := range []string{"handshake_rejected", "handshake_timeout", "connection_failed", "connection_closed"} {
 		if counts[state] > 0 {
 			s.State = state
+			for i, value := range states {
+				if value == state && i < len(details) && details[i] != "" {
+					s.Detail = details[i]
+					break
+				}
+			}
 			return s
 		}
+	}
+	if counts["respawning"] > 0 {
+		s.State = "respawning"
 	}
 	return s
 }
@@ -159,7 +169,13 @@ func main() {
 			return
 		}
 		states := make([]string, engine.Count())
+		details := make([]string, engine.Count())
 		var stateLock sync.Mutex
+		engine.OnError = func(index int, detail string) {
+			stateLock.Lock()
+			defer stateLock.Unlock()
+			details[index] = detail
+		}
 		workers.Add(1)
 		go func() {
 			defer workers.Done()
@@ -171,7 +187,7 @@ func main() {
 					return
 				case <-tick.C:
 					stateLock.Lock()
-					current := summarize(states)
+					current := summarize(states, details)
 					stateLock.Unlock()
 					write(current)
 				}
@@ -184,6 +200,9 @@ func main() {
 				stateLock.Lock()
 				defer stateLock.Unlock()
 				states[index] = state
+				if state == "connecting" || state == "active" || state == "respawning" {
+					details[index] = ""
+				}
 			})
 		}()
 	}
