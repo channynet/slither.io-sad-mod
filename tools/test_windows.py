@@ -3,6 +3,7 @@ import subprocess
 import sys
 import tempfile
 BUILD.mkdir(parents=True, exist_ok=True)
+subprocess.run([sys.executable, str(ROOT / 'tools/test_font_coverage.py')], check=True)
 subprocess.run([sys.executable, str(ROOT / 'tools/test_auto_update.py')], check=True)
 test = BUILD / 'ntl_protocol_test.exe'
 run([BIN / 'x86_64-w64-mingw32-clang.exe', '-std=gnu11', '-O1', '-static',
@@ -97,7 +98,6 @@ for name, sources, extra in [
             print(result.stdout)
 
 subprocess.run([sys.executable, str(ROOT / 'tools/test_korean_input.py')], check=True)
-subprocess.run([sys.executable, str(ROOT / 'tools/test_font_coverage.py')], check=True)
 http_test = BUILD / 'http_simple_test.exe'
 run([BIN / 'x86_64-w64-mingw32-clang.exe','-std=gnu11','-O1','-static',
      ROOT / 'tests/http_simple_test.c','-lwinhttp','-o',http_test])

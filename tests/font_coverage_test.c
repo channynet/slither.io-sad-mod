@@ -1,6 +1,18 @@
 #include "../app/src/imgui_setup.c"
 #include <assert.h>
 
+// The production font loader is tested with the real ImGui rasterizer.
+// No renderer/window backend may run in this CPU-only executable.
+bool igImplVulkan_Init(ImGui_ImplVulkan_InitInfo* info) { abort(); }
+bool igImplGlfw_InitForVulkan(GLFWwindow* window, bool callbacks) { abort(); }
+void igImplVulkan_NewFrame(void) { abort(); }
+void igImplGlfw_NewFrame(void) { abort(); }
+void igImplVulkan_RenderDrawData(ImDrawData* data, VkCommandBuffer cmd, VkPipeline pipeline) { abort(); }
+void igImplVulkan_Shutdown(void) { abort(); }
+void igImplGlfw_Shutdown(void) { abort(); }
+void text_input_ime_install(void) { abort(); }
+void text_input_ime_restore(void) { abort(); }
+
 int main(void) {
   tuser_data* usr = calloc(1, sizeof(*usr));
   assert(usr);
