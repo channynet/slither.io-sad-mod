@@ -11,6 +11,10 @@ jobs:
     timeout-minutes: 35
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: third_party/snake-missile/go.mod
+          cache-dependency-path: third_party/snake-missile/go.sum
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
@@ -29,6 +33,8 @@ jobs:
         run: python tools/package_windows.py
       - name: Run native tests
         run: python tools/test_windows.py
+      - name: Test local bot engine and process bridge
+        run: python tools/test_swarm.py
       - uses: actions/upload-artifact@v4
         with:
           name: SlitherNative-Windows

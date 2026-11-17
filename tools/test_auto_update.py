@@ -94,4 +94,38 @@ Invoke-SlitherUpdate
     assert not legacy_worker.exists()
     # Give the worker/new application time to release their process image handles.
     time.sleep(.5)
+    # A pre-0.110 updater omits the new worker path. Reproduce its installed
+    # EXE/script and skip-once restart, then verify one automatic repair.
+    version = '2.6-ntl0.110'
+    run([BIN/'x86_64-w64-mingw32-clang.exe', '-static', '-mwindows',
+         f'-DAPP_VERSION="{version}"', '-I'+str(ROOT/'app/src/platform'), source,
+         ROOT/'app/src/platform/auto_update.c', '-o', base/'SlitherNative.exe'])
+    repair_script = parameters + mocks.replace(
+        'Copy-Item -LiteralPath',
+        'Add-Content -LiteralPath "$PSScriptRoot/downloads.txt" -Value "download"\nCopy-Item -LiteralPath')
+    (base/'update.ps1').write_text(repair_script)
+    prefix = f'SlitherNative-{version}-Windows-x64/'
+    with zipfile.ZipFile(package, 'w') as archive:
+        archive.write(base/'SlitherNative.exe', prefix+'SlitherNative.exe')
+        archive.writestr(prefix+'update.ps1', repair_script)
+        archive.writestr(prefix+'app/res/swarm/worker.exe', b'bot worker fixture')
+    release['tag_name'] = 'v'+version
+    release['assets'][0].update(
+        name=f'SlitherNative-{version}-Windows-x64.zip', size=package.stat().st_size,
+        digest='sha256:'+hashlib.sha256(package.read_bytes()).hexdigest(),
+        browser_download_url=f'https://github.com/channynet/slither.io-sad-mod/releases/download/v{version}/SlitherNative-{version}-Windows-x64.zip')
+    (base/'release.json').write_text(json.dumps(release))
+    (base/'started.txt').unlink()
+    subprocess.run([base/'SlitherNative.exe'], cwd=base, env=env, check=True, timeout=20)
+    deadline = time.monotonic()+20
+    while not (base/'started.txt').exists() and time.monotonic()<deadline:
+        time.sleep(.1)
+    assert (base/'started.txt').read_text() == version, (base/'.update/status.txt').read_text()
+    assert (base/'app/res/swarm/worker.exe').read_bytes() == b'bot worker fixture'
+    assert (base/'user.dat').read_bytes() == b'private settings'
+    time.sleep(.5)
+    subprocess.run([base/'SlitherNative.exe'], cwd=base, env=env, check=True, timeout=20)
+    assert (base/'downloads.txt').read_text().splitlines() == ['download'], 'Repeated repair'
+    time.sleep(.5)
+    print('Legacy upgrade repair passed: missing worker installed on skip-once restart, no repair loop, settings preserved.')
     print('Updater handoff passed: offline fallback, spaces/Unicode paths, parent exit, EXE/resource replacement, automatic restart, retired engine backup, no engine repair, preserved settings.')

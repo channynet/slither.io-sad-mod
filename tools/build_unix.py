@@ -11,6 +11,7 @@ source in third_party/moltenvk. Runs on the Python 3.9 that macOS provides."""
 import argparse, os, platform, plistlib, re, shutil, subprocess, sys, zipfile
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
+from build_swarm import build_worker, copy_licenses
 
 ROOT = Path(__file__).resolve().parent.parent
 MAC = sys.platform == 'darwin'
@@ -113,6 +114,8 @@ if not MAC:
     folder.mkdir(parents=True, exist_ok=True)
     shutil.copy2(exe, folder / 'SlitherNative')
     copy_resources(folder / 'app')
+    build_worker(folder / 'app/res/swarm/worker', 'linux', 'arm64' if platform.machine()=='aarch64' else 'amd64')
+    copy_licenses(folder / 'licenses/swarm')
     print('built', folder / 'SlitherNative')
     raise SystemExit(0)
 
@@ -129,6 +132,16 @@ subprocess.run([CC, '-O2', '-fobjc-arc', '-Wno-deprecated-declarations', *arch,
                 '-o', str(updater)], check=True)
 shutil.copy2(MOLTENVK, contents / 'Frameworks/libMoltenVK.dylib')
 copy_resources(contents / 'Resources/app')
+worker = contents / 'Resources/app/res/swarm/worker'
+worker.parent.mkdir(parents=True, exist_ok=True)
+worker_arches = []
+for architecture in filter(None, args.arch.split(',')):
+    target = OBJ / ('swarm-worker-'+architecture)
+    build_worker(target, 'darwin', 'amd64' if architecture=='x86_64' else architecture)
+    worker_arches.append(str(target))
+subprocess.run(['lipo','-create',*worker_arches,'-output',str(worker)],check=True)
+subprocess.run(['codesign','--force','--sign','-',str(worker)],check=True)
+copy_licenses(contents / 'Resources/licenses/swarm')
 icon = ROOT / 'tools/mac/SlitherNative.icns'
 if icon.exists(): shutil.copy2(icon, contents / 'Resources/SlitherNative.icns')
 short = re.sub(r'[^0-9.]', '', VERSION.split('-')[0]) or '1.0'

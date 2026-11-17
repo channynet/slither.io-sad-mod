@@ -25,12 +25,16 @@ try {
     Reject { Get-SafePath $temp 'C:/outside' }
     Reject { Get-SafePath $temp 'file:alternate' }
     Assert (!(Test-RuntimePath 'app/res/snake-missile/worker.exe')) 'Retired engine accepted for installation'
+    Assert (Test-RuntimePath 'app/res/swarm/worker.exe') 'Bot worker rejected'
+    Assert (!(Test-RuntimePath 'app/res/swarm/unknown.exe')) 'Unexpected bot executable accepted'
+    Assert (!(Test-MissingSwarmWorker $temp '2.6-ntl0.109')) 'Legacy version needs no new worker'
+    Assert (Test-MissingSwarmWorker $temp '2.6-ntl0.110') 'Missing worker not detected'
 
     Add-Type -AssemblyName System.IO.Compression
     Add-Type -AssemblyName System.IO.Compression.FileSystem
     $archive=Join-Path $temp 'package.zip'
     $zip=[IO.Compression.ZipFile]::Open($archive,[IO.Compression.ZipArchiveMode]::Create)
-    foreach ($relative in @('SlitherNative.exe','update.ps1','app/res/shaders/bin/test.spv','source/private.txt','user.dat')) {
+    foreach ($relative in @('SlitherNative.exe','update.ps1','app/res/swarm/worker.exe','app/res/shaders/bin/test.spv','source/private.txt','user.dat')) {
         $entry=$zip.CreateEntry('SlitherNative-2.6-ntl0.91-Windows-x64/'+$relative)
         $writer=New-Object IO.StreamWriter($entry.Open());$writer.Write('new '+$relative);$writer.Dispose()
     }
@@ -39,7 +43,7 @@ try {
     $hash=(Get-FileHash -LiteralPath $archive).Hash
     Reject { Expand-VerifiedPackage $archive ('0'*64) $stage '2.6-ntl0.91' }
     $files=@(Expand-VerifiedPackage $archive $hash $stage '2.6-ntl0.91')
-    Assert ($files.Count -eq 3) 'Personal data or source included in installation'
+    Assert ($files.Count -eq 4) 'Personal data or source included in installation'
     $root=Join-Path $temp 'install with spaces'
     [IO.Directory]::CreateDirectory((Join-Path $root '.update')) | Out-Null
     [IO.File]::WriteAllText((Join-Path $root 'SlitherNative.exe'),'old exe')
@@ -47,6 +51,7 @@ try {
     Install-Update $root $stage $files
     Assert ((Get-Content -Raw -LiteralPath (Join-Path $root 'SlitherNative.exe')) -eq 'new SlitherNative.exe') 'EXE replacement failed'
     Assert ((Get-Content -Raw -LiteralPath (Join-Path $root 'user.dat')) -eq 'my settings') 'Settings changed'
+    Assert (!(Test-MissingSwarmWorker $root '2.6-ntl0.110')) 'Installed worker not detected'
     Assert ((Get-Content -Raw -LiteralPath (Join-Path $root '.update/backup/SlitherNative.exe')) -eq 'old exe') 'Missing backup'
     Assert (!(Test-Path -LiteralPath (Join-Path $root '.update/transaction.json'))) 'Uncommitted transaction'
 

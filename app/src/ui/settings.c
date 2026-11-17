@@ -1,4 +1,5 @@
 #include "settings.h"
+#include "../game/snake_swarm.h"
 
 #include "../user.h"
 #include "../game/native_preferences.h"
@@ -231,6 +232,11 @@ void ui_settings(tenv* env) {
       igEndTabItem();
     }
 
+    if(igBeginTabItem("봇 조종",NULL,0)) {
+      igBeginChild_Str("swarm_settings",(ImVec2){0,child_window_height},ImGuiChildFlags_AlwaysUseWindowPadding,0);
+      snake_swarm_settings(env);
+      igEndChild();igEndTabItem();
+    }
     if(igBeginTabItem("Hotkeys",NULL,0)) {
     igBeginChild_Str("hotkey_child_window", (ImVec2){0, child_window_height},
                      ImGuiChildFlags_AlwaysUseWindowPadding, ImGuiWindowFlags_None);

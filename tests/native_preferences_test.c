@@ -24,6 +24,8 @@ int main(void) {
   assert(p.team_name_emphasis && !p.face_smile && !p.face_claws);
   assert(p.wifi_low_latency); p.wifi_low_latency=false;
   assert(!p.path_retry); p.path_retry=true;
+  assert(p.swarm_count==1 && p.swarm_mode==0 && !p.swarm_boost);
+  p.swarm_count=25;p.swarm_mode=4;p.swarm_direction=270;p.swarm_boost=true;
   assert(p.bot_smart && p.bot_length==2000); p.bot_smart=false; p.bot_length=3500;
   assert(!p.gradient_enabled && p.gradient_count==2 && p.gradient_colors[0][2]==1);
   p.gradient_enabled=true; p.gradient_count=4;
@@ -45,6 +47,7 @@ int main(void) {
   assert(!q.uniform_names && q.name_color[0]==.125f);
   assert(!q.team_name_emphasis && q.face_smile && q.face_claws);
   assert(!q.wifi_low_latency && q.path_retry);
+  assert(q.swarm_count==25 && q.swarm_mode==4 && q.swarm_direction==270 && q.swarm_boost);
   assert(!q.bot_smart && q.bot_length==3500);
   assert(!q.net_stats);
   assert(!q.safe_wall && q.safe_wall_script==1 && q.safe_wall_offset==-7 && q.fire_skin && q.fire_strength==.5f);
@@ -59,6 +62,7 @@ int main(void) {
   assert(q.uniform_names && q.name_color[0]==.85f && q.team_name_color[0]==1);
   assert(q.team_name_emphasis && !q.face_smile && !q.face_claws);
   assert(q.wifi_low_latency && !q.path_retry);
+  assert(q.swarm_count==1 && q.swarm_mode==0 && !q.swarm_boost);
   assert(q.bot_smart && q.bot_length==2000);  // settings saved before these options keep the defaults
   assert(q.net_stats);
   assert(q.safe_wall && q.safe_wall_script==2 && q.safe_wall_offset==0 && !q.fire_skin && q.fire_strength==1);   // on unless turned off

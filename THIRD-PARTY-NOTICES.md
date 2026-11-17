@@ -12,6 +12,7 @@ The source tree includes these components and their original license texts:
 | cimgui | app/src/cimgui/LICENSE |
 | Dear ImGui | app/src/cimgui/imgui/LICENSE.txt |
 | Mongoose | app/src/external/LICENSE.txt and mongoose.h |
+| Snake Missile transport and local swarm worker | third_party/snake-missile/LICENSE and UPSTREAM.md; the modified native protocol adapter retains the host GPL terms |
 | Vulkan Memory Allocator | thermite/src/external/vma/LICENSE.txt |
 | stb | thermite/src/external/stb/LICENSE.txt |
 | cglm | thermite/include/cglm/LICENSE.txt |

@@ -13,6 +13,8 @@ typedef struct {
   bool path_retry;
   bool bot_smart;      // NTL "Smart bot": grow first, then circle. Off: circle at once.
   int bot_length;      // NTL "bot length": the length at which growing turns into circling
+  int swarm_count, swarm_mode, swarm_direction;
+  bool swarm_boost;
   bool gradient_enabled;
   int gradient_count;
   float gradient_colors[4][3];

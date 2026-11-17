@@ -1,0 +1,8 @@
+Generated with the built-in imagegen tool. Transparent background requested.
+
+Create a single production app icon for SlitherNative, a polished desktop snake game. Square 1024 x 1024 canvas. A rounded square deep midnight navy tile with generous corner radii, centered with 7 percent transparent margin on all four sides. On the tile a single thick friendly mint green to bright lime snake body makes one elegant flowing S-shaped loop. Large rounded head at upper right, two clear expressive ivory eyes and dark pupils looking right. Smooth subtle dimensional shading like a premium hand crafted game mascot, crisp silhouette, beautifully controlled highlights, minimal depth. The broad snake occupies most of the tile and remains recognizable at 32 pixels. Tight coherent emerald/lime palette against nearly black navy. No text, letters, numerals, badges, border decorations, particles, tiny details, extra snakes, fangs, tongue or limbs. Straight-on orthographic view, no mockup, no perspective. Actual transparent background outside rounded square. A finished app icon, understated and professional, not a glossy plastic toy.
+
+SlitherNative.png is the original generated artwork (1254 x 1254 RGBA).
+SlitherNative.ico contains 16, 24, 32, 48, 64, 128 and 256 pixel images.
+../mac/SlitherNative.icns contains the macOS icon sizes up to 1024 pixels.
+Pillow was used only for resizing and file-format conversion.

@@ -5,6 +5,7 @@ import argparse
 import re
 import shutil
 import subprocess
+from build_swarm import build_worker, copy_licenses
 
 ROOT = Path(__file__).resolve().parents[1]
 TOOLS = ROOT / '.tools'
@@ -53,7 +54,7 @@ def main():
     sources = [ROOT / f'glfw/src/{name}.c' for name in glfw]
     for folder in ['thermite/src', 'app/src']:
         sources += list((ROOT / folder).rglob('*.c')) + list((ROOT / folder).rglob('*.cpp'))
-    common = ['-O2', '-g0', '-D_GLFW_WIN32', '-D_WIN32_WINNT=0x0A00', '-DGLFW_INCLUDE_NONE', '-DGLFW_INCLUDE_VULKAN', '-DCGLM_FORCE_DEPTH_ZERO_TO_ONE', '-DCIMGUI_NO_EXPORT', '-DAPP_VERSION="2.6-ntl0.109"', '-DSETTINGS_VERSION="1.3"']
+    common = ['-O2', '-g0', '-D_GLFW_WIN32', '-D_WIN32_WINNT=0x0A00', '-DGLFW_INCLUDE_NONE', '-DGLFW_INCLUDE_VULKAN', '-DCGLM_FORCE_DEPTH_ZERO_TO_ONE', '-DCIMGUI_NO_EXPORT', '-DAPP_VERSION="2.6-ntl0.110"', '-DSETTINGS_VERSION="1.3"']
     # Keep local filesystem paths out of distributed assertion/source strings.
     common += [f'-ffile-prefix-map={ROOT}=.', f'-ffile-prefix-map={ROOT.as_posix()}=.']
     for path in ['glfw/include', 'thermite/include', 'thermite/src', '.tools/Vulkan-Headers/include']:
@@ -71,11 +72,17 @@ def main():
         return obj
     with ThreadPoolExecutor(max_workers=2) as pool:
         objects = list(pool.map(compile, sources))
+    icon = BUILD / 'SlitherNative-icon.o'
+    run([BIN / 'x86_64-w64-mingw32-windres.exe', '-I', ROOT / 'tools/app-icon',
+         ROOT / 'tools/app-icon/SlitherNative.rc', '-O', 'coff', '-o', icon])
+    objects.append(icon)
     args = [*objects, imports, '-static', '-mwindows', '-lwinhttp', '-lbcrypt', '-lcrypt32', '-lcomdlg32', '-lgdi32', '-limm32', '-lws2_32', '-lwinmm', '-ldwmapi', '-liphlpapi', '-lwlanapi', '-lole32', '-lwindowscodecs', '-luuid', '-o', DIST / options.exe_name]
     response = BUILD / 'link.rsp'
     response.write_text('\n'.join('"' + str(arg).replace('\\','/') + '"' for arg in args), encoding='utf-8')
     run([BIN / 'x86_64-w64-mingw32-clang++.exe', '@' + str(response)])
     shutil.copytree(ROOT / 'app/res', DIST / 'app/res', dirs_exist_ok=True)
+    build_worker(DIST / 'app/res/swarm/worker.exe')
+    copy_licenses(DIST / 'licenses/swarm')
     shutil.copy2(ROOT / 'LICENSE', DIST / 'LICENSE')
     shutil.copy2(ROOT / 'tools/update.ps1', DIST / 'update.ps1')
     for source in ['glfw/LICENSE.md','app/src/cimgui/LICENSE','app/src/cimgui/imgui/LICENSE.txt','app/src/external/LICENSE.txt','app/src/external/quickjs-ng/LICENSE.txt','thermite/src/external/vma/LICENSE.txt','thermite/src/external/stb/LICENSE.txt','thermite/include/cglm/LICENSE.txt']:

@@ -17,6 +17,13 @@ jobs:
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: third_party/snake-missile/go.mod
+          cache-dependency-path: third_party/snake-missile/go.sum
+      - name: Test local bot engine
+        working-directory: third_party/snake-missile
+        run: go test -count=1 ./application ./utilities ./cmd/native-worker
       - name: Check startup ordering
         run: |
           mkdir -p build/tests
@@ -32,6 +39,11 @@ jobs:
           build/tests/skin_generator
       - name: Build Universal application
         run: python3 tools/build_unix.py --jobs 3
+      - name: Test bundled bot controls and shutdown
+        run: |
+          export SLITHER_MISSILE_WORKER_TEST="$PWD/dist/SlitherNative.app/Contents/Resources/app/res/swarm/worker"
+          cd third_party/snake-missile
+          go test -count=1 -run TestWorkerModesAndWatchdog ./application
       - name: Test HTTP response limits and tag sharing
         run: |
           clang -std=gnu11 -O1 tests/http_simple_test.c -lcurl -o build/tests/http_simple
@@ -47,6 +59,8 @@ jobs:
         run: |
           lipo dist/SlitherNative.app/Contents/MacOS/SlitherNative -verify_arch arm64 x86_64
           lipo dist/SlitherNative.app/Contents/MacOS/SlitherUpdater -verify_arch arm64 x86_64
+          lipo dist/SlitherNative.app/Contents/Resources/app/res/swarm/worker -verify_arch arm64 x86_64
+          codesign --verify --strict dist/SlitherNative.app/Contents/Resources/app/res/swarm/worker
           codesign --verify --deep --strict dist/SlitherNative.app
           otool -L dist/SlitherNative.app/Contents/MacOS/SlitherNative
       - name: Test windowed and fullscreen startup

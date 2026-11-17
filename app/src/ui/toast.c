@@ -6,12 +6,15 @@
 
 typedef struct { char text[256]; float color[3]; double until; } toast;
 static toast toasts[4];
+static const double max_duration = 1.5;
+static const double fade_duration = 0.35;
 
 void toast_show(const char* text, float r, float g, float b, double seconds) {
   int slot = 0;
   for (int i = 0; i < 4; i++) if (toasts[i].until < toasts[slot].until) slot = i;   // replace the oldest
   snprintf(toasts[slot].text, sizeof(toasts[slot].text), "%s", text);
   toasts[slot].color[0] = r; toasts[slot].color[1] = g; toasts[slot].color[2] = b;
+  if (seconds > max_duration) seconds = max_duration;
   toasts[slot].until = glfwGetTime() + seconds;
 }
 
@@ -27,7 +30,7 @@ void toast_draw(tenv* env) {
   ImDrawList* draw = igGetForegroundDrawList_ViewportPtr(NULL);
   for (int k = 0; k < n; k++) {
     toast* t = toasts + order[k];
-    float fade = (float)(t->until - now); if (fade > 1) fade = 1;
+    float fade = (float)((t->until - now) / fade_duration); if (fade > 1) fade = 1;
     ImVec2 ts; igPushFont(font, size); igCalcTextSize(&ts, t->text, NULL, false, -1); igPopFont();
     float x = env->ctx->size[0] / 2.0f - ts.x / 2;
     ImDrawList_AddRectFilled(draw, (ImVec2){x - 18, y - 10}, (ImVec2){x + ts.x + 18, y + ts.y + 10},

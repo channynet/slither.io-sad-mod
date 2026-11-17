@@ -1,4 +1,5 @@
 #include "game/loop.h"
+#include "game/snake_swarm.h"
 #include "platform/auto_update.h"
 #include "ui/text_input_ime.h"
 #include "ui/skin_editor.h"
@@ -163,6 +164,7 @@ void tinit(tenv* env) {
 }
 
 void tdestroy(tenv* env) {
+  snake_swarm_stop();
   native_preferences_tick(&env->usr->usrs,true);
   ntl_destroy();
   server_status_destroy();
@@ -191,6 +193,7 @@ void trender(tenv* env) {
   game_data* gdata = &usr->gdata;
 
   // Input and network service continue even if the GPU cannot accept a frame.
+  snake_swarm_tick(env);
   server_service(env);
   double wait_start=perf_now();
   bool frame_ready=tcontext_begin(ctx);
@@ -295,6 +298,7 @@ void tbackground(tenv* env) {
   static double last; double now=perf_now();
   if(last && now-last<1000) perf_minimized(now-last);   // called about every 16 ms while minimized
   last=now;
+  snake_swarm_tick(env);
   game_background(env);
 }
 

@@ -41,7 +41,11 @@ function Get-SafePath([string]$Root, [string]$Relative) {
     return $path
 }
 function Test-RuntimePath([string]$Path) {
-    return $Path -cmatch '^(SlitherNative\.exe|update\.ps1|LICENSE|THIRD-PARTY-NOTICES\.md|README-KO\.txt|licenses/[a-zA-Z0-9_./-]+|app/res/(fonts|textures|shaders/bin|personal/library|menu|ntl-tags|ntl-tags-online|faces)/[a-zA-Z0-9_.-]+)$'
+    return $Path -cmatch '^(SlitherNative\.exe|update\.ps1|LICENSE|THIRD-PARTY-NOTICES\.md|README-KO\.txt|licenses/[a-zA-Z0-9_./-]+|app/res/swarm/worker\.exe|app/res/(fonts|textures|shaders/bin|personal/library|menu|ntl-tags|ntl-tags-online|faces)/[a-zA-Z0-9_.-]+)$'
+}
+function Test-MissingSwarmWorker([string]$Root, [string]$Version) {
+    return (Get-VersionNumber $Version) -ge (Get-VersionNumber '2.6-ntl0.110') -and
+        !(Test-Path -LiteralPath (Get-SafePath $Root 'app/res/swarm/worker.exe') -PathType Leaf)
 }
 function Test-RetiredPath([string]$Path) {
     return $Path -ceq 'app/res/snake-missile/worker.exe'
@@ -135,9 +139,12 @@ function Invoke-SlitherUpdate {
         $journal = Get-SafePath $root '.update/transaction.json'
         if (!(Test-Path -LiteralPath $journal)) {
             if (!$CheckOnly) { Move-RetiredComponents $root }
-            if ($SkipCheck -and !$CheckOnly) { return }
+            # Older updaters install the new EXE/script but omit the new worker path.
+            # Repair that partial upgrade once, including on the automatic restart.
+            $missingWorker = Test-MissingSwarmWorker $root $CurrentVersion
+            if ($SkipCheck -and !$CheckOnly -and !$missingWorker) { return }
             $release = Invoke-RestMethod -Uri "https://api.github.com/repos/$Repository/releases/latest" -Headers @{'User-Agent'='SlitherNative-Updater';Accept='application/vnd.github+json'} -TimeoutSec 8
-            $asset = Get-UpdateAsset $release $CurrentVersion -Repair:$Repair
+            $asset = Get-UpdateAsset $release $CurrentVersion -Repair:($Repair -or $missingWorker)
             if ($CheckOnly) {
                 [pscustomobject]@{installed=$CurrentVersion;latest=$release.tag_name;updateAvailable=($null -ne $asset)} | ConvertTo-Json -Compress
                 return
@@ -149,6 +156,8 @@ function Invoke-SlitherUpdate {
             if ((Get-Item -LiteralPath $archive).Length -ne $asset.size) { throw 'Incomplete download' }
             $stage = Get-SafePath $root ('.update/stage-'+[guid]::NewGuid().ToString('N'))
             $files = @(Expand-VerifiedPackage $archive $asset.digest.Substring(7) $stage $version)
+            if ((Get-VersionNumber $version) -ge (Get-VersionNumber '2.6-ntl0.110') -and
+                !('app/res/swarm/worker.exe' -cin $files)) { throw 'Missing bot worker in package' }
         } elseif ($CheckOnly) { throw 'Interrupted update requires recovery' }
         else { $recovered = $true }
         # Capture the parent process handle before signalling. Never replace a running EXE.

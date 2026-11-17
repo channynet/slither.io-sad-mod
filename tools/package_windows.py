@@ -25,6 +25,10 @@ README = f'''Slither Native {VERSION} · Windows x64
 4. F8의 채팅창 아래 메뉴에서 "팀 연결 설정"을 열고 본인의 NTL 인증키/팀 ID를 입력할 수 있습니다.
    NTL처럼 이름을 붙여 여러 팀키를 저장하고 "저장된 팀키" 목록에서 골라 연결합니다(연결 중에도 바꾸기 가능).
 
+설정 > 봇 조종: 생성 수·이동 방식·가속을 설정합니다.
+G 한 번: 별도 봇 시작. G 다시 한 번: 봇 정지. 기본 생성 수는 1마리입니다.
+이 PC의 인터넷 연결을 사용합니다. 서버의 접속 제한에 따라 실제 생성 수는 달라집니다.
+앱 종료·사망·서버 변경 시 봇을 종료합니다.
 주요 조작: 마우스 이동, Space 가속, 휠 확대/축소, F11 전체 화면.
 앱을 실행하면 최신 정식 버전을 확인합니다. 새 버전이 있으면 자동으로 설치한 뒤 앱을 실행합니다.
 게임 접속 시 관리 서버에 접속 IP 주소·앱 버전·최근 접속 시각이 기록됩니다.
@@ -104,6 +108,7 @@ def main():
         package.mkdir()
         shutil.copy2(build.DIST / 'SlitherNative.exe', package / 'SlitherNative.exe')
         shutil.copy2(build.DIST / 'update.ps1', package / 'update.ps1')
+        shutil.copytree(build.DIST / 'app/res/swarm', package / 'app/res/swarm')
         tracked = set(filter(None, subprocess.check_output(['git', 'ls-files', '-z'], cwd=ROOT).decode().split('\0')))
         patterns = ['fonts/*.ttf', 'fonts/*.txt', 'textures/*.png',
                     'shaders/bin/*.spv', 'personal/library/*.png', 'menu/cat-knock-*.png',
@@ -132,6 +137,8 @@ def main():
         # match this executable, including newly added IME and chat modules.
         added = subprocess.check_output(['git', 'ls-files', '--others', '--exclude-standard', '-z',
                                          '--', 'app/src', 'tests', 'tools'], cwd=ROOT).decode().split('\0')
+        tracked |= {p.relative_to(ROOT).as_posix() for p in (ROOT / 'third_party/snake-missile').rglob('*')
+                    if p.is_file() and (p.suffix in {'.go','.mod','.sum','.md'} or p.name=='LICENSE')}
         sources = tracked | face_assets | {name for name in added if name and Path(name).suffix.lower() in {'.c', '.cpp', '.h', '.py'}}
         for relative in sorted(sources):
             if relative in {'README.md', 'README-NATIVE.md'}:
@@ -144,7 +151,7 @@ def main():
             shutil.copy2(ROOT / path, target)
         (package / 'source/README.md').write_text(
             f'# Slither Native {VERSION}\n\nWindows x64 build from this source snapshot:\n\n'
-            '1. Install Python 3 and Git.\n2. Run `python tools/prepare_windows.py`.\n'
+            '1. Install Python 3, Git and Go 1.24 or later.\n2. Run `python tools/prepare_windows.py`.\n'
             '3. Run `python tools/build_windows.py`.\n4. Output: `dist/SlitherNative.exe`.\n\n'
             'Build dependencies are pinned in tools/prepare_windows.py. '
             'The package contains no Git history or personal configuration.\n', encoding='utf-8')

@@ -1,4 +1,5 @@
 #include "ui_overlay.h"
+#include "snake_swarm.h"
 #include "input.h"
 #include "perf_trace.h"
 
@@ -13,6 +14,7 @@
 
 void ui_overlay(tenv* env) {
   target_marker_draw(env);
+  snake_swarm_draw(env);
   tuser_data* usr = env->usr;
   tcontext* ctx = env->ctx;
   game_data* gdata = &usr->gdata;
