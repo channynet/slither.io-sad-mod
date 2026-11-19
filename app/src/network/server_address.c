@@ -75,8 +75,15 @@ bool server_address_host(struct mg_connection* c,const char* host) {
   if(mg_iobuf_add(&c->send,start,host,strlen(host))!=strlen(host)) { c->is_closing=true; return false; }
   if(c->is_tls && !c->tls) {
     initialize_tls_clock();
+    // Older Windows updaters install licenses/* but do not know app/res/certs.
+    // Keep the trust store in an already supported path for direct upgrades.
+#ifdef _WIN32
+    struct mg_str ca=mg_file_read(&mg_fs_posix,"licenses/tls/ca.pem");
+    if(!ca.len) ca=mg_file_read(&mg_fs_posix,"app/res/certs/ca.pem");
+#else
     struct mg_str ca=mg_file_read(&mg_fs_posix,"app/res/certs/ca.pem");
-    if(!ca.len) { mg_error(c,"TLS trust store missing: app/res/certs/ca.pem"); return false; }
+#endif
+    if(!ca.len) { mg_error(c,"TLS trust store missing"); return false; }
     char name[MAX_IPV4_LEN+1]; size_t n=strcspn(host,":");
     if(n>=sizeof(name)) { mg_free((void*)ca.buf); c->is_closing=true; return false; }
     memcpy(name,host,n); name[n]=0;

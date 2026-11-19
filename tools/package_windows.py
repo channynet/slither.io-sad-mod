@@ -135,6 +135,8 @@ def main():
             target.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(ROOT / relative, target)
         shutil.copytree(build.DIST / 'licenses', package / 'licenses')
+        # This path is also installed by older updaters that predate WSS support.
+        shutil.copytree(ROOT / 'app/res/certs', package / 'licenses/tls')
         for name in ['LICENSE', 'THIRD-PARTY-NOTICES.md']:
             shutil.copy2(ROOT / name, package / name)
         (package / 'README-KO.txt').write_text(README, encoding='utf-8-sig')

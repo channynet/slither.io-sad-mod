@@ -34,6 +34,7 @@ def compile_probe():
         compiler, flags = BIN / 'x86_64-w64-mingw32-clang.exe', ['-static', '-lws2_32']
     else:
         compiler, flags = os.environ.get('CC', 'cc'), ['-lpthread', '-lm']
+        flags.insert(0, ROOT / 'app/src/platform/compat.c')
     run([compiler, '-std=gnu11', '-O1', ROOT / 'tests/server_tls_test.c',
          ROOT / 'app/src/network/server_address.c', ROOT / 'app/src/external/mongoose.c',
          *flags, '-o', exe], ROOT)
@@ -73,7 +74,7 @@ def main():
     exe = compile_probe()
     with tempfile.TemporaryDirectory(prefix='tls-regression-', dir=ROOT / 'build') as temp:
         folder = Path(temp)
-        ca_path = folder / 'app/res/certs/ca.pem'
+        ca_path = folder / ('licenses/tls/ca.pem' if os.name == 'nt' else 'app/res/certs/ca.pem')
         ca_path.parent.mkdir(parents=True)
         for ca in ('trusted', 'untrusted'):
             run([OPENSSL, 'req', '-x509', '-newkey', 'ec', '-pkeyopt', 'ec_paramgen_curve:P-256',
