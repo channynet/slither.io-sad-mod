@@ -25,6 +25,12 @@ README = f'''Slither Native {VERSION} · Windows x64
 4. F8의 채팅창 아래 메뉴에서 "팀 연결 설정"을 열고 본인의 NTL 인증키/팀 ID를 입력할 수 있습니다.
    NTL처럼 이름을 붙여 여러 팀키를 저장하고 "저장된 팀키" 목록에서 골라 연결합니다(연결 중에도 바꾸기 가능).
 
+설정 > 화면 > 메뉴 배경: PNG/JPG/BMP 선택 및 기본 배경 복원 (16MB, 4096px 이하).
+선택한 이미지는 menu-background.image에 보관되어 다음 실행과 업데이트 후에도 유지됩니다.
+
+스킨 설정 > 특별한 스킨: 불꽃·얼음·번개·오로라·별빛·물결 중 하나를 선택하고 효과 강도를 조절합니다.
+OK를 누르면 저장된 스킨에 보관합니다. 같은 서버에서 외형 공유를 켠 0.116 이상 사용자끼리 새 효과를 볼 수 있습니다.
+
 설정 > 봇 조종: 생성 수·이동 방식·가속을 설정합니다.
 G 한 번: 별도 봇 시작. G 다시 한 번: 봇 정지. 기본 생성 수는 1마리입니다.
 이 PC의 인터넷 연결을 사용합니다. 서버의 접속 제한에 따라 실제 생성 수는 달라집니다.
@@ -122,7 +128,8 @@ def main():
                 target.parent.mkdir(parents=True, exist_ok=True)
                 shutil.copy2(source, target)
         # Original built-in face artwork: explicit allowlist, never user imports.
-        face_assets = {'app/res/faces/jmou3.png', 'app/res/faces/sest5.png'}
+        face_assets = {'app/res/faces/jmou3.png', 'app/res/faces/sest5.png',
+                       'app/res/certs/ca.pem', 'app/res/certs/LICENSE.txt'}
         for relative in sorted(face_assets):
             target = package / relative
             target.parent.mkdir(parents=True, exist_ok=True)

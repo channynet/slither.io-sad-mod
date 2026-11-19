@@ -56,6 +56,7 @@ try {
                 if ($health.schema -ne 2) { throw 'The live access storage implementation is outdated.' }
                 $room = Invoke-RestMethod -Uri "$ServiceUrl/v1/room?s=deployment-check" -Method Post -ContentType 'application/json' -Body '{"sid":-1}' -TimeoutSec 15
                 if ($room.appearanceSchema -ne 1) { throw 'The live appearance relay is outdated.' }
+                if ($room.specialSkinSchema -ne 1) { throw 'The live special-skin relay is outdated.' }
                 Write-Host "Verified deployment: $ServiceUrl (administrator page matches; access schema 2; appearance schema 1)."
                 exit 0
             } catch {

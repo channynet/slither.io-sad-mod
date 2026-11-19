@@ -2,6 +2,22 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {Room} from '../src/index.js';
 const send=async(room,body)=>(await room.fetch(new Request('https://room/',{method:'POST',body:JSON.stringify(body)}))).json();
+
+test('all five special skins round trip, reject unknown types and coexist with legacy fire',async()=>{
+  const room=new Room({});
+  for(let kind=2;kind<=6;kind++) {
+    const result=await send(room,{sid:kind,appearance:{special:[kind,.8]}});
+    assert.deepEqual(result.a.find(row=>row[0]===kind),[kind,{special:[kind,.8]}]);
+  }
+  for(const special of [[7,1],[2.5,1],[3,-1],[4,"1"],[5],[2,1,3]]) {
+    const result=await send(room,{sid:100,appearance:{special}});
+    assert.equal(result.a.length,5);
+  }
+  const result=await send(room,{sid:100,appearance:{special:[2,99],fire:.7}});
+  assert.deepEqual(result.a.at(-1),[100,{fire:.7,special:[2,1.5]}]);
+  const removed=await send(room,{sid:100,appearance:{special:[0,1]}});
+  assert.equal(removed.a.length,5);
+});
 test('new clients share effects and cosmetics while legacy tags remain compatible',async()=>{
   const room=new Room({});
   await send(room,{sid:1,tag:['ntl',200],appearance:{fire:.7,cosmetic:['0123456789abcdef',160,-18,45,1]}});

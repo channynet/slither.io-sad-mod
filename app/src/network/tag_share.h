@@ -19,6 +19,8 @@ typedef struct {
   float cosmetic_size, cosmetic_gap, cosmetic_angle;
   bool cosmetic_rotate;
   float fire_strength;
+  int special_skin;
+  float special_strength;
   int gradient_count;
   float gradient_colors[4][3];
 } share_entry;

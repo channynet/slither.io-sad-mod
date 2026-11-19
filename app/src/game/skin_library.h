@@ -10,6 +10,7 @@ typedef struct {
 typedef struct {
   char code[257];
   bool custom,fire,gradient,smile,claws,local_tag;
+  int special_skin;
   int default_skin,accessory,gradient_count,tag_mode,tag_id;
   float fire_strength,colors[4][3],look[4];
   skin_image_state images[2];

@@ -24,5 +24,15 @@ int main(void) {
   assert(skin_library_remember(&l,"missing/fail.json",&d)==1); // existing item needs no write
   d.images[1].angle=90;
   assert(skin_library_remember(&l,"missing/fail.json",&d)==-1 && l.count==2);
+  for(int kind=2;kind<=6;kind++) {
+    d.special_skin=kind;d.fire=false;d.fire_strength=.6f;
+    int slot=skin_library_remember(&l,"skins.json",&d);
+    assert(slot==kind);
+    assert(skin_library_load(&loaded,"skins.json"));
+    assert(loaded.items[slot].special_skin==kind && loaded.items[slot].fire_strength==.6f);
+    assert(skin_library_remember(&loaded,"skins.json",&d)==slot);
+  }
+  d.special_skin=7;
+  assert(skin_library_remember(&l,"skins.json",&d)==-1);
   puts("Skin library: round trip, full appearance, deduplication, corrupt-file preservation and write failure passed");
 }

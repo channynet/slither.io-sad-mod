@@ -33,20 +33,39 @@ void skin_gradient_controls(void) {
 }
 
 void fire_skin_controls(void) {
-  igCheckbox("불꽃 스킨",&native_prefs.fire_skin);
-  igTextWrapped("몸이 불타는 색으로 일렁이고 옆구리에서 불꽃이 피어오릅니다. 외형 공유를 켜면 같은 서버의 이 클라이언트 사용자에게도 보입니다. 설정은 자동 저장됩니다.");
-  igBeginDisabled(!native_prefs.fire_skin);
-  igSetNextItemWidth(180);
-  igSliderFloat("불꽃 크기",&native_prefs.fire_strength,.2f,1.5f,"%.1f",ImGuiSliderFlags_AlwaysClamp);
+  static const char* descriptions[]={
+    "특별한 효과를 끄고 기본 스킨 또는 그라데이션을 표시합니다.",
+    "뜨거운 색이 몸을 타고 흐르며 양옆으로 불꽃이 피어오릅니다.",
+    "차가운 빛이 몸을 감싸고 반짝이는 얼음 결정이 흩어집니다.",
+    "푸른 전류가 몸을 타고 달리며 짧은 번개가 튀어 오릅니다.",
+    "초록과 보랏빛의 부드러운 빛 띠가 몸을 따라 일렁입니다.",
+    "보랏빛 몸 주위를 작은 금빛 별들이 돌며 반짝입니다.",
+    "청록빛 물결이 흐르고 작은 기포와 둥근 파동이 퍼집니다."};
+  int selected=special_skin_selected(native_prefs.fire_skin,native_prefs.special_skin);
+  ImVec2 available;igGetContentRegionAvail(&available);
+  if(igSelectable_Bool("효과 끄기",selected==SPECIAL_NONE,0,(ImVec2){0})) selected=SPECIAL_NONE;
+  float width=fmaxf(70,(available.x-igGetStyle()->ItemSpacing.x)*.5f);
+  for(int kind=SPECIAL_FIRE;kind<SPECIAL_COUNT;kind++) {
+    if((kind-1)%2) igSameLine(0,-1);
+    igPushStyleColor_Vec4(ImGuiCol_Button,igGetStyle()->Colors[selected==kind?ImGuiCol_ButtonActive:ImGuiCol_Button]);
+    if(igButton(special_skin_name(kind),(ImVec2){width,38})) selected=kind;
+    igPopStyleColor(1);
+  }
+  native_prefs.special_skin=selected;native_prefs.fire_skin=selected==SPECIAL_FIRE;
+  igSpacing();igSeparatorText(special_skin_name(selected));
+  igTextWrapped("%s",descriptions[selected]);
+  igBeginDisabled(selected==SPECIAL_NONE);
+  igSetNextItemWidth(fmaxf(70,available.x-75));
+  igSliderFloat("효과 강도",&native_prefs.fire_strength,.2f,1.5f,"%.1f",ImGuiSliderFlags_AlwaysClamp);
   igEndDisabled();
-  // a strip of the fire colours, moving like the body does
   ImVec2 start,space; igGetCursorScreenPos(&start); igGetContentRegionAvail(&space);
   int parts=24; float w=fmaxf(20,space.x)/parts;
   for(int i=0;i<parts;i++) {
-    float c[3]; fire_body_color(c,i,parts,(float)igGetTime());
+    float c[3]; special_body_color(c,selected,i,parts,(float)igGetTime());
     ImDrawList_AddRectFilled(igGetWindowDrawList(),(ImVec2){start.x+i*w,start.y},(ImVec2){start.x+(i+1)*w,start.y+22},
       igColorConvertFloat4ToU32((ImVec4){c[0],c[1],c[2],1}),0,0);
   }
   igDummy((ImVec2){space.x,26});
-  igTextWrapped("켜 두면 그라데이션 스킨보다 우선합니다. 얼굴·태그·cosmetic과 함께 쓸 수 있습니다.");
+  igTextWrapped("한 번에 하나의 효과를 사용합니다. 얼굴·태그·cosmetic과 함께 쓸 수 있습니다. OK를 누르면 스킨 목록에도 보관됩니다.");
+  igTextWrapped("외형 공유를 켜면 같은 서버의 최신 클라이언트 사용자에게도 보입니다.");
 }

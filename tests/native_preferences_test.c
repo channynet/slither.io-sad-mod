@@ -54,9 +54,16 @@ int main(void) {
   assert(q.gradient_enabled && q.gradient_count==4);
   for(int i=0;i<4;i++) for(int c=0;c<3;c++) assert(fabsf(q.gradient_colors[i][c]-p.gradient_colors[i][c])<.00001f);
   assert(!memcmp(q.team_name_color,p.team_name_color,sizeof(p.team_name_color)));
+  for(int kind=2;kind<=6;kind++) {
+    p.special_skin=kind;p.fire_skin=false;
+    assert(native_preferences_save("special.json",&p));
+    assert(native_preferences_load("special.json",&q));
+    assert(q.special_skin==kind && !q.fire_skin && q.fire_strength==.5f);
+  }
   FILE* legacy=fopen("legacy.json","wb");
   fputs("{\"version\":2,\"frame_cap\":1,\"render_scale\":2,\"team_panel\":false,\"fullscreen\":true}",legacy); fclose(legacy);
   assert(native_preferences_load("legacy.json",&q));
+  assert(q.special_skin==0);
   assert(q.team_status);
   assert(q.snake_outline && q.head_point && q.death_freeze && q.fullscreen && !q.team_panel && q.frame_cap==1 && q.render_scale==2);
   assert(q.uniform_names && q.name_color[0]==.85f && q.team_name_color[0]==1);

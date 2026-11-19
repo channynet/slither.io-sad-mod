@@ -4,6 +4,7 @@
 // with a warm glow under it and flames licking off its sides and trailing behind.
 // Only drawn on this screen, for my own snake.
 #include <stdint.h>
+#include <stdbool.h>
 #include "../rendering/bst_renderer.h"
 
 extern float skin_effect_time;             // seconds; set once per frame by the renderer
@@ -26,4 +27,12 @@ typedef struct {
 
 // Glow under the body and flames over it, as additive glow instances. Returns instances pushed.
 int fire_skin_effects(bst_renderer* under, bst_renderer* over, const fire_body* body, float t);
+enum { SPECIAL_NONE, SPECIAL_FIRE, SPECIAL_ICE, SPECIAL_LIGHTNING, SPECIAL_AURORA, SPECIAL_STARS, SPECIAL_WATER, SPECIAL_COUNT };
+// The legacy fire flag remains readable by older installations.
+static inline int special_skin_selected(bool fire, int kind) {
+  return kind >= SPECIAL_ICE && kind < SPECIAL_COUNT ? kind : fire ? SPECIAL_FIRE : SPECIAL_NONE;
+}
+const char* special_skin_name(int kind);
+void special_body_color(float out[3], int kind, int index, int count, float t);
+int special_skin_effects(bst_renderer* under, bst_renderer* over, const fire_body* body, int kind, float t);
 #endif

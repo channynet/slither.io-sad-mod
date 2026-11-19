@@ -8,7 +8,7 @@
 #include <time.h>
 #include <math.h>
 #define STATUS_LIMIT 32
-#define PROBE_TIMEOUT 1500
+#define PROBE_TIMEOUT 5000
 #define PROBE_TTL 20000
 static struct entry {
   char address[MAX_IPV4_LEN+1];
@@ -82,7 +82,7 @@ static int measure(const char* address) {
   probe p={0}; char url[160],host[MAX_IPV4_LEN+1];
   struct mg_connection* c=server_address_url(address,"/ptc",url,sizeof(url),host,sizeof(host),PROBE_TIMEOUT)
     ? mg_ws_connect(&mgr,url,probe_callback,&p,"Origin: https://slither.com\r\n") : NULL;
-  server_address_host(c,host);
+  if(*host && !server_address_host(c,host) && c) c->is_closing=true;
   ULONGLONG start=GetTickCount64();
   while(c && !p.done && GetTickCount64()-start<PROBE_TIMEOUT &&
         !InterlockedCompareExchange(&stopping,0,0) && InterlockedCompareExchange(&menu,0,0)) mg_mgr_poll(&mgr,10);

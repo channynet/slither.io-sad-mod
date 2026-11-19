@@ -26,5 +26,12 @@ int main(void) {
   assert(e[1].sid==13 && e[1].kind==SHARE_NONE && e[1].gradient_count==2 && e[1].gradient_colors[1][2]==1);
   assert(tag_share_parse(appearance,strlen(appearance),e,1)==1 && e[0].fire_strength==1.5f);
   printf("Tag share: hash, room reply passed\n");
+  for(int kind=2;kind<=6;kind++) {
+    char wire[128];snprintf(wire,sizeof(wire),"{\"p\":[],\"a\":[[17,{\"special\":[%d,0.6]}]]}",kind);
+    assert(tag_share_parse(wire,strlen(wire),e,8)==1);
+    assert(e[0].special_skin==kind && e[0].special_strength==.6f && e[0].kind==SHARE_NONE);
+  }
+  const char* invalid="{\"p\":[],\"a\":[[1,{\"special\":[7,1]}],[2,{\"special\":[2,-1]}],[3,{\"special\":[3.5,1]}]]}";
+  assert(!tag_share_parse(invalid,strlen(invalid),e,8));
   return 0;
 }

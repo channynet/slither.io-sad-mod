@@ -1,4 +1,5 @@
 #include "settings.h"
+#include "menu_background.h"
 #include "../game/snake_swarm.h"
 
 #include "../user.h"
@@ -122,6 +123,7 @@ void ui_settings(tenv* env) {
     if(igBeginTabItem("화면",NULL,0)) {
       igBeginChild_Str("display_settings",(ImVec2){0,child_window_height},
                       ImGuiChildFlags_AlwaysUseWindowPadding,0);
+      menu_background_settings(env);
       ntl_display_settings(env);
       igEndChild();
       igEndTabItem();

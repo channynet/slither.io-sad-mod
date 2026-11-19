@@ -37,6 +37,24 @@ int main(void) {
   under_n = over_n = 0; max_alpha = 0; b.strength = 99; b.alpha = .1f;
   fire_skin_effects((bst_renderer*)1, (bst_renderer*)2, &b, 1);
   assert(max_alpha <= .1f);
+  // Each new effect animates, respects hidden parts/opacity, and has a fixed budget.
+  for(int kind=SPECIAL_ICE;kind<SPECIAL_COUNT;kind++) {
+    float first[3],later[3];
+    special_body_color(first,kind,10,50,.3f);special_body_color(later,kind,10,50,1.7f);
+    float delta=0;
+    for(int c=0;c<3;c++) { assert(first[c]>=0 && first[c]<=1);delta+=fabsf(first[c]-later[c]); }
+    assert(delta>.00001f);
+    under_n=over_n=0;max_alpha=0;
+    int n=special_skin_effects((bst_renderer*)1,(bst_renderer*)2,&b,kind,1.7f);
+    assert(n>0 && n<=768 && n==under_n+over_n && max_alpha<=.1f);
+    for(int i=0;i<50;i++) vis[i]=0;
+    assert(!special_skin_effects((bst_renderer*)1,(bst_renderer*)2,&b,kind,1));
+    for(int i=0;i<40;i++) vis[i]=2;
+  }
+  assert(!special_skin_effects((bst_renderer*)1,(bst_renderer*)2,&b,999,1));
+  assert(!special_skin_effects((bst_renderer*)1,(bst_renderer*)2,&b,SPECIAL_WATER,NAN));
+  assert(special_skin_selected(true,0)==SPECIAL_FIRE);
+  assert(special_skin_selected(true,SPECIAL_ICE)==SPECIAL_ICE);
   puts("fire skin test passed");
   return 0;
 }

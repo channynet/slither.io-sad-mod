@@ -52,6 +52,12 @@ int tag_share_parse(const char* json, size_t length, share_entry* out, int cap) 
     int k=0; while(k<n && out[k].sid!=(int)sid) k++;
     share_entry e=k<n?out[k]:(share_entry){.sid=(int)sid};
     if(mg_json_get_num(item,"$[1].fire",&v) && v>0) e.fire_strength=within(v,.2f,1.5f,0);
+    if(mg_json_get_num(item,"$[1].special[0]",&v) && isfinite(v) && floor(v)==v && v>=2 && v<=6) {
+      int kind=(int)v;
+      if(mg_json_get_num(item,"$[1].special[1]",&v) && isfinite(v) && v>0) {
+        e.special_skin=kind;e.special_strength=within(v,.2f,1.5f,1);
+      }
+    }
     char* hash=mg_json_get_str(item,"$[1].cosmetic[0]");
     if(hex16(hash)) {
       memcpy(e.cosmetic_hash,hash,17);
@@ -70,7 +76,7 @@ int tag_share_parse(const char* json, size_t length, share_entry* out, int cap) 
       }
     }
     if(k<n) out[k]=e;
-    else if(n<cap && (e.fire_strength>0 || e.gradient_count || e.cosmetic_hash[0])) out[n++]=e;
+    else if(n<cap && (e.special_skin>=2 || e.fire_strength>0 || e.gradient_count || e.cosmetic_hash[0])) out[n++]=e;
   }
   return n;
 }

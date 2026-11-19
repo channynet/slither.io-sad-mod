@@ -33,6 +33,22 @@ jobs:
         run: |
           clang -std=gnu11 tests/skin_library_test.c app/src/game/skin_library.c app/src/external/mongoose.c -o build/tests/skin_library
           cd build/tests && ./skin_library
+      - name: Test verified external server connections
+        run: python3 tools/test_server_tls.py
+      - name: Test special skins, preferences and menu background
+        run: |
+          flags=(-std=gnu11 -O1 -DGLFW_INCLUDE_NONE -DGLFW_INCLUDE_VULKAN -DCIMGUI_NO_EXPORT '-DSETTINGS_VERSION="1.3"' -Iglfw/include -Ithermite/include -Ithermite/src -Ithird_party/vulkan/include -ffunction-sections -fdata-sections -Wl,-dead_strip)
+          clang "${flags[@]}" tests/fire_skin_test.c app/src/ui/fire_skin.c -o build/tests/fire_skin
+          clang "${flags[@]}" tests/gradient_skin_test.c app/src/ui/skin_gradient.c app/src/ui/fire_skin.c -o build/tests/gradient_skin
+          clang "${flags[@]}" tests/menu_background_test.c thermite/src/external/stb/stb_image.c thermite/src/external/stb/stb_image_write.c app/src/platform/compat.c -o build/tests/menu_background
+          clang "${flags[@]}" tests/native_preferences_test.c app/src/game/native_preferences.c app/src/game/user_settings.c app/src/external/mongoose.c app/src/platform/compat.c -o build/tests/native_preferences
+          clang "${flags[@]}" tests/tag_share_test.c app/src/network/tag_share_proto.c app/src/external/mongoose.c -o build/tests/tag_share
+          cd build/tests
+          ./fire_skin
+          ./gradient_skin
+          ./menu_background
+          ./native_preferences
+          ./tag_share
       - name: Test random skin generator
         run: |
           clang -std=gnu11 -O1 tests/skin_generator_test.c app/src/game/skin_generator.c app/src/external/quickjs-ng/quickjs-amalgam.c -o build/tests/skin_generator

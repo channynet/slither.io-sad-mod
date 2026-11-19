@@ -304,13 +304,13 @@ void personal_image_editor(tenv* env) {
   float inspector_width=fminf(380,fmaxf(280,env->ctx->size[0]*.34f));
   igSetNextWindowPos((ImVec2){env->ctx->size[0]-16,20},ImGuiCond_Always,(ImVec2){1,0});
   igSetNextWindowSize((ImVec2){inspector_width,env->ctx->size[1]-40},ImGuiCond_Always);
-  if(igBegin("태그 / cosmetic",NULL,ImGuiWindowFlags_NoDocking|ImGuiWindowFlags_NoMove|ImGuiWindowFlags_NoResize|ImGuiWindowFlags_NoCollapse)) {
-    if(igBeginTabBar("personal-image-tabs",0)) {
+  if(igBegin("스킨 꾸미기",NULL,ImGuiWindowFlags_NoDocking|ImGuiWindowFlags_NoMove|ImGuiWindowFlags_NoResize|ImGuiWindowFlags_NoCollapse)) {
+    if(igBeginTabBar("personal-image-tabs",ImGuiTabBarFlags_FittingPolicyScroll)) {
+      if(igBeginTabItem("특별한 스킨",NULL,0)) {
+        fire_skin_controls(); igEndTabItem();
+      }
       if(igBeginTabItem("그라데이션",NULL,0)) {
         skin_gradient_controls(); igEndTabItem();
-      }
-      if(igBeginTabItem("불꽃",NULL,0)) {
-        fire_skin_controls(); igEndTabItem();
       }
       if(igBeginTabItem("태그",NULL,0)) {
         igSeparatorText("태그 크기·줄 (내 태그 / 다른 사람)");

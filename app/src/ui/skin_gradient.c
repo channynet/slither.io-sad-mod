@@ -10,11 +10,13 @@ void skin_effect_remote(const share_entry* appearance) { remote_effect=appearanc
 
 void skin_effect_color(float out[3],int index,int count) {
   if(remote_effect) {
-    if(remote_effect->fire_strength>0) fire_body_color(out,index,count,skin_effect_time);
+    if(remote_effect->special_skin>=2 && remote_effect->special_skin<SPECIAL_COUNT) special_body_color(out,remote_effect->special_skin,index,count,skin_effect_time);
+    else if(remote_effect->fire_strength>0) fire_body_color(out,index,count,skin_effect_time);
     else gradient_color(out,remote_effect->gradient_colors,remote_effect->gradient_count,count>1?(float)index/(count-1):0);
     return;
   }
-  if(native_prefs.fire_skin) fire_body_color(out,index,count,skin_effect_time);
+  int kind=special_skin_selected(native_prefs.fire_skin,native_prefs.special_skin);
+  if(kind) special_body_color(out,kind,index,count,skin_effect_time);
   else gradient_color(out,native_prefs.gradient_colors,native_prefs.gradient_count,count>1?(float)index/(count-1):0);
 }
 

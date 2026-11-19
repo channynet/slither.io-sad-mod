@@ -10,11 +10,11 @@
 #endif
 
 static char* encode(const skin_design* d) {
-  return mg_mprintf("{\"code\":%m,\"base\":[%d,%d,%d],\"effects\":[%d,%.6f,%d,%d,%d,%d],"
+  return mg_mprintf("{\"special_skin\":%d,\"code\":%m,\"base\":[%d,%d,%d],\"effects\":[%d,%.6f,%d,%d,%d,%d],"
     "\"colors\":[%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f],"
     "\"tag\":[%d,%d,%d,%.6f,%.6f,%.6f,%.6f],"
     "\"images\":[[%d,%d,%.6f,%.6f,%.6f,%d,%d],[%d,%d,%.6f,%.6f,%.6f,%d,%d]]}",
-    MG_ESC(d->code),d->custom,d->default_skin,d->accessory,d->fire,d->fire_strength,d->gradient,d->gradient_count,d->smile,d->claws,
+    d->special_skin,MG_ESC(d->code),d->custom,d->default_skin,d->accessory,d->fire,d->fire_strength,d->gradient,d->gradient_count,d->smile,d->claws,
     d->colors[0][0],d->colors[0][1],d->colors[0][2],d->colors[1][0],d->colors[1][1],d->colors[1][2],
     d->colors[2][0],d->colors[2][1],d->colors[2][2],d->colors[3][0],d->colors[3][1],d->colors[3][2],
     d->tag_mode,d->tag_id,d->local_tag,d->look[0],d->look[1],d->look[2],d->look[3],
@@ -30,7 +30,13 @@ static bool numbers(struct mg_str row,const char* key,float* out,int count) {
   return true;
 }
 static bool decode(struct mg_str row,skin_design* d) {
-  memset(d,0,sizeof(*d));char* code=mg_json_get_str(row,"$.code");
+  memset(d,0,sizeof(*d));
+  double kind;
+  if(mg_json_get_num(row,"$.special_skin",&kind)) {
+    if(!isfinite(kind)||floor(kind)!=kind||kind<0||kind>6) return false;
+    d->special_skin=(int)kind;
+  }
+  char* code=mg_json_get_str(row,"$.code");
   if(!code || strlen(code)>256) {free(code);return false;}
   for(const char* p=code;*p;p++) if(!((*p>='a'&&*p<='z')||(*p>='0'&&*p<='9')||*p==','||*p=='-')) {free(code);return false;}
   strcpy(d->code,code);free(code);

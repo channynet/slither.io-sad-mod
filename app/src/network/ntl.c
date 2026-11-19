@@ -878,7 +878,7 @@ void ntl_display_settings(tenv* env) {
   igSeparatorText("표시 / 스킨");
   igCheckbox("팀원 현황 표시",&native_prefs.team_status);
   if(igCollapsingHeader_TreeNodeFlags("이미지 태그 / cosmetic",0)) personal_tag_controls(env);
-  if(igCollapsingHeader_TreeNodeFlags("불꽃 스킨",0)) fire_skin_controls();
+  if(igCollapsingHeader_TreeNodeFlags("특별한 스킨",0)) fire_skin_controls();
   igSeparator();
   if(igCollapsingHeader_TreeNodeFlags("이름 색상",0)) {
     igCheckbox("팀원 닉네임 강조(팀 색 + 반짝임) · Ctrl+F3",&native_prefs.team_name_emphasis);

@@ -3,7 +3,7 @@
 #include <string.h>
 
 texture* create_rgba_texture(tcontext* ctx,const unsigned char* pixels,int width,int height) {
-  if(!pixels || width<1 || height<1 || width>512 || height>512) return NULL;
+  if(!pixels || width<1 || height<1 || width>4096 || height>4096) return NULL;
   texture* r=calloc(1,sizeof(*r)); if(!r) return NULL;
   VkBuffer staging=VK_NULL_HANDLE; VmaAllocation allocation=NULL; VmaAllocationInfo info;
   VkDeviceSize bytes=(VkDeviceSize)width*height*4;

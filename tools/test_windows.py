@@ -5,6 +5,7 @@ import tempfile
 BUILD.mkdir(parents=True, exist_ok=True)
 subprocess.run([sys.executable, str(ROOT / 'tools/test_font_coverage.py')], check=True)
 subprocess.run([sys.executable, str(ROOT / 'tools/test_auto_update.py')], check=True)
+subprocess.run([sys.executable, str(ROOT / 'tools/test_server_tls.py')], check=True)
 test = BUILD / 'ntl_protocol_test.exe'
 run([BIN / 'x86_64-w64-mingw32-clang.exe', '-std=gnu11', '-O1', '-static',
      ROOT / 'tests/ntl_protocol_test.c', ROOT / 'app/src/network/ntl_protocol.c',
@@ -23,6 +24,7 @@ with tempfile.TemporaryDirectory(prefix='preferences-test-', dir=BUILD) as sandb
     print(result.stdout)
 
 for name, sources, extra in [
+    ('menu_background', ['thermite/src/external/stb/stb_image.c','thermite/src/external/stb/stb_image_write.c'], [*flags,'-DCIMGUI_NO_EXPORT','-ffunction-sections','-fdata-sections','-Wl,--gc-sections']),
     ('skin_wire', [], []),
     ('snake_swarm', ['app/src/game/snake_swarm.c'], [*flags,'-DCIMGUI_NO_EXPORT','-ffunction-sections','-fdata-sections','-Wl,--gc-sections']),
     ('skin_generator', ['app/src/game/skin_generator.c','app/src/external/quickjs-ng/quickjs-amalgam.c'], []),

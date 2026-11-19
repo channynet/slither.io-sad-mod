@@ -2,6 +2,7 @@
 #include "../app/src/game/native_preferences.h"
 #include "../app/src/ui/gradient_color.h"
 #include "../app/src/ui/skin_gradient.h"
+#include "../app/src/ui/fire_skin.h"
 #include <assert.h>
 #include <string.h>
 #include <math.h>
@@ -30,6 +31,14 @@ int main(void) {
   }
   gradient_color(color,colors,2,.5f);close_color(color,(float[]){.5f,.5f,0});
   memcpy(native_prefs.gradient_colors,colors,sizeof(colors));native_prefs.gradient_count=4;
+  for(int kind=2;kind<SPECIAL_COUNT;kind++) {
+    float own[3],remote[3];native_prefs.special_skin=kind;skin_effect_time=1.7f;
+    skin_effect_remote(NULL);skin_effect_color(own,10,50);
+    share_entry shared={.special_skin=kind,.special_strength=.8f};
+    skin_effect_remote(&shared);skin_effect_color(remote,10,50);
+    close_color(own,remote);
+  }
+  native_prefs.special_skin=0;skin_effect_remote(NULL);
   tenv env={.usr=&usr};
   usr.r=&render;
   usr.gdata.cg_uvs[9]=(vec4s){.1f,.2f,.3f,.4f};

@@ -19,6 +19,7 @@ void ui_overlay(tenv* env) {
   tcontext* ctx = env->ctx;
   game_data* gdata = &usr->gdata;
   user_settings* usrs = &usr->usrs;
+  int hud_score = gdata->data.score;
 
   float mww2 = ctx->size[0] / 2.0f;
   float mhh2 = ctx->size[1] / 2.0f;
@@ -43,6 +44,10 @@ void ui_overlay(tenv* env) {
     if (gdata->data.snake_id == me->id) {
       float a = me->alive_amt * (1 - me->dead_amt);
       int sct = me->sct + me->rsc;
+      // R packets compensate the nominal score for removed body segments.
+      // The lower-left HUD shows the remaining mass, as used by game controls.
+      hud_score = (int)floorf((gdata->data.fpsls[me->sct] +
+                              me->fam / gdata->data.fmlts[me->sct] - 1) * 15 - 5);
       float hx = me->xx + me->fx;
       float hy = me->yy + me->fy;
       if(native_prefs.head_point && !me->dead && gdata->data.follow_view) {
@@ -181,7 +186,7 @@ void ui_overlay(tenv* env) {
     igPushFont(
         usr->imgui_data.mono_font_bold[usrs->stats_font_size],
         usr->imgui_data.mono_font_bold[usrs->stats_font_size]->LegacySize);
-    igTextColored((ImVec4){1, 1, 1, 0.7}, "%d", gdata->data.score);
+    igTextColored((ImVec4){1, 1, 1, 0.7}, "%d", hud_score);
     igPopFont();
     // A battle dome (a small arena: official servers are 21600 across, the dome 3400): this
     // life's kills next to the length as well.

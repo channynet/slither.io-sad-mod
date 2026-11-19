@@ -39,6 +39,10 @@ function cleanAppearance(a) {
   const out = {};
   if (typeof a.fire === "number" && Number.isFinite(a.fire) && a.fire > 0)
     out.fire = num(a.fire, .2, 1.5, .8);
+  const s = a.special;
+  if (Array.isArray(s) && s.length === 2 && Number.isInteger(s[0]) && s[0] >= 2 && s[0] <= 6 &&
+      typeof s[1] === "number" && Number.isFinite(s[1]) && s[1] > 0)
+    out.special = [s[0], num(s[1], .2, 1.5, 1)];
   const c = a.cosmetic;
   if (Array.isArray(c) && typeof c[0] === "string" && /^[0-9a-f]{16}$/.test(c[0]))
     out.cosmetic = [c[0], num(c[1],24,320,160), num(c[2],-100,100,-18), num(c[3],-180,180,0), c[4] ? 1 : 0];
@@ -101,7 +105,7 @@ export class Room {
       if(e.tag) p.push([s, ...e.tag]);
       if(e.appearance) a.push([s, e.appearance]);
     }
-    return json({ p, a, appearanceSchema: 1 });
+    return json({ p, a, appearanceSchema: 1, specialSkinSchema: 1 });
   }
 }
 

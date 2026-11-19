@@ -51,7 +51,8 @@ static void open_connection(tenv* env) {
     mg_ws_connect(&gdata->network_manager, url, server_callback, env,
                   "%s:%s\r\n",
                   "Origin", "https://slither.com");
-  server_address_host(gdata->connection, host);
+  if(*host && !server_address_host(gdata->connection, host) && gdata->connection)
+    gdata->connection->is_closing=true;
   if (!gdata->connection) gdata->closed = true;
 }
 

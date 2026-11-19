@@ -206,7 +206,7 @@ void tag_share_tick(tenv* env) {
       for(int i=0;i<n*3;i++) at+=snprintf(gradient+at,sizeof(gradient)-at,",%.3f",native_prefs.gradient_colors[i/3][i%3]);
       snprintf(gradient+at,sizeof(gradient)-at,"]");
     }
-    snprintf(w.appearance,sizeof(w.appearance),"{\"fire\":%.3f,\"gradient\":%s,\"cosmetic\":%s}",native_prefs.fire_skin?native_prefs.fire_strength:0,gradient,cosmetic);
+    snprintf(w.appearance,sizeof(w.appearance),"{\"fire\":%.3f,\"special\":[%d,%.3f],\"gradient\":%s,\"cosmetic\":%s}",native_prefs.fire_skin && native_prefs.special_skin<2?native_prefs.fire_strength:0,native_prefs.special_skin,native_prefs.fire_strength,gradient,cosmetic);
   } else if (url[0]) snprintf(w.url, sizeof w.url, "%s", url);
   EnterCriticalSection(&S.lock);
   bool same = S.w.want == w.want && !strcmp(S.w.url, w.url) && !strcmp(S.w.server, w.server) && S.w.sid == w.sid && !strcmp(S.w.tag, w.tag) && !strcmp(S.w.appearance,w.appearance);

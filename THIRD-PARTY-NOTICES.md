@@ -11,7 +11,8 @@ The source tree includes these components and their original license texts:
 | GLFW | glfw/LICENSE.md |
 | cimgui | app/src/cimgui/LICENSE |
 | Dear ImGui | app/src/cimgui/imgui/LICENSE.txt |
-| Mongoose | app/src/external/LICENSE.txt and mongoose.h |
+| Mongoose 7.23 | app/src/external/LICENSE.txt and mongoose.h; upstream commit 02bdbb9ed6f0a8f7c42228c6e7cb35d748b60551; desktop TLS enabled in mongoose.h |
+| Mozilla CA certificate bundle | app/res/certs/ca.pem, obtained from https://curl.se/ca/cacert.pem (2026-11-05 bundle), Mozilla Public License 2.0: https://www.mozilla.org/MPL/2.0/ |
 | Snake Missile transport and local swarm worker | third_party/snake-missile/LICENSE and UPSTREAM.md; the modified native protocol adapter retains the host GPL terms |
 | Vulkan Memory Allocator | thermite/src/external/vma/LICENSE.txt |
 | stb | thermite/src/external/stb/LICENSE.txt |

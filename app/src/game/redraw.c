@@ -705,8 +705,8 @@ void redraw(tenv* env) {
         bool own_style=o->id==gdata->data.snake_id;
         share_entry shared_style={0};
         bool remote_style=!own_style && tag_share_lookup(o->id,&shared_style);
-        bool gradient=own_style ? (native_prefs.gradient_enabled || native_prefs.fire_skin) :
-                                  (remote_style && (shared_style.gradient_count || shared_style.fire_strength>0));
+        bool gradient=own_style ? (native_prefs.gradient_enabled || special_skin_selected(native_prefs.fire_skin,native_prefs.special_skin)) :
+                                  (remote_style && (shared_style.gradient_count || shared_style.fire_strength>0 || shared_style.special_skin>=2));
         {
           int first=o->cusk && o->cusk_len ? o->cusk_data[0] : gdata->default_skins[o->cv][1];
           if(first<0 || first>=NUM_COLOR_GROUPS) first=0;
@@ -1071,12 +1071,17 @@ void redraw(tenv* env) {
           }
         }
 
-        float fire_strength=own_style ? (native_prefs.fire_skin?native_prefs.fire_strength:0) : shared_style.fire_strength;
-        if (fire_strength>0 && !o->dead) {
+        int effect=own_style?special_skin_selected(native_prefs.fire_skin,native_prefs.special_skin):
+          special_skin_selected(shared_style.fire_strength>0,shared_style.special_skin);
+        float fire_strength=own_style?native_prefs.fire_strength:
+          (effect>=2?shared_style.special_strength:shared_style.fire_strength);
+        float effect_alpha=a;
+        if(!own_style && native_prefs.others_opacity>0 && native_prefs.others_opacity<1) effect_alpha*=native_prefs.others_opacity;
+        if (effect && fire_strength>0 && !o->dead) {
           fire_body body = {gdata->data.pbx, gdata->data.pby, gdata->data.pba, gdata->data.pbu, bp,
                             lsz * .8f, gdata->data.view_xx, gdata->data.view_yy, gdata->data.gsc,
-                            mww2, mhh2, a, fire_strength};
-          fire_skin_effects(usr->r->bstb, usr->r->bsta, &body, skin_effect_time);
+                            mww2, mhh2, effect_alpha, fire_strength};
+          special_skin_effects(usr->r->bstb, usr->r->bsta, &body, effect, skin_effect_time);
         }
 
         // debugging
@@ -1539,7 +1544,7 @@ void redraw(tenv* env) {
         if(custom_face) {
           // Stalks take the colour of the head: the first gradient colour, else the first skin colour.
           float head_rgb[3];
-          if(native_prefs.gradient_enabled || native_prefs.fire_skin) skin_effect_color(head_rgb,0,2);
+          if(native_prefs.gradient_enabled || special_skin_selected(native_prefs.fire_skin,native_prefs.special_skin)) skin_effect_color(head_rgb,0,2);
           else {
             int head_cg=o->cusk ? o->cusk_data[0] : gdata->default_skins[o->cv][1];
             if(head_cg<0 || head_cg>=NUM_COLOR_GROUPS) head_cg=9;

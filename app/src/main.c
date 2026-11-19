@@ -4,6 +4,7 @@
 #include "ui/text_input_ime.h"
 #include "ui/skin_editor.h"
 #include "ui/title_screen.h"
+#include "ui/menu_background.h"
 #include "ui/settings.h"
 #include "ui/viewport.h"
 #include "user.h"
@@ -150,6 +151,7 @@ void tinit(tenv* env) {
   env->usr->r = renderer_create(env);
   ui_viewport_init(env);
   ui_title_screen_init(env);
+  menu_background_init(env);
   ui_skin_editor_init(env);
   ui_settings_init(env);
   game_data_init(env);
@@ -178,6 +180,7 @@ void tdestroy(tenv* env) {
   ui_settings_destroy(env);
   ui_skin_editor_destroy(env);
   ui_title_screen_destroy(env);
+  menu_background_destroy(env);
   ui_viewport_destroy(env);
   renderer_destroy(env->usr->r, env->ctx);
   imgui_destroy();
@@ -210,6 +213,7 @@ void trender(tenv* env) {
       usr->r->size[1] != GLM_MAX(1,(int)(ctx->size[1]*usr->render_scale)))
     ui_viewport_resize(env);
   personal_tag_prepare(env);
+  menu_background_prepare(env);
   ntl_tags_prepare(env);
   imgui_prerender();
   native_shortcuts(env);
@@ -224,6 +228,7 @@ void trender(tenv* env) {
               ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoDocking |
               ImGuiWindowFlags_NoBringToFrontOnFocus | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse | ImGuiWindowFlags_NoSavedSettings);
   igPopStyleVar(1);
+  menu_background_draw(env);
   switch (usr->gdata.curr_screen) {
     case TITLE_SCREEN:
       ui_title_screen(env);

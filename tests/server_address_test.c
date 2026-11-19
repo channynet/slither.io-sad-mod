@@ -17,7 +17,11 @@ int main(void) {
   same("kingston-inside-best-graphic.trycloudflare.com","kingston-inside-best-graphic.trycloudflare.com");
   same("  https://Kingston-Inside-Best-Graphic.TryCloudflare.com/  ","kingston-inside-best-graphic.trycloudflare.com");
   same("http://name.example.com/slither?x=1","name.example.com");
-  same("wss://name.example.com:443","name.example.com:443"); same("ws://name.example.com:80","name.example.com");
+  same("wss://name.example.com:443","wss://name.example.com"); same("ws://name.example.com:80","name.example.com");
+  same("https://name.example.com/path","wss://name.example.com");
+  same("https://name.example.com:8443/path","wss://name.example.com:8443");
+  same("kingston-inside-best-graphic.trycloudflare.com:80","kingston-inside-best-graphic.trycloudflare.com");
+  same("wss://kingston-inside-best-graphic.trycloudflare.com:443/slither","kingston-inside-best-graphic.trycloudflare.com");
   same("name.example.com:8080","name.example.com:8080"); same("name.example.com.","name.example.com");
   same("localhost:4444","localhost:4444"); same("a1.b2","a1.b2");
   const char* bad[]={"",NULL,"1.2.3.256:444","1.2.3.4:0","1.2.3.4:65536","1.2.3.4:444/x","1.2.3:444","ws://1.2.3.4:444",
@@ -34,7 +38,11 @@ int main(void) {
   assert(!strcmp(url,"ws://1.2.3.4:444/slither") && !host[0]);
   // A name is looked up by Windows and keeps its name for the Host header.
   assert(server_address_url("localhost:4444","/ptc",url,sizeof(url),host,sizeof(host),3000));
-  assert(!strcmp(url,"ws://127.0.0.1:4444/ptc") && !strcmp(host,"localhost"));
+  assert(!strcmp(url,"ws://127.0.0.1:4444/ptc") && !strcmp(host,"localhost:4444"));
+  assert(server_address_url("wss://localhost:8443","/ptc",url,sizeof(url),host,sizeof(host),3000));
+  assert(!strcmp(url,"wss://127.0.0.1:8443/ptc") && !strcmp(host,"localhost:8443"));
+  assert(server_address_url("localhost:443","/ptc",url,sizeof(url),host,sizeof(host),3000));
+  assert(!strcmp(url,"wss://127.0.0.1:443/ptc") && !strcmp(host,"localhost"));
   assert(server_address_url("localhost","/slither",url,sizeof(url),host,sizeof(host),3000) && !strcmp(url,"ws://127.0.0.1:80/slither"));
   // A name that does not exist fails, within the time allowed.
   assert(!server_address_url("no-such-name-for-this-test.invalid","/slither",url,sizeof(url),host,sizeof(host),3000) && !host[0]);

@@ -35,7 +35,7 @@ static void random_skin(tenv* env) {
   }
   strcpy(env->usr->usrs.skin_code,result.code);
   env->usr->usrs.custom_skin=true;
-  native_prefs.fire_skin=false;native_prefs.gradient_enabled=false;
+  native_prefs.fire_skin=false;native_prefs.special_skin=0;native_prefs.gradient_enabled=false;
   last_generated=result;selected_skin=-1;
   toast_show(result.topic,.6f,.9f,.8f,4);
 }
@@ -43,7 +43,7 @@ static skin_design capture_skin(tenv* env) {
   user_settings* u=&env->usr->usrs;skin_design d={0};
   snprintf(d.code,sizeof(d.code),"%s",u->skin_code);d.custom=u->custom_skin;
   d.default_skin=u->default_skin;d.accessory=u->accessory;
-  d.fire=native_prefs.fire_skin;d.fire_strength=native_prefs.fire_strength;
+  d.special_skin=native_prefs.special_skin;d.fire=native_prefs.fire_skin;d.fire_strength=native_prefs.fire_strength;
   d.gradient=native_prefs.gradient_enabled;d.gradient_count=native_prefs.gradient_count;
   memcpy(d.colors,native_prefs.gradient_colors,sizeof(d.colors));
   d.smile=native_prefs.face_smile;d.claws=native_prefs.face_claws;
@@ -70,13 +70,13 @@ static void saved_skin_controls(tenv* env,float width) {
     if(!saved_skins.count) igTextDisabled("스킨을 적용하거나 게임에 접속하면 자동 보관됩니다.");
     for(int i=0;i<saved_skins.count;i++) {
       skin_design* d=&saved_skins.items[i];
-      snprintf(label,sizeof(label),"스킨 %03d%s%s",i+1,d->fire?" · 불꽃":"",d->gradient?" · 그라데이션":"");
+      snprintf(label,sizeof(label),"스킨 %03d · %s%s",i+1,special_skin_selected(d->fire,d->special_skin)?special_skin_name(special_skin_selected(d->fire,d->special_skin)):"",d->gradient?" · 그라데이션":"");
       if(igSelectable_Bool(label,selected_skin==i,0,(ImVec2){0})) {
         if(!personal_images_restore(d->images)) { snprintf(skin_save_status,sizeof(skin_save_status),"보관 스킨의 태그·장식 이미지를 찾지 못했습니다."); continue; }
         user_settings* u=&env->usr->usrs;strcpy(u->skin_code,d->code);u->custom_skin=d->custom;
         u->default_skin=d->default_skin<NUM_DEFAULT_SKINS?d->default_skin:0;
         u->accessory=d->accessory<NUM_ACCESSORIES?d->accessory:NO_ACCESSORY;
-        native_prefs.fire_skin=d->fire;native_prefs.fire_strength=d->fire_strength;
+        native_prefs.special_skin=d->special_skin;native_prefs.fire_skin=d->fire;native_prefs.fire_strength=d->fire_strength;
         native_prefs.gradient_enabled=d->gradient;native_prefs.gradient_count=d->gradient_count;
         memcpy(native_prefs.gradient_colors,d->colors,sizeof(d->colors));
         native_prefs.face_smile=d->smile;native_prefs.face_claws=d->claws;
@@ -161,13 +161,13 @@ void ui_skin_editor(tenv* env) {
                               [1 + ((preview_total - 1 - cbp) % sk_len)];
     }
 
-    if (native_prefs.gradient_enabled || native_prefs.fire_skin || cg_id != -1) {
+    if (native_prefs.gradient_enabled || special_skin_selected(native_prefs.fire_skin,native_prefs.special_skin) || cg_id != -1) {
       if(cg_id<0) cg_id=9;
       float we =
           gdata->worm_effect[(preview_total - 1 - cbp) % WORM_EFFECT_LEN] *
               (!usrs->custom_skin) +
           usrs->custom_skin;
-      skin_gradient_body(env,native_prefs.gradient_enabled||native_prefs.fire_skin,0,preview_total-1-cbp,preview_total, &(bp_instance){{igGetCursorPosX() +
+      skin_gradient_body(env,native_prefs.gradient_enabled||special_skin_selected(native_prefs.fire_skin,native_prefs.special_skin),0,preview_total-1-cbp,preview_total, &(bp_instance){{igGetCursorPosX() +
                                                         i * preview_step,
                                                     igGetCursorPosY(), scale},
                                                    gdata->cg_uvs[cg_id],
@@ -209,13 +209,13 @@ void ui_skin_editor(tenv* env) {
 
     head_cg = cg_id < 0 ? 9 : cg_id;
     head_index = preview_total - 1 - cbp;
-    if (native_prefs.gradient_enabled || native_prefs.fire_skin || cg_id != -1) {
+    if (native_prefs.gradient_enabled || special_skin_selected(native_prefs.fire_skin,native_prefs.special_skin) || cg_id != -1) {
       if(cg_id<0) cg_id=9;
       float we =
           gdata->worm_effect[(preview_total - 1 - cbp) % WORM_EFFECT_LEN] *
               (!usrs->custom_skin) +
           usrs->custom_skin;
-      skin_gradient_body(env,native_prefs.gradient_enabled||native_prefs.fire_skin,0,preview_total-1-cbp,preview_total, &(bp_instance){{last_bp_pos[0],
+      skin_gradient_body(env,native_prefs.gradient_enabled||special_skin_selected(native_prefs.fire_skin,native_prefs.special_skin),0,preview_total-1-cbp,preview_total, &(bp_instance){{last_bp_pos[0],
                                                     last_bp_pos[1], scale, PI},
                                                    gdata->cg_uvs[cg_id],
                                                    {we, we, we, 1}});
@@ -224,6 +224,19 @@ void ui_skin_editor(tenv* env) {
     cbp++;
   }
 
+  int special=special_skin_selected(native_prefs.fire_skin,native_prefs.special_skin);
+  if(special) {
+    float px[256],py[256],pa[256]; uint8_t visible[256];
+    for(int k=0;k<preview_total;k++) {
+      bool top=k<preview_half;
+      int i=top?preview_half-1-k:k-preview_half;
+      px[k]=preview_left+i*preview_step+scale*.5f;
+      py[k]=head_y+(top?0:44*preview_factor);
+      pa[k]=top?PI:0;visible[k]=1;
+    }
+    fire_body body={px,py,pa,visible,preview_total,scale*.4f,0,0,1,0,0,1,native_prefs.fire_strength};
+    special_skin_effects(usr->r->bstb,usr->r->bsta,&body,special,skin_effect_time);
+  }
   float ssc = scale / 29;
   float ed = 6 * ssc;   // o->ed
   float esp = 6 * ssc;  // o->esp
@@ -278,7 +291,7 @@ void ui_skin_editor(tenv* env) {
             {dfs->ppc.r, dfs->ppc.g, dfs->ppc.b, 1}});
   }
   float head_rgb[3];
-  if(native_prefs.gradient_enabled || native_prefs.fire_skin)
+  if(native_prefs.gradient_enabled || special_skin_selected(native_prefs.fire_skin,native_prefs.special_skin))
     skin_effect_color(head_rgb,head_index,preview_total);
   else {
     if(head_cg>=NUM_COLOR_GROUPS) head_cg=9;

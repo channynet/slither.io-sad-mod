@@ -24,7 +24,8 @@ typedef struct {
   int safe_wall_offset;  // NTL "Border assist offset" -10..10: more = further from the wall (script 2)
   bool safe_wall_tight;  // use safe_wall_distance instead of NTL's offset (default on)
   float safe_wall_distance; // 0..20: head centre this far inside the wall (1 = flush)
-  bool fire_skin;      // burning body (my screen only)
+  bool fire_skin;      // legacy fire selection
+  int special_skin;    // 0 none, 1 fire, 2 ice, 3 lightning, 4 aurora, 5 stars, 6 water
   float fire_strength; // 0.2..1.5: flame size and glow
   bool net_stats;      // FPS and ping always shown at the bottom of the screen
   float start_zoom;    // NTL "Start zoom": zoom at the start of every game (1 = normal), 0.2..3
